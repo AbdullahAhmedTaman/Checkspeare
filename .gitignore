@@ -1,0 +1,18 @@
+# visual studio settings
+.vscode
+
+# Build directories
+build/
+bin/
+*.o
+*.out
+*.exe
+
+# Web/Python environments
+node_modules/
+__pycache__/
+venv/
+.env
+
+# OS files
+.DS_Store
