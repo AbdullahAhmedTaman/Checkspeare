@@ -29,3 +29,20 @@ inline void toggle_bit(Bitboard& bb, Square square)
 {
     bb ^= square_bb(square);
 }
+
+inline int popcount(Bitboard bb)
+{
+    return __builtin_popcountll(bb);
+}
+
+inline Square lsb(Bitboard bb)
+{
+    return static_cast<Square>(__builtin_ctzll(bb));
+}
+
+inline Square pop_lsb(Bitboard& bb)
+{
+    Square s = lsb(bb);
+    bb &= bb - 1;
+    return s;
+}
