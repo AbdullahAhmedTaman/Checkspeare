@@ -21,7 +21,7 @@ namespace Eval
     extern const int KING_MG[64];
     extern const int KING_EG[64];
 
-    // use this to flip the square index for black's perspective
+    // use this to flip the square index for white's perspective
     inline Square mirror_square(Square sq)
     {
         return static_cast<Square>(sq ^ 56);
