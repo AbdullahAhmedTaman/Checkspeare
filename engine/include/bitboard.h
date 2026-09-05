@@ -163,37 +163,43 @@ constexpr Bitboard anti_diagonal_bb(Square square)
     return ANTI_DIAGONAL_BB[rank_of(square) + file_of(square)];
 }
 
-// Shifts the bitboard one step East, preventing wrap-around from the H-file.
+constexpr Bitboard shift_north(Bitboard bb)
+
+{
+    return bb << 8;
+}
+
+constexpr Bitboard shift_south(Bitboard bb)
+
+{
+    return bb >> 8;
+}
+
 constexpr Bitboard shift_east(Bitboard b)
 {
     return (b & ~FILE_H) << 1;
 }
 
-// Shifts the bitboard one step West, preventing wrap-around from the A-file.
 constexpr Bitboard shift_west(Bitboard b)
 {
     return (b & ~FILE_A) >> 1;
 }
 
-// Shifts the bitboard one step North-East, protected against H-file wrap.
 constexpr Bitboard shift_north_east(Bitboard b)
 {
     return (b & ~FILE_H) << 9;
 }
 
-// Shifts the bitboard one step North-West, protected against A-file wrap.
 constexpr Bitboard shift_north_west(Bitboard b)
 {
     return (b & ~FILE_A) << 7;
 }
 
-// Shifts the bitboard one step South-East, protected against H-file wrap.
 constexpr Bitboard shift_south_east(Bitboard b)
 {
     return (b & ~FILE_H) >> 7;
 }
 
-// Shifts the bitboard one step South-West, protected against A-file wrap.
 constexpr Bitboard shift_south_west(Bitboard b)
 {
     return (b & ~FILE_A) >> 9;
