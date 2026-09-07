@@ -1,7 +1,6 @@
 #include "evaluate.h"
 #include "pst.h"
 #include "bitboard.h"
-#include <algorithm>
 
 namespace Eval
 {
@@ -71,6 +70,26 @@ int evaluate(const Position& pos)
             black_mg += PST_MG[pt][sq];
             black_eg += PST_EG[pt][sq];
         }
+    }
+
+    if (gamePhase > GAME_PHASE_MAX)
+        gamePhase = GAME_PHASE_MAX;
+
+    int mgScore = white_mg - black_mg;
+    int egScore = white_eg - black_eg;
+
+    int mgWeight = gamePhase;
+    int egWeight = GAME_PHASE_MAX - gamePhase;
+
+    int finalEval = (mgScore * mgWeight + egScore * egWeight) / GAME_PHASE_MAX;
+
+    if (pos.sideToMove == WHITE)
+    {
+        return finalEval;
+    }
+    else
+    {
+        return -finalEval;
     }
 
 }
