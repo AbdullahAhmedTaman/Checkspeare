@@ -1,5 +1,7 @@
 #include "evaluate.h"
 #include "pst.h"
+#include "bitboard.h"
+#include <algorithm>
 
 namespace Eval
 {
@@ -17,4 +19,6 @@ constexpr int GAME_PHASE_MAX = 24;
 // (Pawn=0, Knight=1, Bishop=1, Rook=2, Queen=4, King=0)
 constexpr int PHASE_WEIGHTS[6] = {0, 1, 1, 2, 4, 0};
 
-} 
+constexpr PieceType ALL_PIECE_TYPES[] = { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
+
+}
