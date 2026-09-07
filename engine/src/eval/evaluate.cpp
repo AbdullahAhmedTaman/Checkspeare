@@ -71,17 +71,17 @@ int evaluate(const Position& pos)
             black_eg += PST_EG[pt][sq];
         }
     }
-
+    
     if (gamePhase > GAME_PHASE_MAX)
         gamePhase = GAME_PHASE_MAX;
 
     int mgScore = white_mg - black_mg;
     int egScore = white_eg - black_eg;
 
-    int mgWeight = gamePhase;
-    int egWeight = GAME_PHASE_MAX - gamePhase;
+    int mgWeight = (gamePhase * 256) / GAME_PHASE_MAX;
+    int egWeight = 256 - mgWeight;
 
-    int finalEval = (mgScore * mgWeight + egScore * egWeight) / GAME_PHASE_MAX;
+    int finalEval = ((mgScore * mgWeight) + (egScore * egWeight)) >> 8;
 
     if (pos.sideToMove == WHITE)
     {
@@ -91,7 +91,6 @@ int evaluate(const Position& pos)
     {
         return -finalEval;
     }
-
 }
 
 }
