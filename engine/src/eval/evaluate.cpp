@@ -20,6 +20,12 @@ constexpr int PHASE_WEIGHTS[6] = {0, 1, 1, 2, 4, 0};
 
 constexpr PieceType ALL_PIECE_TYPES[] = { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
 
+Bitboard FILE_MASKS[8];
+Bitboard ISOLATED_MASKS[8];
+Bitboard WHITE_PASSED_MASKS[64];
+Bitboard BLACK_PASSED_MASKS[64];
+
+
 int evaluate(const Position& pos)
 {
     int white_mg = 0;
@@ -52,6 +58,7 @@ int evaluate(const Position& pos)
             white_eg += PST_EG[pt][pst_sq];
         }
     }
+
     // calculation for black pieces
     for (PieceType pt : ALL_PIECE_TYPES)
     {
@@ -71,7 +78,8 @@ int evaluate(const Position& pos)
             black_eg += PST_EG[pt][sq];
         }
     }
-    
+
+  
     if (gamePhase > GAME_PHASE_MAX)
         gamePhase = GAME_PHASE_MAX;
 
