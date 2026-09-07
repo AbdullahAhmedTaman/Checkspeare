@@ -21,4 +21,37 @@ constexpr int PHASE_WEIGHTS[6] = {0, 1, 1, 2, 4, 0};
 
 constexpr PieceType ALL_PIECE_TYPES[] = { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
 
+int evaluate(const Position& pos)
+{
+    int white_mg = 0;
+    int white_eg = 0;
+    
+    int gamePhase = 0;
+
+    // calculation for white pieces
+    for (PieceType pt : ALL_PIECE_TYPES)
+    {
+        Bitboard bb = pos.pieces[WHITE][pt];
+        int count = popcount(bb);
+
+        // calculate phase value
+        gamePhase += count * PHASE_WEIGHTS[pt];
+
+        // calculate material score 
+        white_mg += count * MG_WEIGHT[pt];
+        white_eg += count * EG_WEIGHT[pt];
+
+        // calculate PST score for each piece of the specified type
+        while (bb)
+        {
+            Square sq = pop_lsb(bb);
+            Square pst_sq = mirror_square(sq);
+            
+            white_mg += PST_MG[pt][pst_sq];
+            white_eg += PST_EG[pt][pst_sq];
+        }
+    }
+
+}
+
 }
