@@ -1,6 +1,24 @@
 #pragma once
 #include "types.h"
 
+/**
+ * @brief Stores the irreversible state of the board before a move is made.
+ *
+ * To optimize the search tree traversal, the engine saves only the variables that cannot be
+ * mathematically reversed.
+ */
+struct UndoState // Edit <<<=====
+{
+    uint8_t castlingRights;
+    Square enPassantSquare;
+    uint16_t halfmoveClock;
+    Piece capturedPiece;
+    Key key;
+};
+
+/** @brief Maximum allowed plies (half-moves) in a game or search depth. */
+constexpr int MAX_GAME_PLY = 1024;
+
 struct Position
 {
     Bitboard pieces[2][PieceType::NONE]; //[color][pieceType]
@@ -14,6 +32,9 @@ struct Position
     Square enPassantSquare;
 
     uint16_t halfmoveClock;
+
+    UndoState history[MAX_GAME_PLY]; ///< Stack array storing irreversible state history.
+    int ply = 0;                     ///< Current depth index in the history stack.
 
     // Zobrist hash
     Key key;
@@ -35,21 +56,3 @@ struct Position
      */
     void update_occupancy();
 };
-
-/**
- * @brief Stores the irreversible state of the board before a move is made.
- *
- * To optimize the search tree traversal, the engine saves only the variables that cannot be
- * mathematically reversed.
- */
-struct UndoState
-{
-    uint8_t castlingRights;
-    Square enPassantSquare;
-    uint16_t halfmoveClock;
-    Piece capturedPiece;
-    Key key;
-};
-
-/** @brief Maximum allowed plies (half-moves) in a game or search depth. */
-constexpr int MAX_GAME_PLY = 1024;
