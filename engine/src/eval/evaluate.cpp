@@ -25,7 +25,9 @@ int evaluate(const Position& pos)
 {
     int white_mg = 0;
     int white_eg = 0;
-    
+    int black_mg = 0;
+    int black_eg = 0;
+
     int gamePhase = 0;
 
     // calculation for white pieces
@@ -49,6 +51,25 @@ int evaluate(const Position& pos)
             
             white_mg += PST_MG[pt][pst_sq];
             white_eg += PST_EG[pt][pst_sq];
+        }
+    }
+    // calculation for black pieces
+    for (PieceType pt : ALL_PIECE_TYPES)
+    {
+        Bitboard bb = pos.pieces[BLACK][pt];
+        int count = popcount(bb);
+
+        gamePhase += count * PHASE_WEIGHTS[pt];
+
+        black_mg += count * MG_WEIGHT[pt];
+        black_eg += count * EG_WEIGHT[pt];
+
+        while (bb)
+        {
+            Square sq = pop_lsb(bb);
+            
+            black_mg += PST_MG[pt][sq];
+            black_eg += PST_EG[pt][sq];
         }
     }
 
