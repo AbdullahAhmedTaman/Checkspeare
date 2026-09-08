@@ -1,6 +1,7 @@
 #include "position.h"
 #include "bitboard.h"
 #include "evaluate.h"
+#include "pst.h"
 #include <cassert>
 
 /*void Position::update_occupancy()
@@ -13,6 +14,45 @@
 
     occupancy[BOTH] = occupancy[WHITE] | occupancy[BLACK];
 }*/
+
+namespace
+{
+
+    inline int get_pst_sq(Square sq, Color c)
+    {
+        return (c == WHITE) ? Eval::mirror_square(sq) : sq;
+    }
+
+    inline void move_piece_eval(Position& pos, PieceType pt, Color c, Square from, Square to)
+    {
+        int f_sq = get_pst_sq(from, c);
+        int t_sq = get_pst_sq(to, c);
+
+        pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][f_sq];
+        pos.eg_score[c] -= Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][f_sq];
+
+        pos.mg_score[c] += Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][t_sq];
+        pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][t_sq];
+    }
+
+    inline void remove_piece_eval(Position& pos, PieceType pt, Color c, Square sq)
+    {
+        int m_sq = get_pst_sq(sq, c);
+
+        pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][m_sq];
+        pos.eg_score[c] -= Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][m_sq];
+        pos.game_phase -= Eval::PHASE_WEIGHTS[pt];
+    }
+
+    inline void add_piece_eval(Position& pos, PieceType pt, Color c, Square sq)
+    {
+        int m_sq = get_pst_sq(sq, c);
+
+        pos.mg_score[c] += Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][m_sq];
+        pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][m_sq];
+        pos.game_phase += Eval::PHASE_WEIGHTS[pt];
+    }
+} // namespace
 
 void Position::make_move(Move m)
 {
@@ -30,6 +70,11 @@ void Position::make_move(Move m)
     history[ply].halfmoveClock = halfmoveClock;
     history[ply].capturedPiece = captured_piece;
     history[ply].key = key;
+    history[ply].mg_score[WHITE] = mg_score[WHITE];
+    history[ply].mg_score[BLACK] = mg_score[BLACK];
+    history[ply].eg_score[WHITE] = eg_score[WHITE];
+    history[ply].eg_score[BLACK] = eg_score[BLACK];
+    history[ply].game_phase = game_phase;
     ply++;
 
     // 2. Instead of clearing from and setting to separately, we create a XOR mask for the moving piece
@@ -46,11 +91,14 @@ void Position::make_move(Move m)
         pieces[sideToMove][PAWN] ^= square_bb(from);   // Erase pawn 1^1 = 0
         pieces[sideToMove][promo_pt] ^= square_bb(to); // Spawn promoted piece
         board[to] = static_cast<Piece>((sideToMove == WHITE) ? promo_pt : promo_pt + 6);
+        remove_piece_eval(*this, PAWN, sideToMove, from);
+        add_piece_eval(*this, promo_pt, sideToMove, to);
     }
     else
     {
         pieces[sideToMove][pt] ^= move_mask; // Move piece instantly
         board[to] = moving_piece;
+        move_piece_eval(*this, pt, sideToMove, from, to);
     }
 
     // Update occupancy for the moving piece (Always shifts from -> to)
@@ -67,6 +115,7 @@ void Position::make_move(Move m)
         pieces[sideToMove ^ 1][captured_pt] ^= capture_mask;
         occupancy[sideToMove ^ 1] ^= capture_mask; // Remove captured piece from opponent's occupancy
         occupancy[BOTH] ^= capture_mask; // Flips destination from 0 back to 1 (1^1=0, 0^1=1), keeping it occupied.
+        remove_piece_eval(*this, captured_pt, static_cast<Color>(sideToMove ^ 1), to);
     }
 
     // 5. Handle Special Flags (En Passant & Castling)
@@ -79,6 +128,7 @@ void Position::make_move(Move m)
         occupancy[sideToMove ^ 1] ^= ep_mask;
         occupancy[BOTH] ^= ep_mask;
         board[ep_pawn_sq] = PIECE_NONE;
+        remove_piece_eval(*this, PAWN, static_cast<Color>(sideToMove ^ 1), ep_pawn_sq);
     }
     else if (flag == KING_CASTLE || flag == QUEEN_CASTLE)
     {
@@ -94,6 +144,7 @@ void Position::make_move(Move m)
 
         board[rook_from] = PIECE_NONE;
         board[rook_to] = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
+        move_piece_eval(*this, ROOK, sideToMove, rook_from, rook_to);
     }
 
     // 6. Update Clocks and State
@@ -128,6 +179,11 @@ void Position::unmake_move(Move m)
     halfmoveClock = history[ply].halfmoveClock;
     key = history[ply].key;
     Piece captured_piece = history[ply].capturedPiece;
+    mg_score[WHITE] = history[ply].mg_score[WHITE];
+    mg_score[BLACK] = history[ply].mg_score[BLACK];
+    eg_score[WHITE] = history[ply].eg_score[WHITE];
+    eg_score[BLACK] = history[ply].eg_score[BLACK];
+    game_phase = history[ply].game_phase;
 
     Bitboard move_mask = square_bb(from) | square_bb(to);
 
