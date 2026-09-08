@@ -14,6 +14,9 @@ struct UndoState // Edit <<<=====
     uint16_t halfmoveClock;
     Piece capturedPiece;
     Key key;
+    int mg_score[2] = {0, 0};
+    int eg_score[2] = {0, 0};
+    int game_phase = 0;
 };
 
 /** @brief Maximum allowed plies (half-moves) in a game or search depth. */
@@ -23,21 +26,18 @@ struct Position
 {
     Bitboard pieces[2][PieceType::NONE]; //[color][pieceType]
     Bitboard occupancy[3];
-
     Piece board[Square::SQ_NONE];
-
     Color sideToMove;
-
     uint8_t castlingRights;
     Square enPassantSquare;
-
     uint16_t halfmoveClock;
+    Key key;                  // Zobrist hash
+    int mg_score[2] = {0, 0}; // Middlegame score for [WHITE] and [BLACK]
+    int eg_score[2] = {0, 0}; // Endgame score for [WHITE] and [BLACK]
+    int game_phase = 0;       // Tracks transition from middlegame to endgame
 
     UndoState history[MAX_GAME_PLY]; ///< Stack array storing irreversible state history.
     int ply = 0;                     ///< Current depth index in the history stack.
-
-    // Zobrist hash
-    Key key;
 
     /**
      * @brief Executes a physical move on the board and updates state.
