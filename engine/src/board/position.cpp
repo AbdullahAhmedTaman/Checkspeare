@@ -17,39 +17,26 @@
 
 namespace
 {
-
-    inline int get_pst_sq(Square sq, Color c)
-    {
-        return (c == WHITE) ? Eval::mirror_square(sq) : sq;
-    }
-
     inline void move_piece_eval(Position& pos, PieceType pt, Color c, Square from, Square to)
     {
-        int f_sq = get_pst_sq(from, c);
-        int t_sq = get_pst_sq(to, c);
+        pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST.mg[c][pt][from];
+        pos.eg_score[c] -= Eval::EG_WEIGHT[pt] + Eval::PST.eg[c][pt][from];
 
-        pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][f_sq];
-        pos.eg_score[c] -= Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][f_sq];
-
-        pos.mg_score[c] += Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][t_sq];
-        pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][t_sq];
+        pos.mg_score[c] += Eval::MG_WEIGHT[pt] + Eval::PST.mg[c][pt][to];
+        pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST.eg[c][pt][to];
     }
 
     inline void remove_piece_eval(Position& pos, PieceType pt, Color c, Square sq)
     {
-        int m_sq = get_pst_sq(sq, c);
-
-        pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][m_sq];
-        pos.eg_score[c] -= Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][m_sq];
+        pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST.mg[c][pt][sq];
+        pos.eg_score[c] -= Eval::EG_WEIGHT[pt] + Eval::PST.eg[c][pt][sq];
         pos.game_phase -= Eval::PHASE_WEIGHTS[pt];
     }
 
     inline void add_piece_eval(Position& pos, PieceType pt, Color c, Square sq)
     {
-        int m_sq = get_pst_sq(sq, c);
-
-        pos.mg_score[c] += Eval::MG_WEIGHT[pt] + Eval::PST_MG[pt][m_sq];
-        pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST_EG[pt][m_sq];
+        pos.mg_score[c] += Eval::MG_WEIGHT[pt] + Eval::PST.mg[c][pt][sq];
+        pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST.eg[c][pt][sq];
         pos.game_phase += Eval::PHASE_WEIGHTS[pt];
     }
 } // namespace

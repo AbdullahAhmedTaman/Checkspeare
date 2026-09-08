@@ -5,11 +5,6 @@
 
 namespace Eval
 {
-
-    const int* PST_MG[6] = {PAWN_MG, KNIGHT_MG, BISHOP_MG, ROOK_MG, QUEEN_MG, KING_MG};
-
-    const int* PST_EG[6] = {PAWN_EG, KNIGHT_EG, BISHOP_EG, ROOK_EG, QUEEN_EG, KING_EG};
-
     constexpr int GAME_PHASE_MAX = 24;
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
@@ -53,10 +48,9 @@ namespace Eval
                 while (bb)
                 {
                     Square sq = pop_lsb(bb);
-                    Square pst_sq = (color == WHITE) ? mirror_square(sq) : sq;
 
-                    pos.mg_score[color] += MG_WEIGHT[pt] + PST_MG[pt][pst_sq];
-                    pos.eg_score[color] += EG_WEIGHT[pt] + PST_EG[pt][pst_sq];
+                    pos.mg_score[color] += MG_WEIGHT[pt] + PST.mg[color][pt][sq];
+                    pos.eg_score[color] += EG_WEIGHT[pt] + PST.eg[color][pt][sq];
                 }
             }
         }
