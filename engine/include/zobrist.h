@@ -1,4 +1,4 @@
-#ifndef ZOBRIST_H
+#pragma once
 #define ZOBRIST_H
 
 #include "position.h"
@@ -35,5 +35,3 @@ namespace Zobrist
      */
     uint64_t generate_key(const Position& pos);
 } // namespace Zobrist
-
-#endif
