@@ -12,10 +12,10 @@ int main()
 {
     try
     {
-        auto window = initWindow();
+        auto window = renderUI::initWindow();
         // this is non-copybable object which handlded by c++17 RVO
         Config conf;
-        windowRenderUI(window, conf);
+        renderUI::windowRenderUI(window, conf);
     }
     catch (const std::exception& e)
     {

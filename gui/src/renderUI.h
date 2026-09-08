@@ -7,7 +7,10 @@ struct Config
     float squareSize = 80.0f;
 };
 
-sf::RenderWindow initWindow();
-void imGuiRenderUI(sf::RenderWindow& window, Config& conf);
-// where to write the imGui components
-void windowRenderUI(sf::RenderWindow& window, Config& conf);
+namespace renderUI
+{
+    sf::RenderWindow initWindow();
+    void imGuiRenderUI(sf::RenderWindow& window, Config& conf);
+    // where to write the imGui components
+    void windowRenderUI(sf::RenderWindow& window, Config& conf);
+} // namespace renderUI
