@@ -46,6 +46,15 @@ enum Piece : uint8_t
     PIECE_NONE
 };
 
+// fast static array mapping Pieces to PieceTypes
+constexpr PieceType PIECE_TO_TYPE[13] = {PAWN,   KNIGHT, BISHOP, ROOK,  QUEEN, KING, PAWN,
+                                         KNIGHT, BISHOP, ROOK,   QUEEN, KING,  NONE};
+
+inline constexpr PieceType type_of(Piece pc)
+{
+    return PIECE_TO_TYPE[pc];
+}
+
 // clang-format off
 enum Square : uint8_t
 {
