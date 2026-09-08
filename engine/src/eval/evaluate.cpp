@@ -1,6 +1,7 @@
 #include "evaluate.h"
 #include "bitboard.h"
 #include "pst.h"
+#include <algorithm>
 
 namespace Eval
 {
@@ -13,20 +14,24 @@ namespace Eval
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
 
-    int evaluate(const Position& pos)
+    int taper(const Score& score, const Position& pos)
     {
-        int mgScore = pos.mg_score[WHITE] - pos.mg_score[BLACK];
-        int egScore = pos.eg_score[WHITE] - pos.eg_score[BLACK];
-
-        int phase = pos.game_phase;
-        if (phase > GAME_PHASE_MAX)
-            phase = GAME_PHASE_MAX;
+        int phase = std::min(pos.game_phase, GAME_PHASE_MAX);
 
         int mgWeight = (phase * 256) / GAME_PHASE_MAX;
         int egWeight = 256 - mgWeight;
 
-        int finalEval = ((mgScore * mgWeight) + (egScore * egWeight)) >> 8;
+        int finalEval = ((score.mg * mgWeight) + (score.eg * egWeight)) >> 8;
         return (pos.sideToMove == WHITE) ? finalEval : -finalEval;
+    }
+
+    int evaluate(const Position& pos)
+    {
+        Score score;
+        score.mg = pos.mg_score[WHITE] - pos.mg_score[BLACK];
+        score.eg = pos.eg_score[WHITE] - pos.eg_score[BLACK];
+
+        return taper(score, pos);
     }
 
     void init_scores(Position& pos)
