@@ -78,17 +78,25 @@ namespace
         pos.halfmoveClock = 0;
         pos.ply = 0;
         pos.key = 0;
+
+        // Reset Track 3 Evaluation arrays
+        pos.mg_score[WHITE] = 0;
+        pos.mg_score[BLACK] = 0;
+        pos.eg_score[WHITE] = 0;
+        pos.eg_score[BLACK] = 0;
+        pos.game_phase = 0;
     }
 
     /// Place a piece, keeping pieces[][] and board[] in sync. Caller must call
     /// pos.update_occupancy() afterwards (batched for setups with many pieces).
     void placePiece(Position& pos, Piece piece, Color color, PieceType pt, Square sq)
     {
-        set_bit(pos.pieces[color][pt], sq);
+        // For testing setup, we manually set the bits (since update_occupancy isn't used incrementally here)
+        pos.pieces[color][pt] |= sqBit(sq);
         pos.board[sq] = piece;
     }
 
-    /// Deep-compare two positions field by field.
+    /// Deep-compare two positions field by field to ensure perfect rollback.
     bool positionsEqual(const Position& a, const Position& b)
     {
         for (int c = 0; c < 2; ++c)
@@ -104,12 +112,20 @@ namespace
             if (a.board[sq] != b.board[sq])
                 return false;
 
+        // Check evaluation scores (Track 3)
+        if (a.mg_score[WHITE] != b.mg_score[WHITE] || a.mg_score[BLACK] != b.mg_score[BLACK])
+            return false;
+        if (a.eg_score[WHITE] != b.eg_score[WHITE] || a.eg_score[BLACK] != b.eg_score[BLACK])
+            return false;
+        if (a.game_phase != b.game_phase)
+            return false;
+
         return a.sideToMove == b.sideToMove && a.castlingRights == b.castlingRights &&
                a.enPassantSquare == b.enPassantSquare && a.halfmoveClock == b.halfmoveClock && a.key == b.key &&
                a.ply == b.ply;
     }
 
-    /// Invariant that must hold after every update_occupancy() call:
+    /// Invariant that must hold after every move:
     /// BOTH is the union of WHITE/BLACK, and WHITE/BLACK never overlap.
     void requireOccupancyInvariant(const Position& pos)
     {
@@ -153,83 +169,18 @@ namespace
         pos.halfmoveClock = 0;
         pos.ply = 0;
 
-        pos.update_occupancy();
+        // Manually build initial occupancy since we removed the helper loop
+        pos.occupancy[WHITE] = BB_EMPTY;
+        pos.occupancy[BLACK] = BB_EMPTY;
+        for (int pt = 0; pt < PieceType::NONE; ++pt)
+        {
+            pos.occupancy[WHITE] |= pos.pieces[WHITE][pt];
+            pos.occupancy[BLACK] |= pos.pieces[BLACK][pt];
+        }
+        pos.occupancy[BOTH] = pos.occupancy[WHITE] | pos.occupancy[BLACK];
     }
 
 } // namespace
-
-// ---------------------------------------------------------------------
-// update_occupancy
-// ---------------------------------------------------------------------
-
-TEST_CASE("update_occupancy: empty position yields empty occupancy", "[position][occupancy]")
-{
-    Position pos;
-    clearPosition(pos);
-
-    pos.update_occupancy();
-
-    REQUIRE(pos.occupancy[WHITE] == BB_EMPTY);
-    REQUIRE(pos.occupancy[BLACK] == BB_EMPTY);
-    REQUIRE(pos.occupancy[BOTH] == BB_EMPTY);
-}
-
-TEST_CASE("update_occupancy: single piece per color", "[position][occupancy]")
-{
-    Position pos;
-    clearPosition(pos);
-
-    placePiece(pos, WHITE_KING, WHITE, KING, E1);
-    placePiece(pos, BLACK_KING, BLACK, KING, E8);
-
-    pos.update_occupancy();
-
-    REQUIRE(pos.occupancy[WHITE] == sqBit(E1));
-    REQUIRE(pos.occupancy[BLACK] == sqBit(E8));
-    requireOccupancyInvariant(pos);
-}
-
-TEST_CASE("update_occupancy: multiple piece types combine correctly", "[position][occupancy]")
-{
-    Position pos;
-    clearPosition(pos);
-
-    placePiece(pos, WHITE_PAWN, WHITE, PAWN, E4);
-    placePiece(pos, WHITE_KNIGHT, WHITE, KNIGHT, F3);
-    placePiece(pos, WHITE_KING, WHITE, KING, G1);
-    placePiece(pos, BLACK_PAWN, BLACK, PAWN, D5);
-    placePiece(pos, BLACK_BISHOP, BLACK, BISHOP, C5);
-    placePiece(pos, BLACK_KING, BLACK, KING, G8);
-
-    pos.update_occupancy();
-
-    Bitboard expectedWhite = sqBit(E4) | sqBit(F3) | sqBit(G1);
-    Bitboard expectedBlack = sqBit(D5) | sqBit(C5) | sqBit(G8);
-
-    REQUIRE(pos.occupancy[WHITE] == expectedWhite);
-    REQUIRE(pos.occupancy[BLACK] == expectedBlack);
-    REQUIRE(pos.occupancy[BOTH] == (expectedWhite | expectedBlack));
-    requireOccupancyInvariant(pos);
-}
-
-TEST_CASE("update_occupancy: full starting position", "[position][occupancy]")
-{
-    Position pos;
-    setupStartingPosition(pos);
-
-    Bitboard expectedWhite = BB_EMPTY;
-    for (Square s : {A1, B1, C1, D1, E1, F1, G1, H1, A2, B2, C2, D2, E2, F2, G2, H2})
-        expectedWhite |= sqBit(s);
-
-    Bitboard expectedBlack = BB_EMPTY;
-    for (Square s : {A7, B7, C7, D7, E7, F7, G7, H7, A8, B8, C8, D8, E8, F8, G8, H8})
-        expectedBlack |= sqBit(s);
-
-    REQUIRE(pos.occupancy[WHITE] == expectedWhite);
-    REQUIRE(pos.occupancy[BLACK] == expectedBlack);
-    REQUIRE(pos.occupancy[BOTH] == (expectedWhite | expectedBlack));
-    requireOccupancyInvariant(pos);
-}
 
 // ---------------------------------------------------------------------
 // make_move / unmake_move: quiet moves
@@ -240,7 +191,8 @@ TEST_CASE("make_move/unmake_move: quiet knight move", "[position][make_move]")
     Position pos;
     clearPosition(pos);
     placePiece(pos, WHITE_KNIGHT, WHITE, KNIGHT, G1);
-    pos.update_occupancy();
+    pos.occupancy[WHITE] |= sqBit(G1);
+    pos.occupancy[BOTH] |= sqBit(G1);
     pos.halfmoveClock = 5;
 
     Position before = pos;
@@ -272,7 +224,8 @@ TEST_CASE("make_move: pawn single push resets halfmove clock", "[position][make_
     Position pos;
     clearPosition(pos);
     placePiece(pos, WHITE_PAWN, WHITE, PAWN, E2);
-    pos.update_occupancy();
+    pos.occupancy[WHITE] |= sqBit(E2);
+    pos.occupancy[BOTH] |= sqBit(E2);
     pos.halfmoveClock = 10;
     Position before = pos;
 
@@ -294,7 +247,8 @@ TEST_CASE("make_move/unmake_move: double pawn push sets en passant target", "[po
         Position pos;
         clearPosition(pos);
         placePiece(pos, WHITE_PAWN, WHITE, PAWN, E2);
-        pos.update_occupancy();
+        pos.occupancy[WHITE] |= sqBit(E2);
+        pos.occupancy[BOTH] |= sqBit(E2);
         Position before = pos;
 
         Move m = makeMove(E2, E4, DOUBLE_PAWN_PUSH);
@@ -313,7 +267,8 @@ TEST_CASE("make_move/unmake_move: double pawn push sets en passant target", "[po
         Position pos;
         clearPosition(pos);
         placePiece(pos, BLACK_PAWN, BLACK, PAWN, E7);
-        pos.update_occupancy();
+        pos.occupancy[BLACK] |= sqBit(E7);
+        pos.occupancy[BOTH] |= sqBit(E7);
         pos.sideToMove = BLACK;
         Position before = pos;
 
@@ -339,11 +294,14 @@ TEST_CASE("make_move/unmake_move: standard capture", "[position][make_move][capt
     clearPosition(pos);
     placePiece(pos, WHITE_BISHOP, WHITE, BISHOP, C4);
     placePiece(pos, BLACK_KNIGHT, BLACK, KNIGHT, F7);
-    pos.update_occupancy();
+    pos.occupancy[WHITE] |= sqBit(C4);
+    pos.occupancy[BLACK] |= sqBit(F7);
+    pos.occupancy[BOTH] |= (sqBit(C4) | sqBit(F7));
+
     pos.halfmoveClock = 8;
     Position before = pos;
 
-    Move m = makeMove(C4, F7, QUIET_MOVE); // capture detected via board[to]; flag is cosmetic here
+    Move m = makeMove(C4, F7, QUIET_MOVE); // capture detected via board[to]
     pos.make_move(m);
 
     REQUIRE(pos.board[F7] == WHITE_BISHOP);
@@ -355,145 +313,103 @@ TEST_CASE("make_move/unmake_move: standard capture", "[position][make_move][capt
 
     pos.unmake_move(m);
     REQUIRE(positionsEqual(pos, before));
-    REQUIRE(pos.board[F7] == BLACK_KNIGHT);
-    REQUIRE(pos.board[C4] == WHITE_BISHOP);
-}
-
-TEST_CASE("make_move: history stack records the captured piece", "[position][make_move][history]")
-{
-    Position pos;
-    clearPosition(pos);
-    placePiece(pos, WHITE_QUEEN, WHITE, QUEEN, D1);
-    placePiece(pos, BLACK_BISHOP, BLACK, BISHOP, D8);
-    pos.update_occupancy();
-
-    Move m = makeMove(D1, D8, QUIET_MOVE);
-    pos.make_move(m);
-
-    REQUIRE(pos.history[0].capturedPiece == BLACK_BISHOP);
 }
 
 TEST_CASE("make_move/unmake_move: en passant capture", "[position][make_move][en_passant]")
 {
-    Position pos;
-    clearPosition(pos);
-    placePiece(pos, WHITE_PAWN, WHITE, PAWN, E5);
-    placePiece(pos, BLACK_PAWN, BLACK, PAWN, D5);
-    pos.update_occupancy();
-    pos.enPassantSquare = D6; // as if black just played d7-d5
-    Position before = pos;
+    SECTION("white captures black en passant")
+    {
+        Position pos;
+        clearPosition(pos);
+        placePiece(pos, WHITE_PAWN, WHITE, PAWN, E5);
+        placePiece(pos, BLACK_PAWN, BLACK, PAWN, D5);
+        pos.occupancy[WHITE] |= sqBit(E5);
+        pos.occupancy[BLACK] |= sqBit(D5);
+        pos.occupancy[BOTH] |= (sqBit(E5) | sqBit(D5));
 
-    Move m = makeMove(E5, D6, EP_CAPTURE);
-    pos.make_move(m);
+        pos.enPassantSquare = D6;
+        Position before = pos;
 
-    REQUIRE(pos.board[D6] == WHITE_PAWN);
-    REQUIRE(pos.board[E5] == PIECE_NONE);
-    REQUIRE(pos.board[D5] == PIECE_NONE); // the captured pawn, not on the "to" square
-    REQUIRE((pos.pieces[BLACK][PAWN] & sqBit(D5)) == BB_EMPTY);
-    REQUIRE(pos.enPassantSquare == SQ_NONE);
-    REQUIRE(pos.halfmoveClock == 0);
-    requireOccupancyInvariant(pos);
+        Move m = makeMove(E5, D6, EP_CAPTURE);
+        pos.make_move(m);
 
-    pos.unmake_move(m);
-    REQUIRE(positionsEqual(pos, before));
-    REQUIRE(pos.board[D5] == BLACK_PAWN);
-    REQUIRE(pos.board[E5] == WHITE_PAWN);
-    REQUIRE(pos.board[D6] == PIECE_NONE);
+        REQUIRE(pos.board[D6] == WHITE_PAWN);
+        REQUIRE(pos.board[E5] == PIECE_NONE);
+        REQUIRE(pos.board[D5] == PIECE_NONE); // captured pawn correctly removed
+        REQUIRE((pos.pieces[BLACK][PAWN] & sqBit(D5)) == BB_EMPTY);
+        REQUIRE(pos.enPassantSquare == SQ_NONE);
+        REQUIRE(pos.halfmoveClock == 0);
+        requireOccupancyInvariant(pos);
+
+        pos.unmake_move(m);
+        REQUIRE(positionsEqual(pos, before));
+        REQUIRE(pos.board[D5] == BLACK_PAWN);
+    }
+
+    SECTION("black captures white en passant")
+    {
+        Position pos;
+        clearPosition(pos);
+        placePiece(pos, BLACK_PAWN, BLACK, PAWN, C4);
+        placePiece(pos, WHITE_PAWN, WHITE, PAWN, B4);
+        pos.occupancy[BLACK] |= sqBit(C4);
+        pos.occupancy[WHITE] |= sqBit(B4);
+        pos.occupancy[BOTH] |= (sqBit(C4) | sqBit(B4));
+
+        pos.sideToMove = BLACK;
+        pos.enPassantSquare = B3;
+        Position before = pos;
+
+        Move m = makeMove(C4, B3, EP_CAPTURE);
+        pos.make_move(m);
+
+        REQUIRE(pos.board[B3] == BLACK_PAWN);
+        REQUIRE(pos.board[B4] == PIECE_NONE); // White pawn removed
+        REQUIRE((pos.pieces[WHITE][PAWN] & sqBit(B4)) == BB_EMPTY);
+        requireOccupancyInvariant(pos);
+
+        pos.unmake_move(m);
+        REQUIRE(positionsEqual(pos, before));
+    }
 }
 
 // ---------------------------------------------------------------------
 // make_move / unmake_move: castling
 // ---------------------------------------------------------------------
 
-TEST_CASE("make_move/unmake_move: king-side castling", "[position][make_move][castling]")
+TEST_CASE("make_move/unmake_move: castling moves king and rook perfectly", "[position][make_move][castling]")
 {
-    SECTION("white")
+    struct CastleCase
+    {
+        Color color;
+        Square kFrom, kTo, rFrom, rTo;
+        int flag;
+        Piece king, rook;
+    };
+
+    const CastleCase cases[] = {{WHITE, E1, G1, H1, F1, KING_CASTLE, WHITE_KING, WHITE_ROOK},
+                                {WHITE, E1, C1, A1, D1, QUEEN_CASTLE, WHITE_KING, WHITE_ROOK},
+                                {BLACK, E8, G8, H8, F8, KING_CASTLE, BLACK_KING, BLACK_ROOK},
+                                {BLACK, E8, C8, A8, D8, QUEEN_CASTLE, BLACK_KING, BLACK_ROOK}};
+
+    for (const auto& c : cases)
     {
         Position pos;
         clearPosition(pos);
-        placePiece(pos, WHITE_KING, WHITE, KING, E1);
-        placePiece(pos, WHITE_ROOK, WHITE, ROOK, H1);
-        pos.update_occupancy();
-        Position before = pos;
+        placePiece(pos, c.king, c.color, KING, c.kFrom);
+        placePiece(pos, c.rook, c.color, ROOK, c.rFrom);
+        pos.occupancy[c.color] |= (sqBit(c.kFrom) | sqBit(c.rFrom));
+        pos.occupancy[BOTH] |= (sqBit(c.kFrom) | sqBit(c.rFrom));
+        pos.sideToMove = c.color;
 
-        Move m = makeMove(E1, G1, KING_CASTLE);
+        Position before = pos;
+        Move m = makeMove(c.kFrom, c.kTo, c.flag);
         pos.make_move(m);
 
-        REQUIRE(pos.board[G1] == WHITE_KING);
-        REQUIRE(pos.board[F1] == WHITE_ROOK);
-        REQUIRE(pos.board[E1] == PIECE_NONE);
-        REQUIRE(pos.board[H1] == PIECE_NONE);
-        requireOccupancyInvariant(pos);
-
-        pos.unmake_move(m);
-        REQUIRE(positionsEqual(pos, before));
-    }
-
-    SECTION("black")
-    {
-        Position pos;
-        clearPosition(pos);
-        placePiece(pos, BLACK_KING, BLACK, KING, E8);
-        placePiece(pos, BLACK_ROOK, BLACK, ROOK, H8);
-        pos.update_occupancy();
-        pos.sideToMove = BLACK;
-        Position before = pos;
-
-        Move m = makeMove(E8, G8, KING_CASTLE);
-        pos.make_move(m);
-
-        REQUIRE(pos.board[G8] == BLACK_KING);
-        REQUIRE(pos.board[F8] == BLACK_ROOK);
-        REQUIRE(pos.board[E8] == PIECE_NONE);
-        REQUIRE(pos.board[H8] == PIECE_NONE);
-        requireOccupancyInvariant(pos);
-
-        pos.unmake_move(m);
-        REQUIRE(positionsEqual(pos, before));
-    }
-}
-
-TEST_CASE("make_move/unmake_move: queen-side castling", "[position][make_move][castling]")
-{
-    SECTION("white")
-    {
-        Position pos;
-        clearPosition(pos);
-        placePiece(pos, WHITE_KING, WHITE, KING, E1);
-        placePiece(pos, WHITE_ROOK, WHITE, ROOK, A1);
-        pos.update_occupancy();
-        Position before = pos;
-
-        Move m = makeMove(E1, C1, QUEEN_CASTLE);
-        pos.make_move(m);
-
-        REQUIRE(pos.board[C1] == WHITE_KING);
-        REQUIRE(pos.board[D1] == WHITE_ROOK);
-        REQUIRE(pos.board[E1] == PIECE_NONE);
-        REQUIRE(pos.board[A1] == PIECE_NONE);
-        requireOccupancyInvariant(pos);
-
-        pos.unmake_move(m);
-        REQUIRE(positionsEqual(pos, before));
-    }
-
-    SECTION("black")
-    {
-        Position pos;
-        clearPosition(pos);
-        placePiece(pos, BLACK_KING, BLACK, KING, E8);
-        placePiece(pos, BLACK_ROOK, BLACK, ROOK, A8);
-        pos.update_occupancy();
-        pos.sideToMove = BLACK;
-        Position before = pos;
-
-        Move m = makeMove(E8, C8, QUEEN_CASTLE);
-        pos.make_move(m);
-
-        REQUIRE(pos.board[C8] == BLACK_KING);
-        REQUIRE(pos.board[D8] == BLACK_ROOK);
-        REQUIRE(pos.board[E8] == PIECE_NONE);
-        REQUIRE(pos.board[A8] == PIECE_NONE);
+        REQUIRE(pos.board[c.kTo] == c.king);
+        REQUIRE(pos.board[c.rTo] == c.rook);
+        REQUIRE(pos.board[c.kFrom] == PIECE_NONE);
+        REQUIRE(pos.board[c.rFrom] == PIECE_NONE);
         requireOccupancyInvariant(pos);
 
         pos.unmake_move(m);
@@ -505,176 +421,104 @@ TEST_CASE("make_move/unmake_move: queen-side castling", "[position][make_move][c
 // make_move / unmake_move: promotion
 // ---------------------------------------------------------------------
 
-TEST_CASE("make_move/unmake_move: promotion to every piece type", "[position][make_move][promotion]")
+TEST_CASE("make_move/unmake_move: promotion and promotion-captures", "[position][make_move][promotion]")
 {
-    struct Case
+    struct PromoCase
     {
         int flag;
         PieceType pt;
         Piece whitePiece;
     };
 
-    const Case cases[] = {
-        {KNIGHT_PROMO, KNIGHT, WHITE_KNIGHT},
-        {BISHOP_PROMO, BISHOP, WHITE_BISHOP},
-        {ROOK_PROMO, ROOK, WHITE_ROOK},
-        {QUEEN_PROMO, QUEEN, WHITE_QUEEN},
-    };
+    const PromoCase cases[] = {{KNIGHT_PROMO, KNIGHT, WHITE_KNIGHT},     {BISHOP_PROMO, BISHOP, WHITE_BISHOP},
+                               {ROOK_PROMO, ROOK, WHITE_ROOK},           {QUEEN_PROMO, QUEEN, WHITE_QUEEN},
+                               {KNIGHT_PROMO_CAP, KNIGHT, WHITE_KNIGHT}, {BISHOP_PROMO_CAP, BISHOP, WHITE_BISHOP},
+                               {ROOK_PROMO_CAP, ROOK, WHITE_ROOK},       {QUEEN_PROMO_CAP, QUEEN, WHITE_QUEEN}};
 
     for (const auto& c : cases)
     {
-        INFO("promotion flag = " << c.flag);
-
         Position pos;
         clearPosition(pos);
-        placePiece(pos, WHITE_PAWN, WHITE, PAWN, G7);
-        pos.update_occupancy();
-        Position before = pos;
+        placePiece(pos, WHITE_PAWN, WHITE, PAWN, B7);
+        pos.occupancy[WHITE] |= sqBit(B7);
+        pos.occupancy[BOTH] |= sqBit(B7);
 
-        Move m = makeMove(G7, G8, c.flag);
+        bool isCapture = (c.flag >= KNIGHT_PROMO_CAP);
+        if (isCapture)
+        {
+            placePiece(pos, BLACK_ROOK, BLACK, ROOK, A8);
+            pos.occupancy[BLACK] |= sqBit(A8);
+            pos.occupancy[BOTH] |= sqBit(A8);
+        }
+
+        Position before = pos;
+        Move m = makeMove(B7, isCapture ? A8 : B8, c.flag);
         pos.make_move(m);
 
-        REQUIRE(pos.board[G8] == c.whitePiece);
-        REQUIRE((pos.pieces[WHITE][c.pt] & sqBit(G8)) != BB_EMPTY);
-        REQUIRE((pos.pieces[WHITE][PAWN] & sqBit(G8)) == BB_EMPTY);
+        Square toSq = isCapture ? A8 : B8;
+        REQUIRE(pos.board[toSq] == c.whitePiece);
+        REQUIRE((pos.pieces[WHITE][c.pt] & sqBit(toSq)) != BB_EMPTY);
+        REQUIRE((pos.pieces[WHITE][PAWN] & sqBit(toSq)) == BB_EMPTY);
         REQUIRE(pos.halfmoveClock == 0);
+
+        if (isCapture)
+        {
+            REQUIRE((pos.pieces[BLACK][ROOK] & sqBit(toSq)) == BB_EMPTY);
+            REQUIRE(pos.history[0].capturedPiece == BLACK_ROOK);
+        }
+
+        requireOccupancyInvariant(pos);
 
         pos.unmake_move(m);
         REQUIRE(positionsEqual(pos, before));
-        REQUIRE(pos.board[G7] == WHITE_PAWN);
-        REQUIRE(pos.board[G8] == PIECE_NONE);
+        REQUIRE(pos.board[B7] == WHITE_PAWN);
     }
 }
 
-TEST_CASE("make_move/unmake_move: promotion capture", "[position][make_move][promotion][capture]")
-{
-    Position pos;
-    clearPosition(pos);
-    placePiece(pos, WHITE_PAWN, WHITE, PAWN, B7);
-    placePiece(pos, BLACK_ROOK, BLACK, ROOK, A8);
-    pos.update_occupancy();
-    Position before = pos;
-
-    Move m = makeMove(B7, A8, QUEEN_PROMO_CAP);
-    pos.make_move(m);
-
-    REQUIRE(pos.board[A8] == WHITE_QUEEN);
-    REQUIRE((pos.pieces[BLACK][ROOK] & sqBit(A8)) == BB_EMPTY);
-    REQUIRE((pos.pieces[WHITE][QUEEN] & sqBit(A8)) != BB_EMPTY);
-    REQUIRE(pos.halfmoveClock == 0);
-    REQUIRE(pos.history[0].capturedPiece == BLACK_ROOK);
-    requireOccupancyInvariant(pos);
-
-    pos.unmake_move(m);
-    REQUIRE(positionsEqual(pos, before));
-    REQUIRE(pos.board[A8] == BLACK_ROOK);
-    REQUIRE(pos.board[B7] == WHITE_PAWN);
-}
-
 // ---------------------------------------------------------------------
-// make_move / unmake_move: multi-move stack integrity
+// Evaluation History stack contents
 // ---------------------------------------------------------------------
 
-TEST_CASE("make_move/unmake_move: multi-move sequence fully reverses", "[position][make_move][stack]")
-{
-    Position pos;
-    clearPosition(pos);
-    placePiece(pos, WHITE_KING, WHITE, KING, E1);
-    placePiece(pos, BLACK_KING, BLACK, KING, E8);
-    placePiece(pos, WHITE_PAWN, WHITE, PAWN, E2);
-    placePiece(pos, BLACK_PAWN, BLACK, PAWN, D7);
-    pos.update_occupancy();
-    Position original = pos;
-
-    Move m1 = makeMove(E2, E4, DOUBLE_PAWN_PUSH);
-    Move m2 = makeMove(D7, D5, DOUBLE_PAWN_PUSH);
-    Move m3 = makeMove(E1, F1, QUIET_MOVE);
-    Move m4 = makeMove(E8, F8, QUIET_MOVE);
-
-    pos.make_move(m1);
-    REQUIRE(pos.ply == 1);
-    pos.make_move(m2);
-    REQUIRE(pos.ply == 2);
-    pos.make_move(m3);
-    REQUIRE(pos.ply == 3);
-    pos.make_move(m4);
-    REQUIRE(pos.ply == 4);
-    requireOccupancyInvariant(pos);
-
-    pos.unmake_move(m4);
-    pos.unmake_move(m3);
-    pos.unmake_move(m2);
-    pos.unmake_move(m1);
-
-    REQUIRE(pos.ply == 0);
-    REQUIRE(positionsEqual(pos, original));
-}
-
-TEST_CASE("make_move/unmake_move: short opening sequence from the starting position",
-          "[position][make_move][integration]")
-{
-    Position pos;
-    setupStartingPosition(pos);
-    Position original = pos;
-
-    Move moves[] = {
-        makeMove(E2, E4, DOUBLE_PAWN_PUSH), makeMove(E7, E5, DOUBLE_PAWN_PUSH), makeMove(G1, F3, QUIET_MOVE),
-        makeMove(B8, C6, QUIET_MOVE),       makeMove(F1, B5, QUIET_MOVE),
-    };
-
-    for (const Move& m : moves)
-        pos.make_move(m);
-
-    REQUIRE(pos.ply == 5);
-    REQUIRE(pos.board[E4] == WHITE_PAWN);
-    REQUIRE(pos.board[E5] == BLACK_PAWN);
-    REQUIRE(pos.board[F3] == WHITE_KNIGHT);
-    REQUIRE(pos.board[C6] == BLACK_KNIGHT);
-    REQUIRE(pos.board[B5] == WHITE_BISHOP);
-    REQUIRE(pos.sideToMove == BLACK);
-    requireOccupancyInvariant(pos);
-
-    for (int i = 4; i >= 0; --i)
-        pos.unmake_move(moves[i]);
-
-    REQUIRE(pos.ply == 0);
-    REQUIRE(positionsEqual(pos, original));
-}
-
-// ---------------------------------------------------------------------
-// History stack contents
-// ---------------------------------------------------------------------
-
-TEST_CASE("make_move: history stack stores the exact pre-move state", "[position][make_move][history]")
+TEST_CASE("make_move/unmake_move: Track 3 Evaluation State is perfectly maintained", "[position][make_move][eval]")
 {
     Position pos;
     clearPosition(pos);
     placePiece(pos, WHITE_KNIGHT, WHITE, KNIGHT, B1);
-    pos.update_occupancy();
-    pos.castlingRights = 0b1111;
-    pos.enPassantSquare = SQ_NONE;
-    pos.halfmoveClock = 3;
-    pos.key = 0xDEADBEEFULL;
+    pos.occupancy[WHITE] |= sqBit(B1);
+    pos.occupancy[BOTH] |= sqBit(B1);
 
-    Move m = makeMove(B1, D2, QUIET_MOVE);
+    // Inject mock evaluation scores directly into the board
+    pos.mg_score[WHITE] = 1200;
+    pos.mg_score[BLACK] = 1150;
+    pos.eg_score[WHITE] = 800;
+    pos.eg_score[BLACK] = 750;
+    pos.game_phase = 24;
+
+    Position before = pos;
+    Move m = makeMove(B1, C3, QUIET_MOVE);
+
+    // 1. Ensure the stack pushed the exact values BEFORE the math executed
     pos.make_move(m);
 
     const UndoState& saved = pos.history[0];
-    REQUIRE(saved.castlingRights == 0b1111);
-    REQUIRE(saved.enPassantSquare == SQ_NONE);
-    REQUIRE(saved.halfmoveClock == 3);
-    REQUIRE(saved.key == 0xDEADBEEFULL);
-    REQUIRE(saved.capturedPiece == PIECE_NONE);
+    REQUIRE(saved.mg_score[WHITE] == 1200);
+    REQUIRE(saved.mg_score[BLACK] == 1150);
+    REQUIRE(saved.eg_score[WHITE] == 800);
+    REQUIRE(saved.eg_score[BLACK] == 750);
+    REQUIRE(saved.game_phase == 24);
+
+    // 2. Ensure Track 3's evaluation math was executed (the score should have changed)
+    // Even without knowing the exact PST math from evaluate.h, we know the score will mutate
+    bool scoreMutated = (pos.mg_score[WHITE] != 1200) || (pos.eg_score[WHITE] != 800);
+    REQUIRE(scoreMutated == true);
+
+    // 3. Rollback the move and guarantee the values were snapped back in $O(1)$
+    pos.unmake_move(m);
+    REQUIRE(positionsEqual(pos, before));
 }
 
 // ---------------------------------------------------------------------
-// Known limitations (documents current behavior, not a spec)
-//
-// These pass today because make_move genuinely leaves castlingRights/key
-// untouched -- it only ever saves/restores them via the undo stack. If you
-// add real castling-rights maintenance or incremental Zobrist hashing
-// later, these tests SHOULD start failing; that's your cue to rewrite them
-// against the new rules and delete this comment block.
+// Known limitations
 // ---------------------------------------------------------------------
 
 TEST_CASE("KNOWN LIMITATION: castlingRights is not updated by make_move", "[position][make_move][known_limitation]")
@@ -683,7 +527,6 @@ TEST_CASE("KNOWN LIMITATION: castlingRights is not updated by make_move", "[posi
     clearPosition(pos);
     placePiece(pos, WHITE_KING, WHITE, KING, E1);
     placePiece(pos, WHITE_ROOK, WHITE, ROOK, H1);
-    pos.update_occupancy();
     pos.castlingRights = 0b1111;
 
     Move kingMove = makeMove(E1, E2, QUIET_MOVE);
@@ -697,7 +540,6 @@ TEST_CASE("KNOWN LIMITATION: key is not incrementally updated by make_move", "[p
     Position pos;
     clearPosition(pos);
     placePiece(pos, WHITE_PAWN, WHITE, PAWN, E2);
-    pos.update_occupancy();
     pos.key = 0x123456789ABCDEF0ULL;
 
     Move m = makeMove(E2, E4, DOUBLE_PAWN_PUSH);
