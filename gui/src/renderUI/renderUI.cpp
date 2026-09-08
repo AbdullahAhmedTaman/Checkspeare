@@ -49,7 +49,7 @@ namespace renderUI
         }
     }
 
-    void windowRenderUI(sf::RenderWindow& window, Config& conf)
+    void windowRenderUI(sf::RenderWindow& window, Config& conf, const AssetManager& assets)
     {
         sf::Clock deltaClock;
         // ---
@@ -110,6 +110,19 @@ namespace renderUI
                     window.draw(square);
                 }
             }
+            sf::Sprite testPawn(assets.getTexture("White_Pawn"));
+
+            float scaleX = conf.squareSize / testPawn.getLocalBounds().size.x;
+            float scaleY = conf.squareSize / testPawn.getLocalBounds().size.y;
+
+            testPawn.setScale({scaleX, scaleY});
+            testPawn.setPosition({0 * conf.squareSize, 6 * conf.squareSize});
+            window.draw(testPawn);
+
+            sf::Sprite testKing(assets.getTexture("Black_King"));
+            testKing.setScale({scaleX, scaleY});
+            testKing.setPosition({4 * conf.squareSize, 0 * conf.squareSize});
+            window.draw(testKing);
 
             // ----------------------------------------------------
             // ImGui rendering

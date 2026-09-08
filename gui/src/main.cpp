@@ -6,20 +6,29 @@
 #include <imgui.h>
 #include <iostream>
 
+#include "renderUI/AssetManager.h"
 #include "renderUI/renderUI.h"
+
 
 int main()
 {
     try
     {
+        renderUI::AssetManager assetManager;
+
+        if (!assetManager.loadAllPieceTextures("gui/assets/pieces/"))
+        {
+            std::cerr << "Failed to load piece textures. Check directory paths!\n";
+            return -1;
+        }
+
         auto window = renderUI::initWindow();
-        // this is non-copybable object which handlded by c++17 RVO
         Config conf;
-        renderUI::windowRenderUI(window, conf);
+        renderUI::windowRenderUI(window, conf, assetManager);
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Fatal , no Init happened " << e.what() << '\n';
+        std::cerr << "Fatal error: " << e.what() << '\n';
         return -1;
     }
     return 0;
