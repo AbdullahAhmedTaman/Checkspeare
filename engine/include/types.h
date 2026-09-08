@@ -123,3 +123,58 @@ struct SearchLimits
     int movetime;
     bool infinite;
 };
+
+// Generic Enum Range Helper
+template <typename T>
+struct EnumRange
+{
+    T first;
+    T last;
+
+    struct Iterator
+    {
+        T value;
+
+        T operator*() const
+        {
+            return value;
+        }
+
+        Iterator& operator++()
+        {
+            value = static_cast<T>(static_cast<uint8_t>(value) + 1);
+            return *this;
+        }
+
+        bool operator!=(const Iterator& other) const
+        {
+            return value != other.value;
+        }
+    };
+
+    Iterator begin() const
+    {
+        return {first};
+    }
+
+    Iterator end() const
+    {
+        return {last};
+    }
+};
+
+template <typename T>
+constexpr EnumRange<T> all_values(T start, T end)
+{
+    return {start, end};
+}
+
+constexpr auto all_squares()
+{
+    return all_values(A1, SQ_NONE);
+}
+
+constexpr auto all_piece_types()
+{
+    return all_values(PAWN, NONE);
+}
