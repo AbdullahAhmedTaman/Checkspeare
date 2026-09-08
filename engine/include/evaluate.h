@@ -7,5 +7,6 @@ namespace Eval
     constexpr int MG_WEIGHT[PieceType::NONE] = {82, 337, 365, 477, 1025, 0};
     constexpr int EG_WEIGHT[PieceType::NONE] = {94, 281, 297, 512, 936, 0};
 
+    void init_scores(Position& pos); // call it once after parsing FEN
     int evaluate(const Position& pos);
 } // namespace Eval

@@ -2,7 +2,6 @@
 #include "bitboard.h"
 #include "pst.h"
 
-
 namespace Eval
 {
 
@@ -16,74 +15,45 @@ namespace Eval
 
     int evaluate(const Position& pos)
     {
-        int white_mg = 0;
-        int white_eg = 0;
-        int black_mg = 0;
-        int black_eg = 0;
+        int mgScore = pos.mg_score[WHITE] - pos.mg_score[BLACK];
+        int egScore = pos.eg_score[WHITE] - pos.eg_score[BLACK];
 
-        int gamePhase = 0;
+        int phase = pos.game_phase;
+        if (phase > GAME_PHASE_MAX)
+            phase = GAME_PHASE_MAX;
 
-        // calculation for white pieces
-        for (PieceType pt : ALL_PIECE_TYPES)
-        {
-            Bitboard bb = pos.pieces[WHITE][pt];
-            int count = popcount(bb);
-
-            // calculate phase value
-            gamePhase += count * PHASE_WEIGHTS[pt];
-
-            // calculate material score
-            white_mg += count * MG_WEIGHT[pt];
-            white_eg += count * EG_WEIGHT[pt];
-
-            // calculate PST score for each piece of the specified type
-            while (bb)
-            {
-                Square sq = pop_lsb(bb);
-                Square pst_sq = mirror_square(sq);
-
-                white_mg += PST_MG[pt][pst_sq];
-                white_eg += PST_EG[pt][pst_sq];
-            }
-        }
-        // calculation for black pieces
-        for (PieceType pt : ALL_PIECE_TYPES)
-        {
-            Bitboard bb = pos.pieces[BLACK][pt];
-            int count = popcount(bb);
-
-            gamePhase += count * PHASE_WEIGHTS[pt];
-
-            black_mg += count * MG_WEIGHT[pt];
-            black_eg += count * EG_WEIGHT[pt];
-
-            while (bb)
-            {
-                Square sq = pop_lsb(bb);
-
-                black_mg += PST_MG[pt][sq];
-                black_eg += PST_EG[pt][sq];
-            }
-        }
-
-        if (gamePhase > GAME_PHASE_MAX)
-            gamePhase = GAME_PHASE_MAX;
-
-        int mgScore = white_mg - black_mg;
-        int egScore = white_eg - black_eg;
-
-        int mgWeight = (gamePhase * 256) / GAME_PHASE_MAX;
+        int mgWeight = (phase * 256) / GAME_PHASE_MAX;
         int egWeight = 256 - mgWeight;
 
         int finalEval = ((mgScore * mgWeight) + (egScore * egWeight)) >> 8;
+        return (pos.sideToMove == WHITE) ? finalEval : -finalEval;
+    }
 
-        if (pos.sideToMove == WHITE)
+    void init_scores(Position& pos)
+    {
+        pos.mg_score[WHITE] = 0;
+        pos.mg_score[BLACK] = 0;
+        pos.eg_score[WHITE] = 0;
+        pos.eg_score[BLACK] = 0;
+        pos.game_phase = 0;
+
+        for (int color = WHITE; color <= BLACK; ++color)
         {
-            return finalEval;
-        }
-        else
-        {
-            return -finalEval;
+            for (PieceType pt : ALL_PIECE_TYPES)
+            {
+                Bitboard bb = pos.pieces[color][pt];
+                int count = popcount(bb);
+                pos.game_phase += count * PHASE_WEIGHTS[pt];
+
+                while (bb)
+                {
+                    Square sq = pop_lsb(bb);
+                    Square pst_sq = (color == WHITE) ? mirror_square(sq) : sq;
+
+                    pos.mg_score[color] += MG_WEIGHT[pt] + PST_MG[pt][pst_sq];
+                    pos.eg_score[color] += EG_WEIGHT[pt] + PST_EG[pt][pst_sq];
+                }
+            }
         }
     }
 
