@@ -1,5 +1,4 @@
 #pragma once
-#define ZOBRIST_H
 
 #include "position.h"
 #include "types.h"
