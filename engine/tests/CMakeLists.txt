@@ -1,5 +1,5 @@
 add_executable(EngineTests
-    bitboard_tests.cpp
+    position_tests.cpp
 )
 
 target_link_libraries(EngineTests

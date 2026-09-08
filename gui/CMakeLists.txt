@@ -20,28 +20,3 @@ target_link_libraries(ChessGUI
         SFML::Audio
         ImGui-SFML::ImGui-SFML
 )
-
-if(WIN32)
-
-    add_custom_command(
-        TARGET ChessGUI
-        POST_BUILD
-
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SFML::System>
-            $<TARGET_FILE_DIR:ChessGUI>
-
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SFML::Window>
-            $<TARGET_FILE_DIR:ChessGUI>
-
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SFML::Graphics>
-            $<TARGET_FILE_DIR:ChessGUI>
-
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:SFML::Audio>
-            $<TARGET_FILE_DIR:ChessGUI>
-    )
-
-endif()
