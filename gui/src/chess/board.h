@@ -32,6 +32,7 @@ namespace Chess
     class Board
     {
         const std ::optional<Piece>& getPiece(Square square) const;
+        void setPiece(Square square, std::optional<Piece> piece);
 
     private:
         std::array<std::optional<Piece>, 64> squares;
