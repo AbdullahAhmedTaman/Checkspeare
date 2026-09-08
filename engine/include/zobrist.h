@@ -11,10 +11,10 @@
  * passant files.
  */
 
-extern uint64_t piece_keys[12][64]; ///< Random numbers for each [piece_type][square] combination.
-extern uint64_t side_key;           ///< Random number XORed when it is Black's turn to move.
-extern uint64_t castle_keys[16];    ///< Random numbers for each castling right combination.
-extern uint64_t en_passant_keys[8]; ///< Random numbers for each en passant file(a-h).
+extern Key piece_keys[12][64]; ///< Random numbers for each [piece_type][square] combination.
+extern Key side_key;           ///< Random number XORed when it is Black's turn to move.
+extern Key castle_keys[16];    ///< Random numbers for each castling right combination.
+extern Key en_passant_keys[8]; ///< Random numbers for each en passant file(a-h).
 
 namespace Zobrist
 {
