@@ -1,0 +1,13 @@
+#pragma once
+#include <SFML/Graphics.hpp>
+
+struct Config
+{
+    bool showDemoWindow = true;
+    float squareSize = 80.0f;
+};
+
+sf::RenderWindow initWindow();
+void imGuiRenderUI(sf::RenderWindow& window, Config& conf);
+// where to write the imGui components
+void windowRenderUI(sf::RenderWindow& window, Config& conf);
