@@ -1,5 +1,5 @@
 add_executable(EngineTests
-    position_tests.cpp
+    test_attacks.cpp
 )
 
 target_link_libraries(EngineTests

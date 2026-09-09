@@ -1,4 +1,4 @@
-#include "../include/attacks.h"
+#include "attacks.h"
 #include "bitboard.h"
 #include "types.h"
 
@@ -6,6 +6,7 @@ namespace
 {
     Bitboard arrKnightAttacks[Square::SQ_NONE];
     Bitboard arrKingAttacks[Square::SQ_NONE];
+    Bitboard arrReverseSquareBit[Square::SQ_NONE];
 
     Bitboard calculate_knight_attacks(Square sq)
     {
@@ -34,6 +35,15 @@ namespace
         return shift_north(bb) | shift_south(bb) | shift_east(bb) | shift_west(bb) | shift_north_east(bb) |
                shift_south_east(bb) | shift_north_west(bb) | shift_south_west(bb);
     }
+
+    Bitboard ray_attacks(Bitboard occ, Bitboard mask, Square sq)
+    {
+        Bitboard s = square_bb(sq);
+        Bitboard o = occ & mask;
+        Bitboard forward = o - (s << 1);
+        Bitboard rev = reverse_bb(reverse_bb(o) - 2 * arrReverseSquareBit[sq]);
+        return (forward ^ rev) & mask;
+    }
 } // namespace
 
 /**
@@ -46,6 +56,7 @@ void init_attacks()
     {
         arrKnightAttacks[sq] = calculate_knight_attacks(sq);
         arrKingAttacks[sq] = calculate_king_attacks(sq);
+        arrReverseSquareBit[sq] = reverse_bb(square_bb(sq));
     }
 }
 
@@ -67,4 +78,19 @@ Bitboard knight_attacks(Square sq)
 Bitboard king_attacks(Square sq)
 {
     return arrKingAttacks[sq];
+}
+
+Bitboard bishop_attacks(Bitboard occ, Square sq)
+{
+    return ray_attacks(occ, diagonal_bb(sq), sq) | ray_attacks(occ, anti_diagonal_bb(sq), sq);
+}
+
+Bitboard rook_attacks(Bitboard occ, Square sq)
+{
+    return ray_attacks(occ, file_bb(sq), sq) | ray_attacks(occ, rank_bb(sq), sq);
+}
+
+Bitboard queen_attacks(Bitboard occ, Square sq)
+{
+    return bishop_attacks(occ, sq) | rook_attacks(occ, sq);
 }
