@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace Chess
 {
@@ -27,11 +28,14 @@ namespace Chess
     };
 
     using Square = std::uint8_t;
+    using UCI = std::string;
 
     class Board
     {
         const std ::optional<Piece>& getPiece(Square square) const;
         void setPiece(Square square, std::optional<Piece> piece);
+        Square uciToBoard(std::string);
+        const UCI boardToUci(Square square);
 
     private:
         std::array<std::optional<Piece>, 64> squares;

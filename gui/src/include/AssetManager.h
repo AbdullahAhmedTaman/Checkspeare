@@ -12,6 +12,7 @@ namespace Theme
         AssetManager() = default;
 
         bool loadAllPieceTextures(const std::string& basePath = "gui/assets/pieces/");
+        bool loadAllSquareTextures(const std::string& basePath = "gui/assets/pieces/");
         const sf::Texture& getTexture(const std::string& key) const;
         static std::string getPieceKey(const Chess::Piece& piece);
 
