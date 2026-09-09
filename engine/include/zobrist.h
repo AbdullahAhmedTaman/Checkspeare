@@ -32,5 +32,5 @@ namespace Zobrist
      * @param pos The current board position to evaluate.
      * @return A 64-bit integer representing the unique hash of the position.
      */
-    uint64_t generate_key(const Position& pos);
+    Key generate_key(const Position& pos);
 } // namespace Zobrist
