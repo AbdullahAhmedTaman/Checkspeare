@@ -66,6 +66,4 @@ namespace Theme
         }
         return colorStr + "_" + typeStr;
     }
-
-    std::unordered_map<std::string, sf::Texture> m_textures;
 } // namespace Theme
