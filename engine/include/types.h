@@ -98,6 +98,13 @@ struct Move
 {
     uint16_t data;
 
+    Move(Square from, Square to, MoveFlag moveFlag)
+    {
+        data = from;
+        data |= to << 6;
+        data |= moveFlag << 12;
+    }
+
     inline Square from() const
     {
         return static_cast<Square>(data & 0x3F);
