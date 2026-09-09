@@ -15,14 +15,14 @@ namespace Eval
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
 
-    int taper(const Score& score, const Position& pos)
+    int taper(int mg_total, int eg_total, const Position& pos)
     {
         int phase = std::min(pos.game_phase, GAME_PHASE_MAX);
 
         int mgWeight = (phase * 256) / GAME_PHASE_MAX;
         int egWeight = 256 - mgWeight;
 
-        int finalEval = ((score.mg * mgWeight) + (score.eg * egWeight)) >> 8;
+        int finalEval = ((mg_total * mgWeight) + (eg_total * egWeight)) >> 8;
         return (pos.sideToMove == WHITE) ? finalEval : -finalEval;
     }
 
@@ -30,15 +30,13 @@ namespace Eval
     {
         Score s;
 
-        if (popcount(pos.pieces[WHITE][BISHOP]) >= 2)
+        for (int c = WHITE; c <= BLACK; ++c)
         {
-            s.mg += BISHOP_PAIR_MG;
-            s.eg += BISHOP_PAIR_EG;
-        }
-        if (popcount(pos.pieces[BLACK][BISHOP]) >= 2)
-        {
-            s.mg -= BISHOP_PAIR_MG;
-            s.eg -= BISHOP_PAIR_EG;
+            if (popcount(pos.pieces[c][BISHOP]) >= 2)
+            {
+                s.mg[c] += BISHOP_PAIR_MG;
+                s.eg[c] += BISHOP_PAIR_EG;
+            }
         }
 
         return s;
@@ -47,12 +45,16 @@ namespace Eval
     int evaluate(const Position& pos)
     {
         Score score;
-        score.mg = pos.mg_score[WHITE] - pos.mg_score[BLACK];
-        score.eg = pos.eg_score[WHITE] - pos.eg_score[BLACK];
+        score.mg[WHITE] = pos.mg_score[WHITE];
+        score.mg[BLACK] = pos.mg_score[BLACK];
+        score.eg[WHITE] = pos.eg_score[WHITE];
+        score.eg[BLACK] = pos.eg_score[BLACK];
 
         score += evaluate_bishop_pair(pos);
 
-        return taper(score, pos);
+        int mg_total = score.mg[WHITE] - score.mg[BLACK];
+        int eg_total = score.eg[WHITE] - score.eg[BLACK];
+        return taper(mg_total, eg_total, pos);
     }
 
     void init_scores(Position& pos)

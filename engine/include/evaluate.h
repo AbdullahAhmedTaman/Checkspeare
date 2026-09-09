@@ -4,28 +4,26 @@
 
 struct Score
 {
-    int mg = 0;
-    int eg = 0;
+    int mg[2] = {0, 0};
+    int eg[2] = {0, 0};
 
     Score() = default;
 
-    Score(int m, int e)
-        : mg(m),
-          eg(e)
-    {
-    }
-
     Score& operator+=(const Score& rhs)
     {
-        mg += rhs.mg;
-        eg += rhs.eg;
+        mg[WHITE] += rhs.mg[WHITE];
+        mg[BLACK] += rhs.mg[BLACK];
+        eg[WHITE] += rhs.eg[WHITE];
+        eg[BLACK] += rhs.eg[BLACK];
         return *this;
     }
 
     Score& operator-=(const Score& rhs)
     {
-        mg -= rhs.mg;
-        eg -= rhs.eg;
+        mg[WHITE] -= rhs.mg[WHITE];
+        mg[BLACK] -= rhs.mg[BLACK];
+        eg[WHITE] -= rhs.eg[WHITE];
+        eg[BLACK] -= rhs.eg[BLACK];
         return *this;
     }
 };
