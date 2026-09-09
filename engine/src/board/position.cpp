@@ -230,3 +230,23 @@ void Position::unmake_move(Move m)
         board[rook_from] = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
     }
 }
+
+bool Position::is_square_attacked(Square sq, Color attackingColor) const
+{
+    const Bitboard occupied =
+        occupancy[BOTH] | square_bb(sq); // OR-ing is necessary because we're using HQ method for sliding piece attacks.
+
+    if (pawn_attacks(static_cast<Color>(attackingColor ^ 1), sq) & pieces[attackingColor][PAWN])
+        return true;
+
+    if (knight_attacks(sq) & pieces[attackingColor][KNIGHT])
+        return true;
+
+    if (king_attacks(sq) & pieces[attackingColor][KING])
+        return true;
+
+    if (bishop_attacks(occupied, sq) & (pieces[attackingColor][BISHOP] | pieces[attackingColor][QUEEN]))
+        return true;
+
+    return rook_attacks(occupied, sq) & (pieces[attackingColor][ROOK] | pieces[attackingColor][QUEEN]);
+}

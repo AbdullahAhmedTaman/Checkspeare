@@ -1,4 +1,5 @@
 #pragma once
+#include "attacks.h"
 #include "types.h"
 
 /**
@@ -55,4 +56,11 @@ struct Position
      * @brief Recomputes the White, Black, and Both occupancy bitboards.
      */
     void update_occupancy();
+
+    /**
+     * @brief Checks whether a square is attacked by a given color.
+     * @param sq Target square.
+     * @param byColor Color of the attacking side.
+     */
+    bool is_square_attacked(Square sq, Color attackingColor) const;
 };
