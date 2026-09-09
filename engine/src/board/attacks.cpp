@@ -41,7 +41,7 @@ namespace
         Bitboard s = square_bb(sq);
         Bitboard o = occ & mask;
         Bitboard forward = o - (s << 1);
-        Bitboard rev = reverse_bb(reverse_bb(o) - 2 * arrReverseSquareBit[sq]);
+        Bitboard rev = reverse_bb(reverse_bb(o) - (arrReverseSquareBit[sq] << 1));
         return (forward ^ rev) & mask;
     }
 } // namespace

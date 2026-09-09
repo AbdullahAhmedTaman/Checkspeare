@@ -1,4 +1,5 @@
 #pragma once
+#include "attacks.h"
 #include "types.h"
 
 /**
@@ -7,7 +8,7 @@
  * To optimize the search tree traversal, the engine saves only the variables that cannot be
  * mathematically reversed.
  */
-struct UndoState // Edit <<<=====
+struct UndoState
 {
     uint8_t castlingRights;
     Square enPassantSquare;
@@ -55,4 +56,11 @@ struct Position
      * @brief Recomputes the White, Black, and Both occupancy bitboards.
      */
     void update_occupancy();
+
+    /**
+     * @brief Checks whether a square is attacked by a given color.
+     * @param sq Target square.
+     * @param byColor Color of the attacking side.
+     */
+    bool is_square_attacked(Square sq, Color attackingColor) const;
 };
