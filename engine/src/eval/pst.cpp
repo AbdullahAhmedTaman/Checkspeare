@@ -1,7 +1,9 @@
 #include "pst.h"
+#include "types.h"
 
 namespace Eval
 { // NOTE: these tables are from black's perspective
+    // clang-format off
     constexpr int RAW_PAWN_MG[64] = {
         0,  0,   0,   0,   0,   0,  0,   0,   98,  134, 61,  95,  68, 126, 34, -11, -6, 7,   26,  31, 65, 56,
         25, -20, -14, 13,  6,   21, 23,  12,  17,  -23, -27, -2,  -5, 12,  17, 6,   10, -25, -26, -4, -4, -10,
@@ -67,6 +69,7 @@ namespace Eval
         22,  -22, -17, -20, -12, -27, -30, -25, -14, -36, -49, -1, -27, -39, -46, -44, -33, -51, -14, -14, -22, -46,
         -44, -30, -15, -27, 1,   7,   -8,  -64, -43, -16, 9,   8,  -15, 36,  12,  -54, 8,   -28, 24,  14,
     };
+    // clang-format on
 
     constexpr PrecomputedPST generate_psts()
     {
