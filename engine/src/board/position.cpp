@@ -15,6 +15,7 @@
     occupancy[BOTH] = occupancy[WHITE] | occupancy[BLACK];
 }*/
 
+// helper functions for evaluation updates
 namespace
 {
     inline void move_piece_eval(Position& pos, PieceType pt, Color c, Square from, Square to)
@@ -40,6 +41,20 @@ namespace
         pos.game_phase += Eval::PHASE_WEIGHTS[pt];
     }
 } // namespace
+
+namespace
+{
+    constexpr uint8_t CASTLING_RIGHTS_MASK[64] = {
+        13, 15, 15, 15, 12, 15, 15, 14, // 0..7   (A1 = 13, E1 = 12, H1 = 14)
+        15, 15, 15, 15, 15, 15, 15, 15, // 8..15  (Rank 2)
+        15, 15, 15, 15, 15, 15, 15, 15, // 16..23 (Rank 3)
+        15, 15, 15, 15, 15, 15, 15, 15, // 24..31 (Rank 4)
+        15, 15, 15, 15, 15, 15, 15, 15, // 32..39 (Rank 5)
+        15, 15, 15, 15, 15, 15, 15, 15, // 40..47 (Rank 6)
+        15, 15, 15, 15, 15, 15, 15, 15, // 48..55 (Rank 7)
+        7,  15, 15, 15, 3,  15, 15, 11  // 56..63 (A8 = 7,  E8 = 3,  H8 = 11)
+    };
+}
 
 void Position::make_move(Move m)
 {
@@ -133,6 +148,9 @@ void Position::make_move(Move m)
         board[rook_to] = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
         move_piece_eval(*this, ROOK, sideToMove, rook_from, rook_to);
     }
+
+    // Update castling rights based on the move made
+    castlingRights &= CASTLING_RIGHTS_MASK[from] & CASTLING_RIGHTS_MASK[to];
 
     // 6. Update Clocks and State
     enPassantSquare = SQ_NONE;

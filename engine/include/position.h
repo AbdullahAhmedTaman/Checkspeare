@@ -8,7 +8,7 @@
  * To optimize the search tree traversal, the engine saves only the variables that cannot be
  * mathematically reversed.
  */
-struct UndoState // Edit <<<=====
+struct UndoState
 {
     uint8_t castlingRights;
     Square enPassantSquare;
