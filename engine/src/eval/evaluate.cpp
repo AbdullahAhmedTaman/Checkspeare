@@ -1,11 +1,17 @@
 #include "evaluate.h"
 #include "bitboard.h"
+#include "position.h"
 #include "pst.h"
+#include "types.h"
 #include <algorithm>
 
 namespace Eval
 {
     constexpr int GAME_PHASE_MAX = 24;
+    // position heuristics bonuses
+    // bishop pair
+    constexpr int BISHOP_PAIR_MG = 20;
+    constexpr int BISHOP_PAIR_EG = 50;
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
 
@@ -20,11 +26,31 @@ namespace Eval
         return (pos.sideToMove == WHITE) ? finalEval : -finalEval;
     }
 
+    Score evaluate_bishop_pair(const Position& pos)
+    {
+        Score s;
+
+        if (popcount(pos.pieces[WHITE][BISHOP]) >= 2)
+        {
+            s.mg += BISHOP_PAIR_MG;
+            s.eg += BISHOP_PAIR_EG;
+        }
+        if (popcount(pos.pieces[BLACK][BISHOP]) >= 2)
+        {
+            s.mg -= BISHOP_PAIR_MG;
+            s.eg -= BISHOP_PAIR_EG;
+        }
+
+        return s;
+    }
+
     int evaluate(const Position& pos)
     {
         Score score;
         score.mg = pos.mg_score[WHITE] - pos.mg_score[BLACK];
         score.eg = pos.eg_score[WHITE] - pos.eg_score[BLACK];
+
+        score += evaluate_bishop_pair(pos);
 
         return taper(score, pos);
     }
