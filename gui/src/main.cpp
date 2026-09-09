@@ -6,15 +6,14 @@
 #include <imgui.h>
 #include <iostream>
 
-#include "renderUI/AssetManager.h"
-#include "renderUI/renderUI.h"
-
+#include "include/AssetManager.h"
+#include "include/renderUI.h"
 
 int main()
 {
     try
     {
-        renderUI::AssetManager assetManager;
+        Theme::AssetManager assetManager;
 
         if (!assetManager.loadAllPieceTextures("gui/assets/pieces/"))
         {
@@ -22,9 +21,9 @@ int main()
             return -1;
         }
 
-        auto window = renderUI::initWindow();
+        auto window = RenderUI::initWindow();
         Config conf;
-        renderUI::windowRenderUI(window, conf, assetManager);
+        RenderUI::windowRenderUI(window, conf, assetManager);
     }
     catch (const std::exception& e)
     {

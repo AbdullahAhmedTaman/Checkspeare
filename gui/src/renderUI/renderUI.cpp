@@ -1,11 +1,11 @@
-#include "renderUI.h"
+#include "../include/renderUI.h"
 #include "SFML/Graphics/RenderWindow.hpp"
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
 
-namespace renderUI
+namespace RenderUI
 {
 
     sf::RenderWindow initWindow()
@@ -49,7 +49,7 @@ namespace renderUI
         }
     }
 
-    void windowRenderUI(sf::RenderWindow& window, Config& conf, const AssetManager& assets)
+    void windowRenderUI(sf::RenderWindow& window, Config& conf, const Theme::AssetManager& assets)
     {
         sf::Clock deltaClock;
         // ---
@@ -82,7 +82,7 @@ namespace renderUI
             // ----------------------------------------------------
             // ImGui Components
             // ----------------------------------------------------
-            renderUI::imGuiRenderUI(window, conf);
+            RenderUI::imGuiRenderUI(window, conf);
             // ----------------------------------------------------
             // SFML rendering
             // ----------------------------------------------------
@@ -139,4 +139,4 @@ namespace renderUI
 
         ImGui::SFML::Shutdown();
     }
-} // namespace renderUI
+} // namespace RenderUI
