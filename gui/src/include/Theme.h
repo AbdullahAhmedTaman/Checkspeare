@@ -14,6 +14,7 @@ namespace Theme
         const sf::Texture* Square_Dark;
     };
 
+    // Use it for IdiotProof code
     struct Tag
     {
         std::string Defualt = "Default";

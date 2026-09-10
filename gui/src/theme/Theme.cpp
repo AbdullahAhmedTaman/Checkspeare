@@ -6,6 +6,7 @@ namespace Theme
 {
     BoardTheme getBoardTheme(const std::string& tag, const AssetManager::AssetManager& manager)
     {
+        // Factory Like for themes
         BoardTheme theme;
         if (tag == "Modern")
         {
