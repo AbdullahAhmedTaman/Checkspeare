@@ -6,7 +6,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Theme
+namespace AssetManager
 {
     struct Tag
     {
@@ -39,4 +39,4 @@ namespace Theme
         // memory efficient as it stores a refrence only , Texture object is VRAM heavy
         std::unordered_map<std::string, std::vector<const sf::Texture*>> m_groupTexture;
     };
-} // namespace Theme
+} // namespace AssetManager

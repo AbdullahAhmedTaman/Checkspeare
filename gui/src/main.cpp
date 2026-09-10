@@ -13,7 +13,7 @@ int main()
 {
     try
     {
-        Theme::AssetManager assetManager;
+        AssetManager::AssetManager assetManager;
 
         assetManager.loadAllPieceTextures("gui/assets/pieces/");
 

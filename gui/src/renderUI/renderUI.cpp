@@ -49,7 +49,7 @@ namespace RenderUI
         }
     }
 
-    void windowRenderUI(sf::RenderWindow& window, Config& conf, const Theme::AssetManager& assets)
+    void windowRenderUI(sf::RenderWindow& window, Config& conf, const AssetManager::AssetManager& assets)
     {
         sf::Clock deltaClock;
         // ---

@@ -13,5 +13,5 @@ namespace RenderUI
     sf::RenderWindow initWindow();
     void imGuiRenderUI(sf::RenderWindow& window, Config& conf);
     // where to write the imGui components
-    void windowRenderUI(sf::RenderWindow& window, Config& conf, const Theme::AssetManager& assets);
+    void windowRenderUI(sf::RenderWindow& window, Config& conf, const AssetManager::AssetManager& assets);
 } // namespace RenderUI
