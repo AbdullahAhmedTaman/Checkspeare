@@ -31,6 +31,7 @@ namespace BoardRenderer
     {
     public:
         BoardRenderer() = default;
-        void render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme);
+        void render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme,
+                    const Chess::Board& board, const AssetManager::AssetManager& assets);
     };
 } // namespace BoardRenderer

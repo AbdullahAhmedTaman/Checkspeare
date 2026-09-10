@@ -32,6 +32,9 @@ namespace Chess
 
     class Board
     {
+    public:
+        Board() = default;
+        void setupInitialBoard();
         const std ::optional<Piece>& getPiece(Square square) const;
         void setPiece(Square square, std::optional<Piece> piece);
         Square uciToSquare(std::string);

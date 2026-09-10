@@ -1,4 +1,5 @@
 #include "../include/renderUI.h"
+#include "../include/board.h"
 #include "SFML/Graphics/RenderWindow.hpp"
 #include "Theme.h"
 #include <SFML/Graphics.hpp>
@@ -35,6 +36,8 @@ namespace RenderUI
 
         ImGui::SliderFloat("Square Size", &geo.squareSize, 20.0f, 150.0f);
 
+        ImGui::SliderFloat2("Board Position", &geo.boardOrigin.x, 0.0f, 300.0f);
+
         if (ImGui::Button("Test Button"))
         {
             // Just testing interaction
@@ -57,8 +60,13 @@ namespace RenderUI
         // main Render Loop
         // ---
         BoardRenderer::BoardGeometry geo;
-        BoardRenderer::BoardRenderer board;
+        BoardRenderer::BoardRenderer boardRenderer;
         Theme::BoardTheme theme = Theme::getBoardTheme("Default", assets);
+
+        Chess::Board board;
+
+        board.setupInitialBoard();
+
         while (window.isOpen())
         {
             // ----------------------------------------------------
@@ -95,22 +103,7 @@ namespace RenderUI
             window.clear(sf::Color(255, 255, 255));
 
             // Draw a simple chessboard -- new board
-            board.render(window, geo, theme);
-            /*
-                sf::Sprite testPawn(assets.getTexture("White_Pawn"));
-
-            float scaleX = conf.squareSize / testPawn.getLocalBounds().size.x;
-            float scaleY = conf.squareSize / testPawn.getLocalBounds().size.y;
-
-            testPawn.setScale({scaleX, scaleY});
-            testPawn.setPosition({0 * conf.squareSize, 6 * conf.squareSize});
-            window.draw(testPawn);
-
-            sf::Sprite testKing(assets.getTexture("Black_King"));
-            testKing.setScale({scaleX, scaleY});
-            testKing.setPosition({4 * conf.squareSize, 0 * conf.squareSize});
-            window.draw(testKing);
-            */
+            boardRenderer.render(window, geo, theme, board, assets);
 
             // ----------------------------------------------------
             // ImGui rendering
@@ -131,30 +124,67 @@ namespace RenderUI
 
 namespace BoardRenderer
 {
-
-    void BoardRenderer::render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme)
+    void BoardRenderer::render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme,
+                               const Chess::Board& board, const AssetManager::AssetManager& assets)
     {
+        // board representation
         for (int rank = 0; rank < 8; ++rank)
         {
             for (int file = 0; file < 8; ++file)
             {
                 const sf::Texture* texture = ((rank + file) % 2 == 0) ? theme.Square_Dark : theme.Square_Light;
 
+                if (!texture)
+                    continue;
+
                 sf::Sprite square(*texture);
-                // Position
+
                 float x = geo.boardOrigin.x + file * geo.squareSize;
-                float y = geo.boardOrigin.y + rank * geo.squareSize;
+                float y = geo.boardOrigin.y + (7 - rank) * geo.squareSize;
+
                 square.setPosition({x, y});
-                // Scale
+
                 float scaleX = geo.squareSize / square.getLocalBounds().size.x;
-
                 float scaleY = geo.squareSize / square.getLocalBounds().size.y;
-
                 square.setScale({scaleX, scaleY});
 
                 window.draw(square);
             }
         }
-    }
 
+        // Render pieces on the board
+
+        for (Chess::Square sq = 0; sq < 64; ++sq)
+        {
+            const auto& pieceOpt = board.getPiece(sq);
+
+            if (pieceOpt.has_value())
+            {
+                const Chess::Piece& piece = pieceOpt.value();
+
+                std::string pieceKey = AssetManager::AssetManager::getPieceKey(piece);
+
+                const sf::Texture& pieceTexture = assets.getTexture(pieceKey);
+                sf::Sprite pieceSprite(pieceTexture);
+
+                int file = sq % 8;
+                int rank = sq / 8;
+
+                float squareX = geo.boardOrigin.x + file * geo.squareSize;
+                float squareY = geo.boardOrigin.y + (7 - rank) * geo.squareSize;
+
+                float paddingRatio = 0.85f;
+                float targetSize = geo.squareSize * paddingRatio;
+
+                float scaleX = targetSize / pieceSprite.getLocalBounds().size.x;
+                float scaleY = targetSize / pieceSprite.getLocalBounds().size.y;
+                pieceSprite.setScale({scaleX, scaleY});
+
+                float offset = (geo.squareSize - targetSize) / 2.0f;
+                pieceSprite.setPosition({squareX + offset, squareY + offset});
+
+                window.draw(pieceSprite);
+            }
+        }
+    }
 } // namespace BoardRenderer

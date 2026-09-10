@@ -28,6 +28,7 @@ namespace AssetManager
                 {
                     throw std::runtime_error("[AssetManager Error] Failed to load:" + fullPath + '\n');
                 }
+
                 m_textures[key] = texture;
                 // class by color
                 m_groupTexture[color].push_back(&m_textures[key]);
