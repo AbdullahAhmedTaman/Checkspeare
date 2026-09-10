@@ -89,7 +89,7 @@ namespace RenderUI
             // SFML rendering
             // ----------------------------------------------------
 
-            window.clear(sf::Color(30, 30, 30));
+            window.clear(sf::Color(255, 255, 255));
 
             // Draw a simple chessboard
             BoardRenderer::BoardRenderer board;
