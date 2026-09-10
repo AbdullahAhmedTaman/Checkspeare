@@ -16,6 +16,7 @@ int main()
         AssetManager::AssetManager assetManager;
 
         assetManager.loadAllPieceTextures("gui/assets/pieces/");
+        assetManager.loadAllSquareTextures("gui/assets/squares/");
 
         auto window = RenderUI::initWindow();
         Config conf;
@@ -23,7 +24,7 @@ int main()
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Fatal error: " << e.what() << '\n';
+        std::cerr << "[Fatal error] Faild to Init due to : " << e.what() << '\n';
         return -1;
     }
     return 0;

@@ -1,5 +1,6 @@
 #include "../include/renderUI.h"
 #include "SFML/Graphics/RenderWindow.hpp"
+#include "Theme.h"
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <imgui-SFML.h>
@@ -22,7 +23,7 @@ namespace RenderUI
         return window;
     }
 
-    void imGuiRenderUI(sf::RenderWindow& window, Config& conf)
+    void imGuiRenderUI(sf::RenderWindow& window, Config& conf, BoardRenderer::BoardGeometry& geo)
     {
         ImGui::Begin("Chess Engine Test");
 
@@ -32,7 +33,7 @@ namespace RenderUI
 
         ImGui::Text("Window size: %u x %u", window.getSize().x, window.getSize().y);
 
-        ImGui::SliderFloat("Square Size", &conf.squareSize, 20.0f, 150.0f);
+        ImGui::SliderFloat("Square Size", &geo.squareSize, 20.0f, 150.0f);
 
         if (ImGui::Button("Test Button"))
         {
@@ -82,7 +83,8 @@ namespace RenderUI
             // ----------------------------------------------------
             // ImGui Components
             // ----------------------------------------------------
-            RenderUI::imGuiRenderUI(window, conf);
+            BoardRenderer::BoardGeometry geo;
+            RenderUI::imGuiRenderUI(window, conf, geo);
             // ----------------------------------------------------
             // SFML rendering
             // ----------------------------------------------------
@@ -90,27 +92,11 @@ namespace RenderUI
             window.clear(sf::Color(30, 30, 30));
 
             // Draw a simple chessboard
-            for (int rank = 0; rank < 8; ++rank)
-            {
-                for (int file = 0; file < 8; ++file)
-                {
-                    sf::RectangleShape square(sf::Vector2f(conf.squareSize, conf.squareSize));
-
-                    square.setPosition({file * conf.squareSize, rank * conf.squareSize});
-
-                    if ((rank + file) % 2 == 0)
-                    {
-                        square.setFillColor(sf::Color(240, 217, 181));
-                    }
-                    else
-                    {
-                        square.setFillColor(sf::Color(181, 136, 99));
-                    }
-
-                    window.draw(square);
-                }
-            }
-            sf::Sprite testPawn(assets.getTexture("White_Pawn"));
+            BoardRenderer::BoardRenderer board;
+            Theme::BoardTheme theme = Theme::getBoardTheme("Default", assets);
+            board.render(window, geo, theme);
+            /*
+                sf::Sprite testPawn(assets.getTexture("White_Pawn"));
 
             float scaleX = conf.squareSize / testPawn.getLocalBounds().size.x;
             float scaleY = conf.squareSize / testPawn.getLocalBounds().size.y;
@@ -123,6 +109,7 @@ namespace RenderUI
             testKing.setScale({scaleX, scaleY});
             testKing.setPosition({4 * conf.squareSize, 0 * conf.squareSize});
             window.draw(testKing);
+            */
 
             // ----------------------------------------------------
             // ImGui rendering
@@ -140,3 +127,33 @@ namespace RenderUI
         ImGui::SFML::Shutdown();
     }
 } // namespace RenderUI
+
+namespace BoardRenderer
+{
+
+    void BoardRenderer::render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme)
+    {
+        for (int rank = 0; rank < 8; ++rank)
+        {
+            for (int file = 0; file < 8; ++file)
+            {
+                const sf::Texture* texture = ((rank + file) % 2 == 0) ? theme.Square_Dark : theme.Square_Light;
+
+                sf::Sprite square(*texture);
+                // Position
+                float x = geo.boardOrigin.x + file * geo.squareSize;
+                float y = geo.boardOrigin.y + rank * geo.squareSize;
+                square.setPosition({x, y});
+                // Scale
+                float scaleX = geo.squareSize / square.getLocalBounds().size.x;
+
+                float scaleY = geo.squareSize / square.getLocalBounds().size.y;
+
+                square.setScale({scaleX, scaleY});
+
+                window.draw(square);
+            }
+        }
+    }
+
+} // namespace BoardRenderer
