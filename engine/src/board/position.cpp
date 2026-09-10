@@ -68,12 +68,19 @@ namespace
     // Applied as castlingRights &= MASK[from] & MASK[to]. Indexed by square,
     // not by piece: touching a corner or king square clears the corresponding
     // right regardless of which piece moved there.
+    // clang-format off
     constexpr uint8_t CASTLING_RIGHTS_MASK[64] = {
         13, 15, 15, 15, 12, 15, 15, 14, // A1, E1, H1
-        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
-        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
-        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 7,  15, 15, 15, 3,  15, 15, 11 // A8, E8, H8
+        15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15,
+        7,  15, 15, 15, 3,  15, 15, 11 // A8, E8, H8
     };
+    // clang-format on
+
 } // namespace
 
 Position::Position() noexcept
@@ -370,4 +377,9 @@ bool Position::is_square_attacked(Square sq, Color attackingColor) const
         return true;
 
     return false;
+}
+
+Square Position::king_square(Color c) const
+{
+    return lsb(pieces[c][KING]);
 }

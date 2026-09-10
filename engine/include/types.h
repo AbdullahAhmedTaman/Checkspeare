@@ -48,8 +48,7 @@ enum Piece : uint8_t
     PIECE_NONE
 };
 
-constexpr PieceType PIECE_TO_TYPE[13] = {PAWN,   KNIGHT, BISHOP, ROOK,  QUEEN, KING, PAWN,
-                                         KNIGHT, BISHOP, ROOK,   QUEEN, KING,  NONE};
+constexpr PieceType PIECE_TO_TYPE[13] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NONE};
 
 inline constexpr PieceType type_of(Piece pc)
 {
@@ -115,19 +114,21 @@ struct Move
 {
     uint16_t data;
 
-    Move(Square from, Square to, MoveFlag moveFlag)
+    Move() = default;
+
+    constexpr Move(Square from, Square to, MoveFlag moveFlag)
+        : data(from | (to << 6) | (moveFlag << 12))
     {
         assert(is_valid(from) && is_valid(to));
-        data = from | (to << 6) | (moveFlag << 12);
     }
 
     // data == 0, never a legal move.
-    static Move none()
+    static constexpr Move none()
     {
-        return Move(A1, A1, QUIET_MOVE);
+        return Move();
     }
 
-    static Move null()
+    static constexpr Move null()
     {
         return Move(A1, A1, NULL_MOVE);
     }
