@@ -56,6 +56,9 @@ namespace RenderUI
         // ---
         // main Render Loop
         // ---
+        BoardRenderer::BoardGeometry geo;
+        BoardRenderer::BoardRenderer board;
+        Theme::BoardTheme theme = Theme::getBoardTheme("Default", assets);
         while (window.isOpen())
         {
             // ----------------------------------------------------
@@ -83,7 +86,7 @@ namespace RenderUI
             // ----------------------------------------------------
             // ImGui Components
             // ----------------------------------------------------
-            BoardRenderer::BoardGeometry geo;
+
             RenderUI::imGuiRenderUI(window, conf, geo);
             // ----------------------------------------------------
             // SFML rendering
@@ -91,9 +94,7 @@ namespace RenderUI
 
             window.clear(sf::Color(255, 255, 255));
 
-            // Draw a simple chessboard
-            BoardRenderer::BoardRenderer board;
-            Theme::BoardTheme theme = Theme::getBoardTheme("Default", assets);
+            // Draw a simple chessboard -- new board
             board.render(window, geo, theme);
             /*
                 sf::Sprite testPawn(assets.getTexture("White_Pawn"));
