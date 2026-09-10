@@ -34,8 +34,8 @@ namespace Chess
     {
         const std ::optional<Piece>& getPiece(Square square) const;
         void setPiece(Square square, std::optional<Piece> piece);
-        Square uciToBoard(std::string);
-        const UCI boardToUci(Square square);
+        Square uciToSquare(std::string);
+        const UCI SquareToUci(Square square);
 
     private:
         std::array<std::optional<Piece>, 64> squares;

@@ -15,11 +15,7 @@ int main()
     {
         Theme::AssetManager assetManager;
 
-        if (!assetManager.loadAllPieceTextures("gui/assets/pieces/"))
-        {
-            std::cerr << "Failed to load piece textures. Check directory paths!\n";
-            return -1;
-        }
+        assetManager.loadAllPieceTextures("gui/assets/pieces/");
 
         auto window = RenderUI::initWindow();
         Config conf;

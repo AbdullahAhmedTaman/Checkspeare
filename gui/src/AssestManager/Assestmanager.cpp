@@ -9,7 +9,7 @@
 namespace Theme
 {
 
-    bool AssetManager::loadAllPieceTextures(const std::string& basePath)
+    void AssetManager::loadAllPieceTextures(const std::string& basePath)
     {
         // loockup tables
         const std::string colors[] = {"White", "Black"};
@@ -26,17 +26,19 @@ namespace Theme
                 sf::Texture texture;
                 if (!texture.loadFromFile(fullPath))
                 {
-                    std::cerr << "[AssetManager Error] Failed to load: " << fullPath << '\n';
-                    return false;
+                    throw std::runtime_error("[AssetManager Error] Failed to load:" + fullPath + '\n');
                 }
                 m_textures[key] = texture;
+                // class by color
+                m_groupTexture[color].push_back(&m_textures[key]);
+                // class by type
+                m_groupTexture[type].push_back(&m_textures[key]);
             }
         }
         std::cout << "[AssetManager Success] All 12 piece textures loaded successfully!\n";
-        return true;
     }
 
-    bool AssetManager::loadAllSquareTextures(const std::string& basePath)
+    void AssetManager::loadAllSquareTextures(const std::string& basePath)
     {
         const std::string colors[] = {"White", "Black"};
         for (const auto& color : colors)
@@ -47,13 +49,11 @@ namespace Theme
             sf ::Texture texture;
             if (!texture.loadFromFile(fullPath))
             {
-                std::cerr << "[AssetManager Error] Failed to load: " << fullPath << '\n';
-                return false;
+                throw std::runtime_error("[AssetManager Error] Failed to load:" + fullPath + '\n');
             }
             m_textures[key] = texture;
         }
         std::cout << "[AssetManager Success] All Square textures loaded successfully!\n";
-        return true;
     }
 
     const sf::Texture& AssetManager::getTexture(const std::string& key) const
@@ -61,6 +61,13 @@ namespace Theme
         return m_textures.at(key);
     }
 
+    const std::vector<const sf::Texture*>& AssetManager::getTextureByTag(const std::string& tag) const
+    {
+        // use the Tag Enum for Ediot Proof
+        return m_groupTexture.at(tag);
+    }
+
+    // regenerate the Key from Pieces by passing an actual Piece object
     std::string AssetManager::getPieceKey(const Chess::Piece& piece)
     {
         std::string colorStr = (piece.color == Chess::Color::White) ? "White" : "Black";

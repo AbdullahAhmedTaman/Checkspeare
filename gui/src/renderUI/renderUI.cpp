@@ -17,7 +17,7 @@ namespace RenderUI
         // Initialize ImGui-SFML
         if (!ImGui::SFML::Init(window))
         {
-            throw std::runtime_error("ImGui initialization failed!");
+            throw std::runtime_error("[ImGui] Initialization failed!");
         }
         return window;
     }
