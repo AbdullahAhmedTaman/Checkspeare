@@ -5,20 +5,9 @@
 #include "zobrist.h"
 #include <cassert>
 
-/*void Position::update_occupancy()
-{
-    occupancy[WHITE] = pieces[WHITE][PAWN] | pieces[WHITE][KNIGHT] | pieces[WHITE][BISHOP] | pieces[WHITE][ROOK] |
-                       pieces[WHITE][QUEEN] | pieces[WHITE][KING];
-
-    occupancy[BLACK] = pieces[BLACK][PAWN] | pieces[BLACK][KNIGHT] | pieces[BLACK][BISHOP] | pieces[BLACK][ROOK] |
-                       pieces[BLACK][QUEEN] | pieces[BLACK][KING];
-
-    occupancy[BOTH] = occupancy[WHITE] | occupancy[BLACK];
-}*/
-
-// helper functions for evaluation updates
 namespace
 {
+    // Evaluation updates.
     inline void move_piece_eval(Position& pos, PieceType pt, Color c, Square from, Square to)
     {
         pos.mg_score[c] -= Eval::MG_WEIGHT[pt] + Eval::PST.mg[c][pt][from];
@@ -41,265 +30,330 @@ namespace
         pos.eg_score[c] += Eval::EG_WEIGHT[pt] + Eval::PST.eg[c][pt][sq];
         pos.game_phase += Eval::PHASE_WEIGHTS[pt];
     }
+
+    // History stack.
+    inline void push_state(Position& pos, Piece captured)
+    {
+        UndoState& h = pos.history[pos.ply];
+        h.castlingRights = pos.castlingRights;
+        h.enPassantSquare = pos.enPassantSquare;
+        h.halfmoveClock = pos.halfmoveClock;
+        h.capturedPiece = captured;
+        h.key = pos.key;
+        h.mg_score[WHITE] = pos.mg_score[WHITE];
+        h.mg_score[BLACK] = pos.mg_score[BLACK];
+        h.eg_score[WHITE] = pos.eg_score[WHITE];
+        h.eg_score[BLACK] = pos.eg_score[BLACK];
+        h.game_phase = pos.game_phase;
+        ++pos.ply;
+    }
+
+    // Restores the state saved by the matching push_state.
+    inline Piece pop_state(Position& pos)
+    {
+        --pos.ply;
+        const UndoState& h = pos.history[pos.ply];
+        pos.castlingRights = h.castlingRights;
+        pos.enPassantSquare = h.enPassantSquare;
+        pos.halfmoveClock = h.halfmoveClock;
+        pos.key = h.key;
+        pos.mg_score[WHITE] = h.mg_score[WHITE];
+        pos.mg_score[BLACK] = h.mg_score[BLACK];
+        pos.eg_score[WHITE] = h.eg_score[WHITE];
+        pos.eg_score[BLACK] = h.eg_score[BLACK];
+        pos.game_phase = h.game_phase;
+        return h.capturedPiece;
+    }
+
+    // Applied as castlingRights &= MASK[from] & MASK[to]. Indexed by square,
+    // not by piece: touching a corner or king square clears the corresponding
+    // right regardless of which piece moved there.
+    constexpr uint8_t CASTLING_RIGHTS_MASK[64] = {
+        13, 15, 15, 15, 12, 15, 15, 14, // A1, E1, H1
+        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15,
+        15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 7,  15, 15, 15, 3,  15, 15, 11 // A8, E8, H8
+    };
 } // namespace
 
-namespace
+Position::Position() noexcept
 {
-    constexpr uint8_t CASTLING_RIGHTS_MASK[64] = {
-        13, 15, 15, 15, 12, 15, 15, 14, // 0..7   (A1 = 13, E1 = 12, H1 = 14)
-        15, 15, 15, 15, 15, 15, 15, 15, // 8..15  (Rank 2)
-        15, 15, 15, 15, 15, 15, 15, 15, // 16..23 (Rank 3)
-        15, 15, 15, 15, 15, 15, 15, 15, // 24..31 (Rank 4)
-        15, 15, 15, 15, 15, 15, 15, 15, // 32..39 (Rank 5)
-        15, 15, 15, 15, 15, 15, 15, 15, // 40..47 (Rank 6)
-        15, 15, 15, 15, 15, 15, 15, 15, // 48..55 (Rank 7)
-        7,  15, 15, 15, 3,  15, 15, 11  // 56..63 (A8 = 7,  E8 = 3,  H8 = 11)
-    };
+    clear();
+}
+
+void Position::clear() noexcept
+{
+    for (int c = 0; c < 2; ++c)
+        for (int pt = 0; pt < PieceType::NONE; ++pt)
+            pieces[c][pt] = 0;
+
+    for (int i = 0; i < 3; ++i)
+        occupancy[i] = 0;
+
+    for (int s = 0; s < Square::SQ_NONE; ++s)
+        board[s] = PIECE_NONE;
+
+    sideToMove = WHITE;
+    castlingRights = 0;
+    enPassantSquare = SQ_NONE;
+    halfmoveClock = 0;
+    key = 0;
+    mg_score[WHITE] = mg_score[BLACK] = 0;
+    eg_score[WHITE] = eg_score[BLACK] = 0;
+    game_phase = 0;
+    ply = 0;
+    // history[] left untouched: entries are always written before read.
+}
+
+void Position::update_occupancy() // Unused for now
+{
+    occupancy[WHITE] = pieces[WHITE][PAWN] | pieces[WHITE][KNIGHT] | pieces[WHITE][BISHOP] | pieces[WHITE][ROOK] |
+                       pieces[WHITE][QUEEN] | pieces[WHITE][KING];
+
+    occupancy[BLACK] = pieces[BLACK][PAWN] | pieces[BLACK][KNIGHT] | pieces[BLACK][BISHOP] | pieces[BLACK][ROOK] |
+                       pieces[BLACK][QUEEN] | pieces[BLACK][KING];
+
+    occupancy[BOTH] = occupancy[WHITE] | occupancy[BLACK];
 }
 
 void Position::make_move(Move m)
 {
-    Square from = m.from();
-    Square to = m.to();
-    int flag = m.flag();
+    assert(m.is_ok() && "make_move called with none()/invalid move");
+    assert(ply >= 0 && ply < MAX_GAME_PLY && "history stack overflow");
 
-    Piece moving_piece = board[from];
-    PieceType pt = type_of(moving_piece);
-    Piece captured_piece = board[to];
-
-    // 1. save History
-    history[ply].castlingRights = castlingRights;
-    history[ply].enPassantSquare = enPassantSquare;
-    history[ply].halfmoveClock = halfmoveClock;
-    history[ply].capturedPiece = captured_piece;
-    history[ply].key = key;
-    history[ply].mg_score[WHITE] = mg_score[WHITE];
-    history[ply].mg_score[BLACK] = mg_score[BLACK];
-    history[ply].eg_score[WHITE] = eg_score[WHITE];
-    history[ply].eg_score[BLACK] = eg_score[BLACK];
-    history[ply].game_phase = game_phase;
-    ply++;
-
-    // --- Zobrist: Clear active en passant square from previous state ---
-    if (enPassantSquare != SQ_NONE)
+    if (m.is_null())
     {
-        key ^= en_passant_keys[enPassantSquare & 7];
+        push_state(*this, PIECE_NONE);
+
+        // Clear the EP file from the key.
+        if (enPassantSquare != SQ_NONE)
+            key ^= en_passant_keys[file_of(enPassantSquare)];
+
+        enPassantSquare = SQ_NONE;
+        ++halfmoveClock;
+        sideToMove = static_cast<Color>(sideToMove ^ 1);
+        key ^= side_key;
+        return;
     }
 
-    // 2. Instead of clearing from and setting to separately, we create a XOR mask for the moving piece
-    Bitboard move_mask = square_bb(from) | square_bb(to);
+    assert(is_valid(m.from()) && is_valid(m.to()));
+    assert(board[m.from()] != PIECE_NONE && "make_move on an empty from-square");
 
-    // 3. Handle Promotions vs. Standard Moves
-    if (flag >= KNIGHT_PROMO && flag <= QUEEN_PROMO_CAP)
+    const Square from = m.from();
+    const Square to = m.to();
+
+    const Piece moving_piece = board[from];
+    const PieceType pt = type_of(moving_piece);
+    const Piece captured_piece = board[to];
+
+    const Color us = sideToMove;
+    const Color them = static_cast<Color>(us ^ 1);
+
+    push_state(*this, captured_piece);
+
+    // Drop the previous en passant file from the key.
+    if (enPassantSquare != SQ_NONE)
+        key ^= en_passant_keys[file_of(enPassantSquare)];
+
+    // move_mask moves from -> to for non-promotions, since from != to.
+    const Bitboard move_mask = square_bb(from) | square_bb(to);
+
+    if (m.is_promotion())
     {
-        PieceType promo_pt = (flag == KNIGHT_PROMO || flag == KNIGHT_PROMO_CAP)   ? KNIGHT
-                             : (flag == BISHOP_PROMO || flag == BISHOP_PROMO_CAP) ? BISHOP
-                             : (flag == ROOK_PROMO || flag == ROOK_PROMO_CAP)     ? ROOK
-                                                                                  : QUEEN;
+        const PieceType promo_pt = promotion_type(m);
+        const Piece promo_piece = make_piece(us, promo_pt);
 
-        pieces[sideToMove][PAWN] ^= square_bb(from);   // Erase pawn 1^1 = 0
-        pieces[sideToMove][promo_pt] ^= square_bb(to); // Spawn promoted piece
-
-        Piece promo_piece = static_cast<Piece>((sideToMove == WHITE) ? promo_pt : promo_pt + 6);
+        pieces[us][PAWN] ^= square_bb(from);
+        pieces[us][promo_pt] ^= square_bb(to);
         board[to] = promo_piece;
 
-        // --- Zobrist: Remove pawn from origin and add promoted piece to destination ---
         key ^= piece_keys[static_cast<int>(moving_piece)][from];
         key ^= piece_keys[static_cast<int>(promo_piece)][to];
 
-        remove_piece_eval(*this, PAWN, sideToMove, from);
-        add_piece_eval(*this, promo_pt, sideToMove, to);
+        remove_piece_eval(*this, PAWN, us, from);
+        add_piece_eval(*this, promo_pt, us, to);
     }
     else
     {
-        pieces[sideToMove][pt] ^= move_mask; // Move piece instantly
+        pieces[us][pt] ^= move_mask;
         board[to] = moving_piece;
 
-        // --- Zobrist: Move piece from 'from' to 'to' ---
         key ^= piece_keys[static_cast<int>(moving_piece)][from];
         key ^= piece_keys[static_cast<int>(moving_piece)][to];
 
-        move_piece_eval(*this, pt, sideToMove, from, to);
+        move_piece_eval(*this, pt, us, from, to);
     }
 
-    // Update occupancy for the moving piece (Always shifts from -> to)
-    occupancy[sideToMove] ^= move_mask;
+    occupancy[us] ^= move_mask;
     occupancy[BOTH] ^= move_mask;
     board[from] = PIECE_NONE;
 
-    // 4. Handle Standard Captures
+    // Standard captures. EP captures leave board[to] empty and fall through
+    // to the special-move block below.
     if (captured_piece != PIECE_NONE)
     {
-        PieceType captured_pt = type_of(captured_piece);
-        Bitboard capture_mask = square_bb(to);
+        const PieceType captured_pt = type_of(captured_piece);
+        const Bitboard capture_mask = square_bb(to);
 
-        pieces[sideToMove ^ 1][captured_pt] ^= capture_mask;
-        occupancy[sideToMove ^ 1] ^= capture_mask; // Remove captured piece from opponent's occupancy
-        occupancy[BOTH] ^= capture_mask; // Flips destination from 0 back to 1 (1^1=0, 0^1=1), keeping it occupied.
+        pieces[them][captured_pt] ^= capture_mask;
+        occupancy[them] ^= capture_mask;
+        occupancy[BOTH] ^= capture_mask;
 
-        // --- Zobrist: Remove captured piece from target square ---
         key ^= piece_keys[static_cast<int>(captured_piece)][to];
 
-        remove_piece_eval(*this, captured_pt, static_cast<Color>(sideToMove ^ 1), to);
+        remove_piece_eval(*this, captured_pt, them, to);
     }
 
-    // 5. Handle Special Flags (En Passant & Castling)
-    if (flag == EP_CAPTURE)
+    if (m.is_ep())
     {
-        Square ep_pawn_sq = (sideToMove == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
-        Bitboard ep_mask = square_bb(ep_pawn_sq);
+        const Square ep_pawn_sq = square_behind(to, us);
+        const Bitboard ep_mask = square_bb(ep_pawn_sq);
+        const Piece ep_pawn = make_piece(them, PAWN);
 
-        Piece ep_pawn = (sideToMove == WHITE) ? BLACK_PAWN : WHITE_PAWN;
-
-        pieces[sideToMove ^ 1][PAWN] ^= ep_mask;
-        occupancy[sideToMove ^ 1] ^= ep_mask;
+        pieces[them][PAWN] ^= ep_mask;
+        occupancy[them] ^= ep_mask;
         occupancy[BOTH] ^= ep_mask;
         board[ep_pawn_sq] = PIECE_NONE;
 
-        // --- Zobrist: Remove captured en-passant pawn ---
         key ^= piece_keys[static_cast<int>(ep_pawn)][ep_pawn_sq];
 
-        remove_piece_eval(*this, PAWN, static_cast<Color>(sideToMove ^ 1), ep_pawn_sq);
+        remove_piece_eval(*this, PAWN, them, ep_pawn_sq);
     }
-    else if (flag == KING_CASTLE || flag == QUEEN_CASTLE)
+    else if (m.is_castle())
     {
-        Square rook_from =
-            (flag == KING_CASTLE) ? ((sideToMove == WHITE) ? H1 : H8) : ((sideToMove == WHITE) ? A1 : A8);
-        Square rook_to = (flag == KING_CASTLE) ? ((sideToMove == WHITE) ? F1 : F8) : ((sideToMove == WHITE) ? D1 : D8);
+        const bool kingside = m.is_kingside_castle();
+        const Square rook_from = kingside ? (us == WHITE ? H1 : H8) : (us == WHITE ? A1 : A8);
+        const Square rook_to = kingside ? (us == WHITE ? F1 : F8) : (us == WHITE ? D1 : D8);
 
-        Bitboard rook_mask = square_bb(rook_from) | square_bb(rook_to);
+        const Bitboard rook_mask = square_bb(rook_from) | square_bb(rook_to);
+        const Piece rook_piece = make_piece(us, ROOK);
 
-        pieces[sideToMove][ROOK] ^= rook_mask;
-        occupancy[sideToMove] ^= rook_mask;
+        pieces[us][ROOK] ^= rook_mask;
+        occupancy[us] ^= rook_mask;
         occupancy[BOTH] ^= rook_mask;
-
-        Piece rook_piece = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
 
         board[rook_from] = PIECE_NONE;
         board[rook_to] = rook_piece;
 
-        // --- Zobrist: Move rook during castling ---
         key ^= piece_keys[static_cast<int>(rook_piece)][rook_from];
         key ^= piece_keys[static_cast<int>(rook_piece)][rook_to];
 
-        move_piece_eval(*this, ROOK, sideToMove, rook_from, rook_to);
+        move_piece_eval(*this, ROOK, us, rook_from, rook_to);
     }
 
-    // --- Zobrist: Update castling rights ---
-    uint8_t old_castling = castlingRights;
+    const uint8_t old_castling = castlingRights;
     castlingRights &= CASTLING_RIGHTS_MASK[from] & CASTLING_RIGHTS_MASK[to];
     if (old_castling != castlingRights)
-    {
         key ^= castle_keys[old_castling] ^ castle_keys[castlingRights];
-    }
 
-    // 6. Update Clocks and State
     enPassantSquare = SQ_NONE;
-    if (flag == DOUBLE_PAWN_PUSH)
+    if (m.is_double_push())
     {
-        enPassantSquare = (sideToMove == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
-        // --- Zobrist: XOR in new en passant file ---
-        key ^= en_passant_keys[enPassantSquare & 7];
+        const Square candidate = square_behind(to, us);
+        if (pawn_attacks(us, candidate) & pieces[them][PAWN])
+        {
+            enPassantSquare = candidate;
+            key ^= en_passant_keys[file_of(candidate)];
+        }
     }
 
-    halfmoveClock++;
+    ++halfmoveClock;
     if (pt == PAWN || captured_piece != PIECE_NONE)
         halfmoveClock = 0;
 
-    sideToMove = static_cast<Color>(sideToMove ^ 1);
-
-    // --- Zobrist: Toggle active side to move ---
+    sideToMove = them;
     key ^= side_key;
 }
 
 void Position::unmake_move(Move m)
 {
-    sideToMove = static_cast<Color>(sideToMove ^ 1);
-    ply--;
-
-    Square from = m.from();
-    Square to = m.to();
-    int flag = m.flag();
-
-    Piece moved_piece = board[to];
-    PieceType pt = type_of(moved_piece);
-
-    // 1. Restore History (Includes key restoration!)
-    castlingRights = history[ply].castlingRights;
-    enPassantSquare = history[ply].enPassantSquare;
-    halfmoveClock = history[ply].halfmoveClock;
-    key = history[ply].key; // DIRECT RESTORATION: Zobrist key is instantly restored from history stack.
-    Piece captured_piece = history[ply].capturedPiece;
-    mg_score[WHITE] = history[ply].mg_score[WHITE];
-    mg_score[BLACK] = history[ply].mg_score[BLACK];
-    eg_score[WHITE] = history[ply].eg_score[WHITE];
-    eg_score[BLACK] = history[ply].eg_score[BLACK];
-    game_phase = history[ply].game_phase;
-
-    Bitboard move_mask = square_bb(from) | square_bb(to);
-
-    // 2. Undo Moving Piece & Promotions
-    if (flag >= KNIGHT_PROMO && flag <= QUEEN_PROMO_CAP)
+    assert(m.is_ok() && "unmake_move called with none()/invalid move");
+    assert(ply > 0 && "unmake_move at ply 0");
+    if (m.is_null())
     {
-        pieces[sideToMove][pt] ^= square_bb(to);     // Erase promoted piece
-        pieces[sideToMove][PAWN] ^= square_bb(from); // Restore pawn
-        board[from] = static_cast<Piece>((sideToMove == WHITE) ? WHITE_PAWN : BLACK_PAWN);
+        sideToMove = static_cast<Color>(sideToMove ^ 1);
+        pop_state(*this); // restores key, castling, EP, clocks, eval
+        return;
+    }
+
+    assert(board[m.to()] != PIECE_NONE && "unmake_move on an empty to-square");
+    sideToMove = static_cast<Color>(sideToMove ^ 1);
+
+    const Square from = m.from();
+    const Square to = m.to();
+
+    const Piece moved_piece = board[to];
+    const PieceType pt = type_of(moved_piece);
+
+    const Color us = sideToMove;
+    const Color them = static_cast<Color>(us ^ 1);
+
+    // The key is restored directly from the stack rather than undone incrementally.
+    const Piece captured_piece = pop_state(*this);
+
+    const Bitboard move_mask = square_bb(from) | square_bb(to);
+
+    if (m.is_promotion())
+    {
+        pieces[us][pt] ^= square_bb(to);     // promoted piece
+        pieces[us][PAWN] ^= square_bb(from); // pawn
+        board[from] = make_piece(us, PAWN);
     }
     else
     {
-        pieces[sideToMove][pt] ^= move_mask;
-        board[from] = static_cast<Piece>((sideToMove == WHITE) ? pt : pt + 6);
+        pieces[us][pt] ^= move_mask;
+        board[from] = make_piece(us, pt);
     }
 
-    occupancy[sideToMove] ^= move_mask;
+    occupancy[us] ^= move_mask;
     occupancy[BOTH] ^= move_mask;
-    board[to] = PIECE_NONE; // Clear it initially
+    board[to] = PIECE_NONE;
 
-    // 3. Undo Standard Captures
-    if (captured_piece != PIECE_NONE && flag != EP_CAPTURE)
+    if (captured_piece != PIECE_NONE && !m.is_ep())
     {
-        PieceType captured_pt = type_of(captured_piece);
-        Bitboard capture_mask = square_bb(to);
+        const PieceType captured_pt = type_of(captured_piece);
+        const Bitboard capture_mask = square_bb(to);
 
-        pieces[sideToMove ^ 1][captured_pt] ^= capture_mask;
-        occupancy[sideToMove ^ 1] ^= capture_mask;
+        pieces[them][captured_pt] ^= capture_mask;
+        occupancy[them] ^= capture_mask;
         occupancy[BOTH] ^= capture_mask;
         board[to] = captured_piece;
     }
 
-    // 4. Undo Special Moves
-    if (flag == EP_CAPTURE)
+    if (m.is_ep())
     {
-        Square ep_pawn_sq = (sideToMove == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
-        Bitboard ep_mask = square_bb(ep_pawn_sq);
+        const Square ep_pawn_sq = square_behind(to, us);
+        const Bitboard ep_mask = square_bb(ep_pawn_sq);
 
-        pieces[sideToMove ^ 1][PAWN] ^= ep_mask;
-        occupancy[sideToMove ^ 1] ^= ep_mask;
+        pieces[them][PAWN] ^= ep_mask;
+        occupancy[them] ^= ep_mask;
         occupancy[BOTH] ^= ep_mask;
-        board[ep_pawn_sq] = (sideToMove == WHITE) ? BLACK_PAWN : WHITE_PAWN;
+        board[ep_pawn_sq] = make_piece(them, PAWN);
     }
-    else if (flag == KING_CASTLE || flag == QUEEN_CASTLE)
+    else if (m.is_castle())
     {
-        Square rook_from =
-            (flag == KING_CASTLE) ? ((sideToMove == WHITE) ? H1 : H8) : ((sideToMove == WHITE) ? A1 : A8);
-        Square rook_to = (flag == KING_CASTLE) ? ((sideToMove == WHITE) ? F1 : F8) : ((sideToMove == WHITE) ? D1 : D8);
+        const bool kingside = m.is_kingside_castle();
+        const Square rook_from = kingside ? (us == WHITE ? H1 : H8) : (us == WHITE ? A1 : A8);
+        const Square rook_to = kingside ? (us == WHITE ? F1 : F8) : (us == WHITE ? D1 : D8);
 
-        Bitboard rook_mask = square_bb(rook_from) | square_bb(rook_to);
+        const Bitboard rook_mask = square_bb(rook_from) | square_bb(rook_to);
 
-        pieces[sideToMove][ROOK] ^= rook_mask;
-        occupancy[sideToMove] ^= rook_mask;
+        pieces[us][ROOK] ^= rook_mask;
+        occupancy[us] ^= rook_mask;
         occupancy[BOTH] ^= rook_mask;
 
         board[rook_to] = PIECE_NONE;
-        board[rook_from] = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
+        board[rook_from] = make_piece(us, ROOK);
     }
 }
 
 bool Position::is_square_attacked(Square sq, Color attackingColor) const
 {
-    const Bitboard occupied =
-        occupancy[BOTH] | square_bb(sq); // OR-ing is necessary because we're using HQ method for sliding piece attacks.
+    // sq is OR'd in because the sliding generators assume the target is occupied.
+    const Bitboard occupied = occupancy[BOTH] | square_bb(sq);
 
+    // A pawn of attackingColor attacks sq iff a pawn of the *opposite* color
+    // on sq would attack back.
     if (pawn_attacks(static_cast<Color>(attackingColor ^ 1), sq) & pieces[attackingColor][PAWN])
         return true;
 
@@ -312,5 +366,8 @@ bool Position::is_square_attacked(Square sq, Color attackingColor) const
     if (bishop_attacks(occupied, sq) & (pieces[attackingColor][BISHOP] | pieces[attackingColor][QUEEN]))
         return true;
 
-    return rook_attacks(occupied, sq) & (pieces[attackingColor][ROOK] | pieces[attackingColor][QUEEN]);
+    if (rook_attacks(occupied, sq) & (pieces[attackingColor][ROOK] | pieces[attackingColor][QUEEN]))
+        return true;
+
+    return false;
 }

@@ -139,6 +139,15 @@ constexpr int file_of(Square square)
     return square & 7;
 }
 
+// Returns the square one rank "behind" a pawn's destination square, from
+// the mover's perspective. Used for both:
+//   * the en-passant square created by a double pawn push, and
+//   * the captured pawn's square during an en-passant capture.
+constexpr Square square_behind(Square to, Color mover)
+{
+    return (mover == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
+}
+
 // Returns a bitboard mask containing all squares on the same rank as the given square.
 constexpr Bitboard rank_bb(Square square)
 {
@@ -164,13 +173,11 @@ constexpr Bitboard anti_diagonal_bb(Square square)
 }
 
 constexpr Bitboard shift_north(Bitboard bb)
-
 {
     return bb << 8;
 }
 
 constexpr Bitboard shift_south(Bitboard bb)
-
 {
     return bb >> 8;
 }
