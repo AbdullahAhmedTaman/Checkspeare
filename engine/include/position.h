@@ -43,4 +43,5 @@ struct Position
     void unmake_move(Move m);
     void update_occupancy(); // Unused for now
     bool is_square_attacked(Square sq, Color attackingColor) const;
+    Square king_square(Color c) const;
 };
