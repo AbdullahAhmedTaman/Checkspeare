@@ -2,6 +2,7 @@
 #include "bitboard.h"
 #include "evaluate.h"
 #include "pst.h"
+#include "zobrist.h"
 #include <cassert>
 
 /*void Position::update_occupancy()
@@ -79,6 +80,12 @@ void Position::make_move(Move m)
     history[ply].game_phase = game_phase;
     ply++;
 
+    // --- Zobrist: Clear active en passant square from previous state ---
+    if (enPassantSquare != SQ_NONE)
+    {
+        key ^= en_passant_keys[enPassantSquare & 7];
+    }
+
     // 2. Instead of clearing from and setting to separately, we create a XOR mask for the moving piece
     Bitboard move_mask = square_bb(from) | square_bb(to);
 
@@ -92,7 +99,14 @@ void Position::make_move(Move m)
 
         pieces[sideToMove][PAWN] ^= square_bb(from);   // Erase pawn 1^1 = 0
         pieces[sideToMove][promo_pt] ^= square_bb(to); // Spawn promoted piece
-        board[to] = static_cast<Piece>((sideToMove == WHITE) ? promo_pt : promo_pt + 6);
+
+        Piece promo_piece = static_cast<Piece>((sideToMove == WHITE) ? promo_pt : promo_pt + 6);
+        board[to] = promo_piece;
+
+        // --- Zobrist: Remove pawn from origin and add promoted piece to destination ---
+        key ^= piece_keys[static_cast<int>(moving_piece)][from];
+        key ^= piece_keys[static_cast<int>(promo_piece)][to];
+
         remove_piece_eval(*this, PAWN, sideToMove, from);
         add_piece_eval(*this, promo_pt, sideToMove, to);
     }
@@ -100,6 +114,11 @@ void Position::make_move(Move m)
     {
         pieces[sideToMove][pt] ^= move_mask; // Move piece instantly
         board[to] = moving_piece;
+
+        // --- Zobrist: Move piece from 'from' to 'to' ---
+        key ^= piece_keys[static_cast<int>(moving_piece)][from];
+        key ^= piece_keys[static_cast<int>(moving_piece)][to];
+
         move_piece_eval(*this, pt, sideToMove, from, to);
     }
 
@@ -117,6 +136,10 @@ void Position::make_move(Move m)
         pieces[sideToMove ^ 1][captured_pt] ^= capture_mask;
         occupancy[sideToMove ^ 1] ^= capture_mask; // Remove captured piece from opponent's occupancy
         occupancy[BOTH] ^= capture_mask; // Flips destination from 0 back to 1 (1^1=0, 0^1=1), keeping it occupied.
+
+        // --- Zobrist: Remove captured piece from target square ---
+        key ^= piece_keys[static_cast<int>(captured_piece)][to];
+
         remove_piece_eval(*this, captured_pt, static_cast<Color>(sideToMove ^ 1), to);
     }
 
@@ -126,10 +149,16 @@ void Position::make_move(Move m)
         Square ep_pawn_sq = (sideToMove == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
         Bitboard ep_mask = square_bb(ep_pawn_sq);
 
+        Piece ep_pawn = (sideToMove == WHITE) ? BLACK_PAWN : WHITE_PAWN;
+
         pieces[sideToMove ^ 1][PAWN] ^= ep_mask;
         occupancy[sideToMove ^ 1] ^= ep_mask;
         occupancy[BOTH] ^= ep_mask;
         board[ep_pawn_sq] = PIECE_NONE;
+
+        // --- Zobrist: Remove captured en-passant pawn ---
+        key ^= piece_keys[static_cast<int>(ep_pawn)][ep_pawn_sq];
+
         remove_piece_eval(*this, PAWN, static_cast<Color>(sideToMove ^ 1), ep_pawn_sq);
     }
     else if (flag == KING_CASTLE || flag == QUEEN_CASTLE)
@@ -144,19 +173,33 @@ void Position::make_move(Move m)
         occupancy[sideToMove] ^= rook_mask;
         occupancy[BOTH] ^= rook_mask;
 
+        Piece rook_piece = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
+
         board[rook_from] = PIECE_NONE;
-        board[rook_to] = (sideToMove == WHITE) ? WHITE_ROOK : BLACK_ROOK;
+        board[rook_to] = rook_piece;
+
+        // --- Zobrist: Move rook during castling ---
+        key ^= piece_keys[static_cast<int>(rook_piece)][rook_from];
+        key ^= piece_keys[static_cast<int>(rook_piece)][rook_to];
+
         move_piece_eval(*this, ROOK, sideToMove, rook_from, rook_to);
     }
 
-    // Update castling rights based on the move made
+    // --- Zobrist: Update castling rights ---
+    uint8_t old_castling = castlingRights;
     castlingRights &= CASTLING_RIGHTS_MASK[from] & CASTLING_RIGHTS_MASK[to];
+    if (old_castling != castlingRights)
+    {
+        key ^= castle_keys[old_castling] ^ castle_keys[castlingRights];
+    }
 
     // 6. Update Clocks and State
     enPassantSquare = SQ_NONE;
     if (flag == DOUBLE_PAWN_PUSH)
     {
         enPassantSquare = (sideToMove == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
+        // --- Zobrist: XOR in new en passant file ---
+        key ^= en_passant_keys[enPassantSquare & 7];
     }
 
     halfmoveClock++;
@@ -164,6 +207,9 @@ void Position::make_move(Move m)
         halfmoveClock = 0;
 
     sideToMove = static_cast<Color>(sideToMove ^ 1);
+
+    // --- Zobrist: Toggle active side to move ---
+    key ^= side_key;
 }
 
 void Position::unmake_move(Move m)
@@ -178,11 +224,11 @@ void Position::unmake_move(Move m)
     Piece moved_piece = board[to];
     PieceType pt = type_of(moved_piece);
 
-    // 1. Restore History
+    // 1. Restore History (Includes key restoration!)
     castlingRights = history[ply].castlingRights;
     enPassantSquare = history[ply].enPassantSquare;
     halfmoveClock = history[ply].halfmoveClock;
-    key = history[ply].key;
+    key = history[ply].key; // DIRECT RESTORATION: Zobrist key is instantly restored from history stack.
     Piece captured_piece = history[ply].capturedPiece;
     mg_score[WHITE] = history[ply].mg_score[WHITE];
     mg_score[BLACK] = history[ply].mg_score[BLACK];
