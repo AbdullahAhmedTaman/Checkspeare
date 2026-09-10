@@ -6,8 +6,8 @@
 #include <imgui.h>
 #include <iostream>
 
-#include "include/AssetManager.h"
-#include "include/renderUI.h"
+#include "../include/AssetManager.h"
+#include "../include/renderUI.h"
 
 int main()
 {
