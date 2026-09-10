@@ -1,5 +1,6 @@
 add_executable(EngineTests
-    position_zobrist_tests.cpp
+legal_moves_tests.cpp
+position_zobrist_tests.cpp
 )
 
 target_link_libraries(EngineTests

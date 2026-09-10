@@ -46,5 +46,5 @@ struct MoveList
 namespace MoveGen
 {
     void generate_pseudo_legal_moves(const Position& pos, MoveList& list);
-    void generate_legal_moves(const Position& pos, MoveList& legalMoves);
+    void generate_legal_moves(Position& pos, MoveList& legalMoves);
 } // namespace MoveGen

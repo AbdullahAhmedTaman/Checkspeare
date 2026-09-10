@@ -295,7 +295,7 @@ namespace MoveGen
      *
      * King-safety filtering is performed separately.
      */
-    void generate_pseudo_legal(const Position& pos, MoveList& list)
+    void generate_pseudo_legal_moves(const Position& pos, MoveList& list)
     {
         list.count = 0;
 
@@ -306,4 +306,25 @@ namespace MoveGen
         add_castling_moves(pos, list);
     }
 
+    void generate_legal_moves(Position& pos, MoveList& legalMoves)
+    {
+        MoveList pseudoLegalMoves;
+        generate_pseudo_legal_moves(pos, pseudoLegalMoves);
+
+        legalMoves.count = 0;
+        const Color us = pos.sideToMove;
+
+        for (int i = 0; i < pseudoLegalMoves.count; ++i)
+        {
+            const Move move = pseudoLegalMoves.moves[i];
+            pos.make_move(move);
+            const Square kingSquare = pos.king_square(us);
+            const bool legal = !pos.is_square_attacked(kingSquare, static_cast<Color>(us ^ 1));
+
+            pos.unmake_move(move);
+
+            if (legal)
+                legalMoves.add(move);
+        }
+    }
 } // namespace MoveGen
