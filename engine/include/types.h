@@ -46,6 +46,15 @@ enum Piece : uint8_t
     PIECE_NONE
 };
 
+// fast static array mapping Pieces to PieceTypes
+constexpr PieceType PIECE_TO_TYPE[13] = {PAWN,   KNIGHT, BISHOP, ROOK,  QUEEN, KING, PAWN,
+                                         KNIGHT, BISHOP, ROOK,   QUEEN, KING,  NONE};
+
+inline constexpr PieceType type_of(Piece pc)
+{
+    return PIECE_TO_TYPE[pc];
+}
+
 // clang-format off
 enum Square : uint8_t
 {
@@ -89,6 +98,13 @@ struct Move
 {
     uint16_t data;
 
+    Move(Square from, Square to, MoveFlag moveFlag)
+    {
+        data = from;
+        data |= to << 6;
+        data |= moveFlag << 12;
+    }
+
     inline Square from() const
     {
         return static_cast<Square>(data & 0x3F);
@@ -123,3 +139,58 @@ struct SearchLimits
     int movetime;
     bool infinite;
 };
+
+// Generic Enum Range Helper
+template <typename T>
+struct EnumRange
+{
+    T first;
+    T last;
+
+    struct Iterator
+    {
+        T value;
+
+        T operator*() const
+        {
+            return value;
+        }
+
+        Iterator& operator++()
+        {
+            value = static_cast<T>(static_cast<uint8_t>(value) + 1);
+            return *this;
+        }
+
+        bool operator!=(const Iterator& other) const
+        {
+            return value != other.value;
+        }
+    };
+
+    Iterator begin() const
+    {
+        return {first};
+    }
+
+    Iterator end() const
+    {
+        return {last};
+    }
+};
+
+template <typename T>
+constexpr EnumRange<T> all_values(T start, T end)
+{
+    return {start, end};
+}
+
+constexpr auto all_squares()
+{
+    return all_values(A1, SQ_NONE);
+}
+
+constexpr auto all_piece_types()
+{
+    return all_values(PAWN, NONE);
+}

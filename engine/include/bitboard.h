@@ -204,3 +204,14 @@ constexpr Bitboard shift_south_west(Bitboard b)
 {
     return (b & ~FILE_A) >> 9;
 }
+
+constexpr Bitboard reverse_bb(Bitboard x)
+{
+    // Reverse bits within each byte (3 SWAR passes, byte-parallel).
+    x = ((x & 0x5555555555555555ULL) << 1) | ((x >> 1) & 0x5555555555555555ULL);
+    x = ((x & 0x3333333333333333ULL) << 2) | ((x >> 2) & 0x3333333333333333ULL);
+    x = ((x & 0x0F0F0F0F0F0F0F0FULL) << 4) | ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL);
+
+    // Reverse byte order — GCC lowers this to a single BSWAP instruction.
+    return __builtin_bswap64(x);
+}
