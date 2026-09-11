@@ -21,7 +21,7 @@ namespace Perft
      * @param depth Remaining search depth in plies.
      * @return uint64_t Total number of leaf nodes reached at the specified depth.
      */
-    uint64_t run(Position& pos, int depth);
+    Key run(Position& pos, int depth);
 
     /**
      * @brief Runs Perft from the root position and prints a detailed breakdown.
