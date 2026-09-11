@@ -1,5 +1,7 @@
 #pragma once
+#include <cassert>
 #include <cstdint>
+#include <iosfwd>
 
 using Bitboard = uint64_t;
 using Key = uint64_t;
@@ -46,13 +48,22 @@ enum Piece : uint8_t
     PIECE_NONE
 };
 
-// fast static array mapping Pieces to PieceTypes
-constexpr PieceType PIECE_TO_TYPE[13] = {PAWN,   KNIGHT, BISHOP, ROOK,  QUEEN, KING, PAWN,
-                                         KNIGHT, BISHOP, ROOK,   QUEEN, KING,  NONE};
+constexpr PieceType PIECE_TO_TYPE[13] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, NONE};
 
 inline constexpr PieceType type_of(Piece pc)
 {
     return PIECE_TO_TYPE[pc];
+}
+
+constexpr Color color_of(Piece pc)
+{
+    return pc < BLACK_PAWN ? WHITE : BLACK;
+}
+
+// Color and piece type packed into a Piece. Assumes 6 piece types per color.
+constexpr Piece make_piece(Color c, PieceType pt)
+{
+    return static_cast<Piece>(static_cast<int>(c) * 6 + static_cast<int>(pt));
 }
 
 // clang-format off
@@ -72,14 +83,21 @@ enum Square : uint8_t
 
 // clang-format on
 
+constexpr bool is_valid(Square s)
+{
+    return s < SQ_NONE;
+}
+
 enum MoveFlag
-{ // flags for promotions/special segment (bits 12-15)
+{
     QUIET_MOVE = 0,
     DOUBLE_PAWN_PUSH = 1,
     KING_CASTLE = 2,
     QUEEN_CASTLE = 3,
     CAPTURE = 4,
     EP_CAPTURE = 5,
+    // 6 unused
+    NULL_MOVE = 7,
     KNIGHT_PROMO = 8,
     BISHOP_PROMO = 9,
     ROOK_PROMO = 10,
@@ -91,26 +109,89 @@ enum MoveFlag
 };
 
 // 16-bit encoding:
-// 0000 0000 0011 1111 -> bits 0-5: source square (0-63)
-// 0000 1111 1100 0000 -> bits 6-11: target square (0-63)
-// 1111 0000 0000 0000 -> bits 12-15: move flag
+// bits 0-5: from square, bits 6-11: to square, bits 12-15: flag.
 struct Move
 {
     uint16_t data;
 
-    inline Square from() const
+    Move() = default;
+
+    constexpr Move(Square from, Square to, MoveFlag moveFlag)
+        : data(from | (to << 6) | (moveFlag << 12))
+    {
+        assert(is_valid(from) && is_valid(to));
+    }
+
+    // data == 0, never a legal move.
+    static constexpr Move none()
+    {
+        return Move();
+    }
+
+    static constexpr Move null()
+    {
+        return Move(A1, A1, NULL_MOVE);
+    }
+
+    constexpr Square from() const
     {
         return static_cast<Square>(data & 0x3F);
     }
 
-    inline Square to() const
+    constexpr Square to() const
     {
         return static_cast<Square>((data >> 6) & 0x3F);
     }
 
-    inline int flag() const
+    constexpr int flag() const
     {
         return (data >> 12) & 0xF;
+    }
+
+    constexpr bool is_ok() const
+    {
+        return data != 0;
+    }
+
+    constexpr bool is_null() const
+    {
+        return flag() == NULL_MOVE;
+    }
+
+    // Includes EP captures, whose victim is not on the destination square.
+    constexpr bool is_capture() const
+    {
+        return flag() != NULL_MOVE && (flag() & 4) != 0;
+    }
+
+    constexpr bool is_promotion() const
+    {
+        return flag() >= KNIGHT_PROMO;
+    }
+
+    constexpr bool is_castle() const
+    {
+        return flag() == KING_CASTLE || flag() == QUEEN_CASTLE;
+    }
+
+    constexpr bool is_kingside_castle() const
+    {
+        return flag() == KING_CASTLE;
+    }
+
+    constexpr bool is_queenside_castle() const
+    {
+        return flag() == QUEEN_CASTLE;
+    }
+
+    constexpr bool is_ep() const
+    {
+        return flag() == EP_CAPTURE;
+    }
+
+    constexpr bool is_double_push() const
+    {
+        return flag() == DOUBLE_PAWN_PUSH;
     }
 
     inline bool operator==(const Move& m) const
@@ -124,6 +205,31 @@ struct Move
     }
 };
 
+// Precondition: m.is_promotion().
+constexpr PieceType promotion_type(const Move& m)
+{
+    switch (m.flag())
+    {
+        case KNIGHT_PROMO:
+        case KNIGHT_PROMO_CAP:
+            return KNIGHT;
+        case BISHOP_PROMO:
+        case BISHOP_PROMO_CAP:
+            return BISHOP;
+        case ROOK_PROMO:
+        case ROOK_PROMO_CAP:
+            return ROOK;
+        default:
+            return QUEEN;
+    }
+}
+
+std::ostream& operator<<(std::ostream& os, Color c);
+std::ostream& operator<<(std::ostream& os, Piece p);
+std::ostream& operator<<(std::ostream& os, Square s);
+std::ostream& operator<<(std::ostream& os, MoveFlag f);
+std::ostream& operator<<(std::ostream& os, const Move& m);
+
 struct SearchLimits
 {
     int depth;
@@ -133,7 +239,6 @@ struct SearchLimits
     bool infinite;
 };
 
-// Generic Enum Range Helper
 template <typename T>
 struct EnumRange
 {

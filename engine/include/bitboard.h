@@ -139,6 +139,15 @@ constexpr int file_of(Square square)
     return square & 7;
 }
 
+// Returns the square one rank "behind" a pawn's destination square, from
+// the mover's perspective. Used for both:
+//   * the en-passant square created by a double pawn push, and
+//   * the captured pawn's square during an en-passant capture.
+constexpr Square square_behind(Square to, Color mover)
+{
+    return (mover == WHITE) ? static_cast<Square>(to - 8) : static_cast<Square>(to + 8);
+}
+
 // Returns a bitboard mask containing all squares on the same rank as the given square.
 constexpr Bitboard rank_bb(Square square)
 {
@@ -164,13 +173,11 @@ constexpr Bitboard anti_diagonal_bb(Square square)
 }
 
 constexpr Bitboard shift_north(Bitboard bb)
-
 {
     return bb << 8;
 }
 
 constexpr Bitboard shift_south(Bitboard bb)
-
 {
     return bb >> 8;
 }
@@ -203,4 +210,15 @@ constexpr Bitboard shift_south_east(Bitboard b)
 constexpr Bitboard shift_south_west(Bitboard b)
 {
     return (b & ~FILE_A) >> 9;
+}
+
+constexpr Bitboard reverse_bb(Bitboard x)
+{
+    // Reverse bits within each byte (3 SWAR passes, byte-parallel).
+    x = ((x & 0x5555555555555555ULL) << 1) | ((x >> 1) & 0x5555555555555555ULL);
+    x = ((x & 0x3333333333333333ULL) << 2) | ((x >> 2) & 0x3333333333333333ULL);
+    x = ((x & 0x0F0F0F0F0F0F0F0FULL) << 4) | ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL);
+
+    // Reverse byte order — GCC lowers this to a single BSWAP instruction.
+    return __builtin_bswap64(x);
 }
