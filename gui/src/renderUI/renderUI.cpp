@@ -77,6 +77,10 @@ namespace RenderUI
         board.setupInitialBoard();
         std::string clickedInfo = "None (Click anywhere!)";
 
+        bool isDragging = false;
+        Chess::Square draggedSquare = 0;
+        sf::Vector2f dragOffset(0.0f, 0.0f);
+
         while (window.isOpen())
         {
             // ----------------------------------------------------
@@ -111,15 +115,49 @@ namespace RenderUI
                             std::string sqColor = Chess::Board::getSquareColor(sq);
 
                             const auto& pieceOpt = board.getPiece(sq);
-                            std::string pieceStr =
-                                pieceOpt.has_value() ? Chess::Board::getPieceName(pieceOpt.value()) : "Empty";
+                            if (pieceOpt.has_value())
+                            {
+                                isDragging = true;
+                                draggedSquare = sq;
 
-                            clickedInfo = uci + " (" + sqColor + ") -> " + pieceStr;
+                                float squareX = geo.boardOrigin.x + file * geo.squareSize;
+                                float squareY = geo.boardOrigin.y + (7 - rank) * geo.squareSize;
+                                dragOffset =
+                                    sf::Vector2f(mousePress->position.x - squareX, mousePress->position.y - squareY);
+
+                                std::string uci = Chess::Board::SquareToUci(sq);
+                                std::string sqColor = Chess::Board::getSquareColor(sq);
+                                clickedInfo = "Dragging " + uci + " (" + sqColor + ")";
+                            }
+                        }
+                    }
+                }
+                if (const auto* mouseRelease = event->getIf<sf::Event::MouseButtonReleased>())
+                {
+                    if (mouseRelease->button == sf::Mouse::Button::Left && isDragging)
+                    {
+                        float relativeX = static_cast<float>(mouseRelease->position.x) - geo.boardOrigin.x;
+                        float relativeY = static_cast<float>(mouseRelease->position.y) - geo.boardOrigin.y;
+
+                        float boardWidth = geo.squareSize * 8.0f;
+                        float boardHeight = geo.squareSize * 8.0f;
+
+                        if (relativeX >= 0.0f && relativeX < boardWidth && relativeY >= 0.0f && relativeY < boardHeight)
+                        {
+                            int file = static_cast<int>(relativeX / geo.squareSize);
+                            int rank = 7 - static_cast<int>(relativeY / geo.squareSize);
+                            Chess::Square targetSq = static_cast<Chess::Square>(rank * 8 + file);
+
+                            const auto& movingPiece = board.getPiece(draggedSquare);
+                            board.setPiece(targetSq, movingPiece);
+                            board.setPiece(draggedSquare, std::nullopt);
                         }
                         else
                         {
-                            clickedInfo = "Clicked Outside Board";
+                            clickedInfo = "Dropped Outside Board";
                         }
+
+                        isDragging = false;
                     }
                 }
             }
@@ -144,8 +182,7 @@ namespace RenderUI
             window.clear(sf::Color(255, 255, 255));
 
             // Draw a simple chessboard -- new board
-            boardRenderer.render(window, geo, theme, board, assets);
-
+            boardRenderer.render(window, geo, theme, board, assets, isDragging, draggedSquare, dragOffset);
             // ----------------------------------------------------
             // ImGui rendering
             // ----------------------------------------------------
@@ -168,7 +205,8 @@ namespace RenderUI
 namespace BoardRenderer
 {
     void BoardRenderer::render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme,
-                               const Chess::Board& board, const AssetManager::AssetManager& assets)
+                               const Chess::Board& board, const AssetManager::AssetManager& assets, bool isDragging,
+                               Chess::Square draggedSquare, sf::Vector2f dragOffset)
     {
         // board representation
         for (int rank = 0; rank < 8; ++rank)
@@ -195,18 +233,15 @@ namespace BoardRenderer
             }
         }
 
-        // Render pieces on the board
-
         for (Chess::Square sq = 0; sq < 64; ++sq)
         {
+            if (isDragging && sq == draggedSquare)
+                continue;
             const auto& pieceOpt = board.getPiece(sq);
-
             if (pieceOpt.has_value())
             {
                 const Chess::Piece& piece = pieceOpt.value();
-
                 std::string pieceKey = AssetManager::AssetManager::getPieceKey(piece);
-
                 const sf::Texture& pieceTexture = assets.getTexture(pieceKey);
                 sf::Sprite pieceSprite(pieceTexture);
 
@@ -229,5 +264,32 @@ namespace BoardRenderer
                 window.draw(pieceSprite);
             }
         }
+        if (isDragging)
+        {
+            const auto& pieceOpt = board.getPiece(draggedSquare);
+            if (pieceOpt.has_value())
+            {
+                const Chess::Piece& piece = pieceOpt.value();
+                std::string pieceKey = AssetManager::AssetManager::getPieceKey(piece);
+                const sf::Texture& pieceTexture = assets.getTexture(pieceKey);
+                sf::Sprite draggedSprite(pieceTexture);
+
+                float paddingRatio = 0.85f;
+                float targetSize = geo.squareSize * paddingRatio;
+
+                float scaleX = targetSize / draggedSprite.getLocalBounds().size.x;
+                float scaleY = targetSize / draggedSprite.getLocalBounds().size.y;
+                draggedSprite.setScale({scaleX, scaleY});
+
+                sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+                float drawX = static_cast<float>(mousePos.x) - dragOffset.x;
+                float drawY = static_cast<float>(mousePos.y) - dragOffset.y;
+
+                draggedSprite.setPosition({drawX, drawY});
+                window.draw(draggedSprite);
+            }
+        }
     }
 } // namespace BoardRenderer
+
+// namespace BoardRenderer

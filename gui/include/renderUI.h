@@ -32,6 +32,7 @@ namespace BoardRenderer
     public:
         BoardRenderer() = default;
         void render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme,
-                    const Chess::Board& board, const AssetManager::AssetManager& assets);
+                    const Chess::Board& board, const AssetManager::AssetManager& assets, bool isDragging,
+                    Chess::Square draggedSquare, sf::Vector2f dragOffset);
     };
 } // namespace BoardRenderer
