@@ -1,11 +1,13 @@
 #include "evaluate.h"
+#include "attacks.h"
 #include "bitboard.h"
 #include "position.h"
 #include "pst.h"
 #include "types.h"
 #include <algorithm>
 
-namespace Eval
+
+namespace
 {
     constexpr int GAME_PHASE_MAX = 24;
 
@@ -18,9 +20,82 @@ namespace Eval
     // king safety
     constexpr int PAWN_SHIELD_BONUS_MG = 15;
     constexpr int PAWN_SHIELD_BONUS_EG = 5;
+    constexpr int ATTACK_WEIGHTS[16] = {0, 0, 50, 75, 88, 94, 97, 99, 100, 100, 100, 100, 100, 100, 100, 100};
+    constexpr int ATTACK_VALUE[6] = {0, 20, 20, 40, 80, 0};
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
 
+    inline Bitboard get_king_zone(Square king_sq, Color c)
+    {
+        Bitboard ring = king_attacks(king_sq) | square_bb(king_sq);
+        Bitboard forward = (c == WHITE) ? (ring << 8) : (ring >> 8);
+        return ring | forward;
+    }
+
+    int calculate_king_danger(const Position& pos, Color attacker, Bitboard enemy_king_zone)
+    {
+        int attackingPiecesCount = 0;
+        int valueOfAttacks = 0;
+
+        Bitboard occupancy = pos.occupancy[BOTH];
+
+        Bitboard knights = pos.pieces[attacker][KNIGHT];
+        while (knights)
+        {
+            Square sq = pop_lsb(knights);
+            Bitboard hits = knight_attacks(sq) & enemy_king_zone;
+            if (hits)
+            {
+                attackingPiecesCount++;
+                valueOfAttacks += popcount(hits) * ATTACK_VALUE[KNIGHT];
+            }
+        }
+
+        Bitboard bishops = pos.pieces[attacker][BISHOP];
+        while (bishops)
+        {
+            Square sq = pop_lsb(bishops);
+            Bitboard hits = bishop_attacks(occupancy, sq) & enemy_king_zone;
+            if (hits)
+            {
+                attackingPiecesCount++;
+                valueOfAttacks += popcount(hits) * ATTACK_VALUE[BISHOP];
+            }
+        }
+
+        Bitboard rooks = pos.pieces[attacker][ROOK];
+        while (rooks)
+        {
+            Square sq = pop_lsb(rooks);
+            Bitboard hits = rook_attacks(occupancy, sq) & enemy_king_zone;
+            if (hits)
+            {
+                attackingPiecesCount++;
+                valueOfAttacks += popcount(hits) * ATTACK_VALUE[ROOK];
+            }
+        }
+
+        Bitboard queens = pos.pieces[attacker][QUEEN];
+        while (queens)
+        {
+            Square sq = pop_lsb(queens);
+            Bitboard hits = queen_attacks(occupancy, sq) & enemy_king_zone;
+            if (hits)
+            {
+                attackingPiecesCount++;
+                valueOfAttacks += popcount(hits) * ATTACK_VALUE[QUEEN];
+            }
+        }
+
+        attackingPiecesCount = std::min(attackingPiecesCount, 15);
+
+        // Toga Formula: value * weight[count] / 100
+        return (valueOfAttacks * ATTACK_WEIGHTS[attackingPiecesCount]) / 100;
+    }
+} // namespace
+
+namespace Eval
+{
     int taper(int mg_total, int eg_total, const Position& pos)
     {
         int phase = std::min(pos.game_phase, GAME_PHASE_MAX);
@@ -75,6 +150,20 @@ namespace Eval
 
         s.mg[BLACK] += b_shield_count * PAWN_SHIELD_BONUS_MG;
         s.eg[BLACK] += b_shield_count * PAWN_SHIELD_BONUS_EG;
+
+        // attacks on king --- !Danger: this could slow down the evaluation significantly if not optimized properly (use magic
+        // bitboards).
+        Square w_king_sq = lsb(w_king);
+        Square b_king_sq = lsb(b_king);
+
+        Bitboard wk_ring = get_king_zone(w_king_sq, WHITE);
+        Bitboard bk_ring = get_king_zone(b_king_sq, BLACK);
+
+        int w_danger = calculate_king_danger(pos, BLACK, wk_ring);
+        s.mg[WHITE] -= w_danger;
+
+        int b_danger = calculate_king_danger(pos, WHITE, bk_ring);
+        s.mg[BLACK] -= b_danger;
 
         return s;
     }
