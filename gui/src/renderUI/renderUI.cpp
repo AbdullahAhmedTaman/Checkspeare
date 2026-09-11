@@ -9,6 +9,7 @@
 
 namespace RenderUI
 {
+    using std::string;
 
     sf::RenderWindow initWindow()
     {
@@ -24,7 +25,8 @@ namespace RenderUI
         return window;
     }
 
-    void imGuiRenderUI(sf::RenderWindow& window, Config& conf, BoardRenderer::BoardGeometry& geo)
+    void imGuiRenderUI(sf::RenderWindow& window, Config& conf, BoardRenderer::BoardGeometry& geo,
+                       const std::string& clickedInfo)
     {
         ImGui::Begin("Chess Engine Test");
 
@@ -37,6 +39,14 @@ namespace RenderUI
         ImGui::SliderFloat("Square Size", &geo.squareSize, 20.0f, 150.0f);
 
         ImGui::SliderFloat2("Board Position", &geo.boardOrigin.x, 0.0f, 300.0f);
+
+        ImGui::Separator();
+
+        ImGui::Text("Last Clicked Square:");
+
+        ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.0f, 1.0f), "%s", clickedInfo.c_str());
+
+        ImGui::Separator();
 
         if (ImGui::Button("Test Button"))
         {
@@ -62,10 +72,10 @@ namespace RenderUI
         BoardRenderer::BoardGeometry geo;
         BoardRenderer::BoardRenderer boardRenderer;
         Theme::BoardTheme theme = Theme::getBoardTheme("Default", assets);
-
         Chess::Board board;
 
         board.setupInitialBoard();
+        std::string clickedInfo = "None (Click anywhere!)";
 
         while (window.isOpen())
         {
@@ -76,10 +86,34 @@ namespace RenderUI
             while (const std::optional event = window.pollEvent())
             {
                 ImGui::SFML::ProcessEvent(window, *event);
-
                 if (event->is<sf::Event::Closed>())
                 {
                     window.close();
+                }
+                if (const auto* mousePress = event->getIf<sf::Event::MouseButtonPressed>())
+                {
+                    if (mousePress->button == sf::Mouse::Button::Left)
+                    {
+                        float relativeX = static_cast<float>(mousePress->position.x) - geo.boardOrigin.x;
+                        float relativeY = static_cast<float>(mousePress->position.y) - geo.boardOrigin.y;
+
+                        float boardWidth = geo.squareSize * 8.0f;
+                        float boardHeight = geo.squareSize * 8.0f;
+
+                        if (relativeX >= 0.0f && relativeX < boardWidth && relativeY >= 0.0f && relativeY < boardHeight)
+                        {
+                            int file = static_cast<int>(relativeX / geo.squareSize);
+                            int rank = 7 - static_cast<int>(relativeY / geo.squareSize);
+
+                            int sqIndex = rank * 8 + file;
+
+                            clickedInfo = "Clicked Square Index: " + std::to_string(sqIndex);
+                        }
+                        else
+                        {
+                            clickedInfo = "Clicked Outside Board";
+                        }
+                    }
                 }
             }
 
@@ -95,7 +129,7 @@ namespace RenderUI
             // ImGui Components
             // ----------------------------------------------------
 
-            RenderUI::imGuiRenderUI(window, conf, geo);
+            RenderUI::imGuiRenderUI(window, conf, geo, clickedInfo);
             // ----------------------------------------------------
             // SFML rendering
             // ----------------------------------------------------
@@ -117,10 +151,12 @@ namespace RenderUI
         // --------------------------------------------------------
         // Shutdown
         // --------------------------------------------------------
-
         ImGui::SFML::Shutdown();
     }
+
 } // namespace RenderUI
+
+// namespace RenderUI
 
 namespace BoardRenderer
 {

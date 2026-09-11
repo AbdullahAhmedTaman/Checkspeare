@@ -38,7 +38,9 @@ namespace Chess
         const std ::optional<Piece>& getPiece(Square square) const;
         void setPiece(Square square, std::optional<Piece> piece);
         Square uciToSquare(std::string);
-        const UCI SquareToUci(Square square);
+        static UCI SquareToUci(Square square);
+        static std::string getPieceName(const Piece& piece);
+        static std::string getSquareColor(Square square);
 
     private:
         std::array<std::optional<Piece>, 64> squares;

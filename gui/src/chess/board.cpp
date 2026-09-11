@@ -22,7 +22,7 @@ namespace Chess
         return static_cast<Square>(rank * 8 + file);
     }
 
-    const UCI Board::SquareToUci(Square square)
+    std::string Board::SquareToUci(Square square)
     {
         int file = square % 8;
         int rank = square / 8;
@@ -53,6 +53,43 @@ namespace Chess
             squares[file] = Piece{Color::White, backline[file]};
             squares[56 + file] = Piece{Color::Black, backline[file]};
         }
+    }
+
+    std::string Board::getPieceName(const Piece& piece)
+    {
+        std::string colorStr = (piece.color == Color::White) ? "White" : "Black";
+        std::string typeStr;
+
+        switch (piece.type)
+        {
+            case PieceType::Pawn:
+                typeStr = "Pawn";
+                break;
+            case PieceType::Knight:
+                typeStr = "Knight";
+                break;
+            case PieceType::Bishop:
+                typeStr = "Bishop";
+                break;
+            case PieceType::Rook:
+                typeStr = "Rook";
+                break;
+            case PieceType::Queen:
+                typeStr = "Queen";
+                break;
+            case PieceType::King:
+                typeStr = "King";
+                break;
+        }
+
+        return colorStr + " " + typeStr;
+    }
+
+    std::string Board::getSquareColor(Square square)
+    {
+        int file = square % 8;
+        int rank = square / 8;
+        return ((rank + file) % 2 == 0) ? "Dark" : "Light";
     }
 
 } // namespace Chess
