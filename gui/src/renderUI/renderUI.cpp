@@ -105,9 +105,16 @@ namespace RenderUI
                             int file = static_cast<int>(relativeX / geo.squareSize);
                             int rank = 7 - static_cast<int>(relativeY / geo.squareSize);
 
-                            int sqIndex = rank * 8 + file;
+                            Chess::Square sq = static_cast<Chess::Square>(rank * 8 + file);
 
-                            clickedInfo = "Clicked Square Index: " + std::to_string(sqIndex);
+                            std::string uci = Chess::Board::SquareToUci(sq);
+                            std::string sqColor = Chess::Board::getSquareColor(sq);
+
+                            const auto& pieceOpt = board.getPiece(sq);
+                            std::string pieceStr =
+                                pieceOpt.has_value() ? Chess::Board::getPieceName(pieceOpt.value()) : "Empty";
+
+                            clickedInfo = uci + " (" + sqColor + ") -> " + pieceStr;
                         }
                         else
                         {
