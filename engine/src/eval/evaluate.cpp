@@ -6,8 +6,7 @@
 #include "types.h"
 #include <algorithm>
 
-
-namespace
+namespace Eval
 {
     constexpr int GAME_PHASE_MAX = 24;
 
@@ -22,6 +21,15 @@ namespace
     constexpr int PAWN_SHIELD_BONUS_EG = 5;
     constexpr int ATTACK_WEIGHTS[16] = {0, 0, 50, 75, 88, 94, 97, 99, 100, 100, 100, 100, 100, 100, 100, 100};
     constexpr int ATTACK_VALUE[6] = {0, 20, 20, 40, 80, 0};
+    // piece mobility
+    constexpr int MOB_KNIGHT_MG = 4;
+    constexpr int MOB_KNIGHT_EG = 4;
+    constexpr int MOB_BISHOP_MG = 5;
+    constexpr int MOB_BISHOP_EG = 5;
+    constexpr int MOB_ROOK_MG = 2;
+    constexpr int MOB_ROOK_EG = 4;
+    constexpr int MOB_QUEEN_MG = 1;
+    constexpr int MOB_QUEEN_EG = 2;
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
 
@@ -30,81 +38,6 @@ namespace
         Bitboard ring = king_attacks(king_sq) | square_bb(king_sq);
         Bitboard forward = (c == WHITE) ? (ring << 8) : (ring >> 8);
         return ring | forward;
-    }
-
-    int calculate_king_danger(const Position& pos, Color attacker, Bitboard enemy_king_zone)
-    {
-        int attackingPiecesCount = 0;
-        int valueOfAttacks = 0;
-
-        Bitboard occupancy = pos.occupancy[BOTH];
-
-        Bitboard knights = pos.pieces[attacker][KNIGHT];
-        while (knights)
-        {
-            Square sq = pop_lsb(knights);
-            Bitboard hits = knight_attacks(sq) & enemy_king_zone;
-            if (hits)
-            {
-                attackingPiecesCount++;
-                valueOfAttacks += popcount(hits) * ATTACK_VALUE[KNIGHT];
-            }
-        }
-
-        Bitboard bishops = pos.pieces[attacker][BISHOP];
-        while (bishops)
-        {
-            Square sq = pop_lsb(bishops);
-            Bitboard hits = bishop_attacks(occupancy, sq) & enemy_king_zone;
-            if (hits)
-            {
-                attackingPiecesCount++;
-                valueOfAttacks += popcount(hits) * ATTACK_VALUE[BISHOP];
-            }
-        }
-
-        Bitboard rooks = pos.pieces[attacker][ROOK];
-        while (rooks)
-        {
-            Square sq = pop_lsb(rooks);
-            Bitboard hits = rook_attacks(occupancy, sq) & enemy_king_zone;
-            if (hits)
-            {
-                attackingPiecesCount++;
-                valueOfAttacks += popcount(hits) * ATTACK_VALUE[ROOK];
-            }
-        }
-
-        Bitboard queens = pos.pieces[attacker][QUEEN];
-        while (queens)
-        {
-            Square sq = pop_lsb(queens);
-            Bitboard hits = queen_attacks(occupancy, sq) & enemy_king_zone;
-            if (hits)
-            {
-                attackingPiecesCount++;
-                valueOfAttacks += popcount(hits) * ATTACK_VALUE[QUEEN];
-            }
-        }
-
-        attackingPiecesCount = std::min(attackingPiecesCount, 15);
-
-        // Toga Formula: value * weight[count] / 100
-        return (valueOfAttacks * ATTACK_WEIGHTS[attackingPiecesCount]) / 100;
-    }
-} // namespace
-
-namespace Eval
-{
-    int taper(int mg_total, int eg_total, const Position& pos)
-    {
-        int phase = std::min(pos.game_phase, GAME_PHASE_MAX);
-
-        int mgWeight = (phase * 256) / GAME_PHASE_MAX;
-        int egWeight = 256 - mgWeight;
-
-        int finalEval = ((mg_total * mgWeight) + (eg_total * egWeight)) >> 8;
-        return (pos.sideToMove == WHITE) ? finalEval : -finalEval;
     }
 
     Score evaluate_bishop_pair(const Position& pos)
@@ -123,7 +56,7 @@ namespace Eval
         return s;
     }
 
-    Score evaluate_king_safety(const Position& pos)
+    Score evaluate_king_shield(const Position& pos)
     {
         Score s;
         Bitboard w_king = pos.pieces[WHITE][KING];
@@ -151,21 +84,129 @@ namespace Eval
         s.mg[BLACK] += b_shield_count * PAWN_SHIELD_BONUS_MG;
         s.eg[BLACK] += b_shield_count * PAWN_SHIELD_BONUS_EG;
 
-        // attacks on king --- !Danger: this could slow down the evaluation significantly if not optimized properly (use magic
-        // bitboards).
-        Square w_king_sq = lsb(w_king);
-        Square b_king_sq = lsb(b_king);
+        return s;
+    }
 
-        Bitboard wk_ring = get_king_zone(w_king_sq, WHITE);
-        Bitboard bk_ring = get_king_zone(b_king_sq, BLACK);
+    Score evaluate_pieces(const Position& pos)
+    {
+        Score s;
+        Bitboard occupancy = pos.occupancy[BOTH];
 
-        int w_danger = calculate_king_danger(pos, BLACK, wk_ring);
-        s.mg[WHITE] -= w_danger;
+        Square w_king_sq = pos.king_square(WHITE);
+        Square b_king_sq = pos.king_square(BLACK);
+        Bitboard king_zones[2] = {get_king_zone(w_king_sq, WHITE), get_king_zone(b_king_sq, BLACK)};
 
-        int b_danger = calculate_king_danger(pos, WHITE, bk_ring);
-        s.mg[BLACK] -= b_danger;
+        Bitboard w_pawns = pos.pieces[WHITE][PAWN];
+        Bitboard b_pawns = pos.pieces[BLACK][PAWN];
+
+        Bitboard w_pawn_attacks = ((w_pawns << 9) & NOT_A_FILE) | ((w_pawns << 7) & NOT_H_FILE);
+        Bitboard b_pawn_attacks = ((b_pawns >> 7) & NOT_A_FILE) | ((b_pawns >> 9) & NOT_H_FILE);
+        Bitboard pawn_attacks[2] = {w_pawn_attacks, b_pawn_attacks};
+
+        int attackers_count[2] = {0, 0};
+        int attack_value[2] = {0, 0};
+
+        for (int c = WHITE; c <= BLACK; ++c)
+        {
+            Color them = static_cast<Color>(c ^ 1);
+
+            Bitboard safe_squares = ~pos.occupancy[c] & ~pawn_attacks[them];
+            Bitboard enemy_zone = king_zones[them];
+
+            Bitboard knight = pos.pieces[c][KNIGHT];
+            while (knight)
+            {
+                Square sq = pop_lsb(knight);
+                Bitboard attacks = knight_attacks(sq);
+
+                int mob = popcount(attacks & safe_squares);
+                s.mg[c] += mob * MOB_KNIGHT_MG;
+                s.eg[c] += mob * MOB_KNIGHT_EG;
+
+                Bitboard hits = attacks & enemy_zone;
+                if (hits)
+                {
+                    attackers_count[c]++;
+                    attack_value[c] += popcount(hits) * ATTACK_VALUE[KNIGHT];
+                }
+            }
+
+            Bitboard bishops = pos.pieces[c][BISHOP];
+            while (bishops)
+            {
+                Square sq = pop_lsb(bishops);
+                Bitboard attacks = bishop_attacks(occupancy, sq);
+
+                int mob = popcount(attacks & safe_squares);
+                s.mg[c] += mob * MOB_BISHOP_MG;
+                s.eg[c] += mob * MOB_BISHOP_EG;
+
+                Bitboard hits = attacks & enemy_zone;
+                if (hits)
+                {
+                    attackers_count[c]++;
+                    attack_value[c] += popcount(hits) * ATTACK_VALUE[BISHOP];
+                }
+            }
+
+            Bitboard rooks = pos.pieces[c][ROOK];
+            while (rooks)
+            {
+                Square sq = pop_lsb(rooks);
+                Bitboard attacks = rook_attacks(occupancy, sq);
+
+                int mob = popcount(attacks & safe_squares);
+                s.mg[c] += mob * MOB_ROOK_MG;
+                s.eg[c] += mob * MOB_ROOK_EG;
+
+                Bitboard hits = attacks & enemy_zone;
+                if (hits)
+                {
+                    attackers_count[c]++;
+                    attack_value[c] += popcount(hits) * ATTACK_VALUE[ROOK];
+                }
+            }
+
+            Bitboard queens = pos.pieces[c][QUEEN];
+            while (queens)
+            {
+                Square sq = pop_lsb(queens);
+                Bitboard attacks = queen_attacks(occupancy, sq);
+
+                int mob = popcount(attacks & safe_squares);
+                s.mg[c] += mob * MOB_QUEEN_MG;
+                s.eg[c] += mob * MOB_QUEEN_EG;
+
+                Bitboard hits = attacks & enemy_zone;
+                if (hits)
+                {
+                    attackers_count[c]++;
+                    attack_value[c] += popcount(hits) * ATTACK_VALUE[QUEEN];
+                }
+            }
+        }
+
+        // Toga Formula: value * weight[count] / 100
+        attackers_count[WHITE] = std::min(attackers_count[WHITE], 15);
+        int w_danger = (attack_value[WHITE] * ATTACK_WEIGHTS[attackers_count[WHITE]]) / 100;
+        s.mg[BLACK] -= w_danger;
+
+        attackers_count[BLACK] = std::min(attackers_count[BLACK], 15);
+        int b_danger = (attack_value[BLACK] * ATTACK_WEIGHTS[attackers_count[BLACK]]) / 100;
+        s.mg[WHITE] -= b_danger;
 
         return s;
+    }
+
+    int taper(int mg_total, int eg_total, const Position& pos)
+    {
+        int phase = std::min(pos.game_phase, GAME_PHASE_MAX);
+
+        int mgWeight = (phase * 256) / GAME_PHASE_MAX;
+        int egWeight = 256 - mgWeight;
+
+        int finalEval = ((mg_total * mgWeight) + (eg_total * egWeight)) >> 8;
+        return (pos.sideToMove == WHITE) ? finalEval : -finalEval;
     }
 
     int evaluate(const Position& pos)
@@ -177,7 +218,8 @@ namespace Eval
         score.eg[BLACK] = pos.eg_score[BLACK];
 
         score += evaluate_bishop_pair(pos);
-        score += evaluate_king_safety(pos);
+        score += evaluate_king_shield(pos);
+        score += evaluate_pieces(pos);
 
         int mg_total = score.mg[WHITE] - score.mg[BLACK];
         int eg_total = score.eg[WHITE] - score.eg[BLACK];

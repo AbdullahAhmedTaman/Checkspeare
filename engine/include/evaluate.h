@@ -36,5 +36,6 @@ namespace Eval
     void init_scores(Position& pos); // call it once after parsing FEN
     int evaluate(const Position& pos);
     Score evaluate_bishop_pair(const Position& pos);
-    Score evaluate_king_safety(const Position& pos);
+    Score evaluate_king_shield(const Position& pos); // only evluates king pawn shield
+    Score evaluate_pieces(const Position& pos);      // evaluates mobility and king attacking zones
 } // namespace Eval
