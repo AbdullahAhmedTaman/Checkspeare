@@ -7,7 +7,6 @@
 #include <cctype>
 #include <sstream>
 
-
 namespace
 {
     // Evaluation updates.
@@ -385,110 +384,4 @@ bool Position::is_square_attacked(Square sq, Color attackingColor) const
 Square Position::king_square(Color c) const
 {
     return lsb(pieces[c][KING]);
-}
-
-Position Position::from_fen(const std::string& fen)
-{
-    Position pos;
-    pos.clear(); // Resets board to empty state[cite: 5, 6]
-
-    std::istringstream ss(fen);
-    std::string piece_placement, active_color, castling, en_passant;
-    int halfmove = 0, fullmove = 1;
-
-    ss >> piece_placement >> active_color >> castling >> en_passant >> halfmove >> fullmove;
-
-    // 1. Parse piece placement
-    int rank = 7;
-    int file = 0;
-
-    for (char c : piece_placement)
-    {
-        if (c == '/')
-        {
-            rank--;
-            file = 0;
-        }
-        else if (std::isdigit(c))
-        {
-            file += (c - '0');
-        }
-        else
-        {
-            Square sq = static_cast<Square>(rank * 8 + file);
-            Color color = std::isupper(c) ? WHITE : BLACK;
-            PieceType pt = PAWN;
-
-            switch (std::tolower(c))
-            {
-                case 'p':
-                    pt = PAWN;
-                    break;
-                case 'n':
-                    pt = KNIGHT;
-                    break;
-                case 'b':
-                    pt = BISHOP;
-                    break;
-                case 'r':
-                    pt = ROOK;
-                    break;
-                case 'q':
-                    pt = QUEEN;
-                    break;
-                case 'k':
-                    pt = KING;
-                    break;
-            }
-
-            Piece piece = make_piece(color, pt);
-            Bitboard mask = square_bb(sq);
-
-            pos.pieces[color][pt] |= mask;
-            pos.board[sq] = piece;
-            add_piece_eval(pos, pt, color, sq);
-
-            file++;
-        }
-    }
-
-    // Update occupancy bitboards[cite: 6]
-    pos.update_occupancy();
-
-    // 2. Parse active color
-    pos.sideToMove = (active_color == "w") ? WHITE : BLACK;
-
-    // 3. Parse castling rights
-    pos.castlingRights = 0;
-    if (castling != "-")
-    {
-        for (char c : castling)
-        {
-            if (c == 'K')
-                pos.castlingRights |= 1; // White Kingside
-            else if (c == 'Q')
-                pos.castlingRights |= 2; // White Queenside
-            else if (c == 'k')
-                pos.castlingRights |= 4; // Black Kingside
-            else if (c == 'q')
-                pos.castlingRights |= 8; // Black Queenside
-        }
-    }
-
-    // 4. Parse en passant square
-    pos.enPassantSquare = SQ_NONE;
-    if (en_passant != "-" && en_passant.length() >= 2)
-    {
-        int ep_file = en_passant[0] - 'a';
-        int ep_rank = en_passant[1] - '1';
-        pos.enPassantSquare = static_cast<Square>(ep_rank * 8 + ep_file);
-    }
-
-    // 5. Halfmove clock
-    pos.halfmoveClock = static_cast<uint16_t>(halfmove);
-
-    // 6. Generate full Zobrist key for the position
-    pos.key = Zobrist::generate_key(pos);
-
-    return pos;
 }
