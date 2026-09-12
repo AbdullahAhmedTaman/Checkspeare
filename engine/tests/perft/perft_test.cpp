@@ -28,7 +28,7 @@ TEST_CASE("Perft Leaf Node Verification", "[perft][movegen]")
         REQUIRE(Perft::run(pos, 1) == 48ULL);
         REQUIRE(Perft::run(pos, 2) == 2039ULL);
         REQUIRE(Perft::run(pos, 3) == 97862ULL);
-        REQUIRE(Perft::run(pos, 4) == 4085601ULL);
+        REQUIRE(Perft::run(pos, 4) == 4085603ULL);
     }
 
     SECTION("Position 3 (En Passant & Castling Edge Cases)")
