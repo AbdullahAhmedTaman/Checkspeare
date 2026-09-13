@@ -1,7 +1,12 @@
 add_executable(EngineTests
-legal_moves_tests.cpp
-position_zobrist_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/perft/perft.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/perft/perft_test.cpp
 )
+
+# Force GCC runtime libraries to link statically on Windows
+if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_link_options(EngineTests PRIVATE -static -static-libgcc -static-libstdc++)
+endif()
 
 target_link_libraries(EngineTests
     PRIVATE
@@ -9,8 +14,10 @@ target_link_libraries(EngineTests
         Catch2::Catch2WithMain
 )
 
-target_include_directories(EngineTests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_include_directories(EngineTests PRIVATE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/perft
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+)
 
 include(Catch)
-
 catch_discover_tests(EngineTests)

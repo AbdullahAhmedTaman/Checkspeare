@@ -4,6 +4,8 @@
 #include "pst.h"
 #include "zobrist.h"
 #include <cassert>
+#include <cctype>
+#include <sstream>
 
 namespace
 {

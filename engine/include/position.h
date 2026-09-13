@@ -37,6 +37,9 @@ struct Position
     // board[] is explicitly filled with PIECE_NONE.
     void clear() noexcept;
 
+    // Construct a position from a standard FEN string
+    static Position from_fen(const std::string& fen);
+
     Position() noexcept;
 
     void make_move(Move m);
