@@ -42,8 +42,8 @@ namespace Eval
     Bitboard ISOLATED_MASKS[8];
     Bitboard WHITE_PASSED_MASKS[64];
     Bitboard BLACK_PASSED_MASKS[64];
-
-    void init_pawn_masks()
+    // run once in FEN 
+    void init_pawn_masks() 
     {
         // 1. Build File Masks
         for (int col = 0; col < 8; ++col)
