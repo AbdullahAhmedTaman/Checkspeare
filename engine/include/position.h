@@ -1,20 +1,47 @@
 #pragma once
+#include "attacks.h"
 #include "types.h"
+
+struct UndoState
+{
+    uint8_t castlingRights;
+    Square enPassantSquare;
+    uint16_t halfmoveClock;
+    Piece capturedPiece;
+    Key key;
+    int mg_score[2] = {0, 0};
+    int eg_score[2] = {0, 0};
+    int game_phase = 0;
+};
+
+constexpr int MAX_GAME_PLY = 1024;
 
 struct Position
 {
-    Bitboard pieces[2][PieceType::NONE]; //[color][pieceType]
+    Bitboard pieces[2][PieceType::NONE];
     Bitboard occupancy[3];
-
     Piece board[Square::SQ_NONE];
-
     Color sideToMove;
-
     uint8_t castlingRights;
     Square enPassantSquare;
-
     uint16_t halfmoveClock;
-
-    // Zobrist hash
     Key key;
+    int mg_score[2] = {0, 0};
+    int eg_score[2] = {0, 0};
+    int game_phase = 0;
+
+    UndoState history[MAX_GAME_PLY];
+    int ply = 0;
+
+    // Resets to an empty board, White to move, zero clocks/key/eval/ply.
+    // board[] is explicitly filled with PIECE_NONE.
+    void clear() noexcept;
+
+    Position() noexcept;
+
+    void make_move(Move m);
+    void unmake_move(Move m);
+    void update_occupancy(); // Unused for now
+    bool is_square_attacked(Square sq, Color attackingColor) const;
+    Square king_square(Color c) const;
 };

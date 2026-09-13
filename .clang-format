@@ -8,7 +8,7 @@ BasedOnStyle: LLVM
 Standard: Latest
 IndentWidth: 4
 TabWidth: 4
-ColumnLimit: 120
+ColumnLimit: 130
 IndentCaseLabels: true
 IndentGotoLabels: false
 
