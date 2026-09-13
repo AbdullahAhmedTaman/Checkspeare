@@ -10,17 +10,21 @@ namespace Eval
 {
     constexpr int GAME_PHASE_MAX = 24;
 
+    constexpr Bitboard FILE_A = 0x0101010101010101ULL;
     constexpr Bitboard NOT_A_FILE = 0xFEFEFEFEFEFEFEFEULL;
     constexpr Bitboard NOT_H_FILE = 0x7F7F7F7F7F7F7F7FULL;
+
     // position heuristics bonuses
     // bishop pair
     constexpr int BISHOP_PAIR_MG = 20;
     constexpr int BISHOP_PAIR_EG = 50;
+
     // king safety
     constexpr int PAWN_SHIELD_BONUS_MG = 15;
     constexpr int PAWN_SHIELD_BONUS_EG = 5;
     constexpr int ATTACK_WEIGHTS[16] = {0, 0, 50, 75, 88, 94, 97, 99, 100, 100, 100, 100, 100, 100, 100, 100};
     constexpr int ATTACK_VALUE[6] = {0, 20, 20, 40, 80, 0};
+
     // piece mobility
     constexpr int MOB_KNIGHT_MG = 4;
     constexpr int MOB_KNIGHT_EG = 4;
@@ -32,6 +36,46 @@ namespace Eval
     constexpr int MOB_QUEEN_EG = 2;
 
     constexpr PieceType ALL_PIECE_TYPES[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
+
+    // Pawn Structure Masks
+    Bitboard FILE_MASKS[8];
+    Bitboard ISOLATED_MASKS[8];
+    Bitboard WHITE_PASSED_MASKS[64];
+    Bitboard BLACK_PASSED_MASKS[64];
+
+    void init_pawn_masks()
+    {
+        // 1. Build File Masks
+        for (int col = 0; col < 8; ++col)
+        {
+            FILE_MASKS[col] = FILE_A << col;
+        }
+
+        // 2. Build Isolated Pawn Masks
+        for (int col = 0; col < 8; ++col)
+        {
+            Bitboard left_file  = (FILE_MASKS[col] >> 1) & NOT_H_FILE;
+            Bitboard right_file = (FILE_MASKS[col] << 1) & NOT_A_FILE;
+            
+            ISOLATED_MASKS[col] = left_file | right_file;
+        }
+
+        // 3. Build Passed Pawn Masks
+        for (int sq = 0; sq < 64; ++sq)
+        {
+            int col = sq % 8;
+            int row = sq / 8;
+
+            Bitboard front_cols = FILE_MASKS[col] | ISOLATED_MASKS[col];
+
+            Bitboard white_ranks = (row < 7) ? (~0ULL << (8 * (row + 1))) : 0ULL;
+
+            Bitboard black_ranks = ~(~0ULL << (8 * row));
+
+            WHITE_PASSED_MASKS[sq] = front_cols & white_ranks;
+            BLACK_PASSED_MASKS[sq] = front_cols & black_ranks;
+        }
+    }
 
     inline Bitboard get_king_zone(Square king_sq, Color c)
     {
