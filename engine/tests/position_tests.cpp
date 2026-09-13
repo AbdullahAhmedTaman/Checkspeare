@@ -104,9 +104,8 @@ namespace
             if (a.board[sq] != b.board[sq])
                 return false;
 
-        return a.sideToMove == b.sideToMove && a.castlingRights == b.castlingRights &&
-               a.enPassantSquare == b.enPassantSquare && a.halfmoveClock == b.halfmoveClock && a.key == b.key &&
-               a.ply == b.ply;
+        return a.sideToMove == b.sideToMove && a.castlingRights == b.castlingRights && a.enPassantSquare == b.enPassantSquare &&
+               a.halfmoveClock == b.halfmoveClock && a.key == b.key && a.ply == b.ply;
     }
 
     /// Invariant that must hold after every update_occupancy() call:
@@ -610,8 +609,7 @@ TEST_CASE("make_move/unmake_move: multi-move sequence fully reverses", "[positio
     REQUIRE(positionsEqual(pos, original));
 }
 
-TEST_CASE("make_move/unmake_move: short opening sequence from the starting position",
-          "[position][make_move][integration]")
+TEST_CASE("make_move/unmake_move: short opening sequence from the starting position", "[position][make_move][integration]")
 {
     Position pos;
     setupStartingPosition(pos);
@@ -704,4 +702,86 @@ TEST_CASE("KNOWN LIMITATION: key is not incrementally updated by make_move", "[p
     pos.make_move(m);
 
     REQUIRE(pos.key == 0x123456789ABCDEF0ULL); // unchanged -- no Zobrist XORs yet
+}
+
+// ---------------------------------------------------------------------
+// from_fen
+// ---------------------------------------------------------------------
+
+TEST_CASE("from_fen: parses the starting position correctly", "[position][fen]")
+{
+    // The standard chess initial position
+    Position pos = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    REQUIRE(pos.sideToMove == WHITE);
+    REQUIRE(pos.castlingRights == 0b1111); // K, Q, k, q all available
+    REQUIRE(pos.enPassantSquare == SQ_NONE);
+    REQUIRE(pos.halfmoveClock == 0);
+
+    // Verify piece placement anchors
+    REQUIRE(pos.board[A1] == WHITE_ROOK);
+    REQUIRE(pos.board[E1] == WHITE_KING);
+    REQUIRE(pos.board[A8] == BLACK_ROOK);
+    REQUIRE(pos.board[E8] == BLACK_KING);
+    REQUIRE(pos.board[E2] == WHITE_PAWN);
+    REQUIRE(pos.board[E7] == BLACK_PAWN);
+
+    // Verify empty squares
+    REQUIRE(pos.board[E4] == PIECE_NONE);
+    REQUIRE(pos.board[D5] == PIECE_NONE);
+}
+
+TEST_CASE("from_fen: parses complex middlegame states", "[position][fen]")
+{
+    // Position with Black to move, an en passant target, partial castling rights, and an advanced clock
+    Position pos = Position::from_fen("r1bqkbnr/ppp1p1pp/2n5/3P1p2/8/5N2/PPPP1PPP/RNBQKB1R b KQq f3 14 5");
+
+    REQUIRE(pos.sideToMove == BLACK);
+
+    // Castling rights: White Kingside (1), White Queenside (2), Black Queenside (8) -> 1 | 2 | 8 = 11
+    REQUIRE(pos.castlingRights == 11);
+
+    // En passant target is f3
+    REQUIRE(pos.enPassantSquare == F3);
+
+    // Halfmove clock advanced
+    REQUIRE(pos.halfmoveClock == 14);
+
+    // Verify specific piece placements from the FEN
+    REQUIRE(pos.board[C6] == BLACK_KNIGHT);
+    REQUIRE(pos.board[D5] == WHITE_PAWN);
+    REQUIRE(pos.board[F5] == BLACK_PAWN);
+    REQUIRE(pos.board[F3] == WHITE_KNIGHT);
+}
+
+TEST_CASE("from_fen: handles endgame states and stripped rights", "[position][fen]")
+{
+    // Endgame state with no castling rights, no en passant, and high halfmove clock
+    Position pos = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 49 100");
+
+    REQUIRE(pos.sideToMove == WHITE);
+    REQUIRE(pos.castlingRights == 0);
+    REQUIRE(pos.enPassantSquare == SQ_NONE);
+    REQUIRE(pos.halfmoveClock == 49);
+
+    // Only kings remain on the board
+    REQUIRE(pos.board[E1] == WHITE_KING);
+    REQUIRE(pos.board[E8] == BLACK_KING);
+    REQUIRE(pos.board[A1] == PIECE_NONE);
+    REQUIRE(pos.board[A8] == PIECE_NONE);
+}
+
+TEST_CASE("from_fen: correctly synchronizes bitboards and piece counts", "[position][fen]")
+{
+    // Validate that the piece bitboards and occupancy match the board array
+    Position pos = Position::from_fen("8/5k2/8/8/8/8/2K5/8 w - - 0 1");
+
+    // Check individual piece bitboards
+    REQUIRE((pos.pieces[WHITE][KING] & sqBit(C2)) != BB_EMPTY);
+    REQUIRE((pos.pieces[BLACK][KING] & sqBit(F7)) != BB_EMPTY);
+
+    // Check occupancy bitboards
+    REQUIRE(pos.occupancy[WHITE] == sqBit(C2));
+    REQUIRE(pos.occupancy[BLACK] == sqBit(F7));
+    REQUIRE(pos.occupancy[BOTH] == (sqBit(C2) | sqBit(F7)));
 }
