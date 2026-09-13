@@ -131,6 +131,51 @@ namespace Eval
         return s;
     }
 
+    Score evaluate_pawns(const Position& pos)
+    {
+        Score s;
+        Bitboard wPawns = pos.pieces[WHITE][PAWN];
+        Bitboard bPawns = pos.pieces[BLACK][PAWN];
+
+        for (int col = 0; col < 8; ++col)
+        {
+            Bitboard wColPawns = wPawns & FILE_MASKS[col];
+            Bitboard bColPawns = bPawns & FILE_MASKS[col];
+
+            // Doubled Pawns Check
+            int wCount = popcount(wColPawns);
+            if (wCount > 1)
+            {
+                s.mg[WHITE] -= (wCount - 1) * DOUBLED_PAWN_PENALTY_MG;
+                s.eg[WHITE] -= (wCount - 1) * DOUBLED_PAWN_PENALTY_EG;
+            }
+
+            int bCount = popcount(bColPawns);
+            if (bCount > 1)
+            {
+                s.mg[BLACK] -= (bCount - 1) * DOUBLED_PAWN_PENALTY_MG;
+                s.eg[BLACK] -= (bCount - 1) * DOUBLED_PAWN_PENALTY_EG;
+            }
+
+            // Isolated Pawns Check
+            if (wColPawns && !(wPawns & ISOLATED_MASKS[col]))
+            {
+                s.mg[WHITE] -= wCount * ISOLATED_PAWN_PENALTY_MG;
+                s.eg[WHITE] -= wCount * ISOLATED_PAWN_PENALTY_EG;
+            }
+
+            if (bColPawns && !(bPawns & ISOLATED_MASKS[col]))
+            {
+                s.mg[BLACK] -= bCount * ISOLATED_PAWN_PENALTY_MG;
+                s.eg[BLACK] -= bCount * ISOLATED_PAWN_PENALTY_EG;
+            }
+        }
+
+       
+
+        return s;
+    }
+
     Score evaluate_pieces(const Position& pos)
     {
         Score s;
@@ -264,6 +309,7 @@ namespace Eval
         score += evaluate_bishop_pair(pos);
         score += evaluate_king_shield(pos);
         score += evaluate_pieces(pos);
+        score += evaluate_pawns(pos); 
 
         int mg_total = score.mg[WHITE] - score.mg[BLACK];
         int eg_total = score.eg[WHITE] - score.eg[BLACK];
