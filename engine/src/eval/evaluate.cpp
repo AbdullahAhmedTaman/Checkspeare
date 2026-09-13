@@ -171,7 +171,31 @@ namespace Eval
             }
         }
 
-       
+        // Passed Pawns Check for White
+        Bitboard tempW = wPawns;
+        while (tempW)
+        {
+            Square sq = pop_lsb(tempW);
+            if (!(WHITE_PASSED_MASKS[sq] & bPawns))
+            {
+                int row = sq / 8;
+                s.mg[WHITE] += PASSED_PAWN_BONUS_MG[row];
+                s.eg[WHITE] += PASSED_PAWN_BONUS_EG[row];
+            }
+        }
+
+        // Passed Pawns Check for Black
+        Bitboard tempB = bPawns;
+        while (tempB)
+        {
+            Square sq = pop_lsb(tempB);
+            if (!(BLACK_PASSED_MASKS[sq] & wPawns))
+            {
+                int row = 7 - (sq / 8); // Perspective relative rank
+                s.mg[BLACK] += PASSED_PAWN_BONUS_MG[row];
+                s.eg[BLACK] += PASSED_PAWN_BONUS_EG[row];
+            }
+        }
 
         return s;
     }
