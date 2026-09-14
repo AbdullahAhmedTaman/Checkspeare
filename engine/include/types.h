@@ -7,6 +7,7 @@ using Bitboard = uint64_t;
 using Key = uint64_t;
 using Value = int;
 
+constexpr int MAX_PLY = 128;
 constexpr Value VALUE_ZERO = 0;
 constexpr Value VALUE_MATE = 32000;
 constexpr Value VALUE_INFINITE = 32001;
@@ -232,11 +233,12 @@ std::ostream& operator<<(std::ostream& os, const Move& m);
 
 struct SearchLimits
 {
-    int depth;
-    int wtime, btime;
-    int winc, binc;
-    int movetime;
-    bool infinite;
+    int depth = Max_PLY;
+    int wtime = 0, btime = 0;
+    int winc = 0, binc = 0;
+    int movetime = 0;
+    uint64_t max_nodes = UINT64_MAX; // Needed for UCI 'go nodes X'
+    bool infinite = false;
 };
 
 template <typename T>
