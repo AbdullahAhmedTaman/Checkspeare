@@ -233,7 +233,7 @@ std::ostream& operator<<(std::ostream& os, const Move& m);
 
 struct SearchLimits
 {
-    int depth = Max_PLY;
+    int depth = MAX_PLY;
     int wtime = 0, btime = 0;
     int winc = 0, binc = 0;
     int movetime = 0;
