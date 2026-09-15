@@ -15,7 +15,7 @@ namespace RenderUI
     sf::RenderWindow initWindow();
     void imGuiRenderUI(sf::RenderWindow& window, Config& conf);
     // where to write the imGui components
-    void windowRenderUI(sf::RenderWindow& window, Config& conf, const AssetManager::AssetManager& assets);
+    void windowRenderUI(sf::RenderWindow& window, Config& conf, const Assets::AssetManager& assets);
 } // namespace RenderUI
 
 namespace BoardRenderer
@@ -31,8 +31,7 @@ namespace BoardRenderer
     {
     public:
         BoardRenderer() = default;
-        void render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme,
-                    const Chess::Board& board, const AssetManager::AssetManager& assets, bool isDragging,
-                    Chess::Square draggedSquare, sf::Vector2f dragOffset);
+        void render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme, const Chess::Board& board,
+                    const Assets::AssetManager& assets, bool isDragging, Chess::Square draggedSquare, sf::Vector2f dragOffset);
     };
 } // namespace BoardRenderer

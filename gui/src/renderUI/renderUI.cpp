@@ -25,8 +25,7 @@ namespace RenderUI
         return window;
     }
 
-    void imGuiRenderUI(sf::RenderWindow& window, Config& conf, BoardRenderer::BoardGeometry& geo,
-                       const std::string& clickedInfo)
+    void imGuiRenderUI(sf::RenderWindow& window, Config& conf, BoardRenderer::BoardGeometry& geo, const std::string& clickedInfo)
     {
         ImGui::Begin("Chess Engine Test");
 
@@ -63,7 +62,7 @@ namespace RenderUI
         }
     }
 
-    void windowRenderUI(sf::RenderWindow& window, Config& conf, const AssetManager::AssetManager& assets)
+    void windowRenderUI(sf::RenderWindow& window, Config& conf, const Assets::AssetManager& assets)
     {
         sf::Clock deltaClock;
         // ---
@@ -122,8 +121,7 @@ namespace RenderUI
 
                                 float squareX = geo.boardOrigin.x + file * geo.squareSize;
                                 float squareY = geo.boardOrigin.y + (7 - rank) * geo.squareSize;
-                                dragOffset =
-                                    sf::Vector2f(mousePress->position.x - squareX, mousePress->position.y - squareY);
+                                dragOffset = sf::Vector2f(mousePress->position.x - squareX, mousePress->position.y - squareY);
 
                                 std::string uci = Chess::Board::SquareToUci(sq);
                                 std::string sqColor = Chess::Board::getSquareColor(sq);
@@ -205,7 +203,7 @@ namespace RenderUI
 namespace BoardRenderer
 {
     void BoardRenderer::render(sf::RenderWindow& window, const BoardGeometry& geo, const Theme::BoardTheme& theme,
-                               const Chess::Board& board, const AssetManager::AssetManager& assets, bool isDragging,
+                               const Chess::Board& board, const Assets::AssetManager& assets, bool isDragging,
                                Chess::Square draggedSquare, sf::Vector2f dragOffset)
     {
         // board representation
@@ -241,7 +239,7 @@ namespace BoardRenderer
             if (pieceOpt.has_value())
             {
                 const Chess::Piece& piece = pieceOpt.value();
-                std::string pieceKey = AssetManager::AssetManager::getPieceKey(piece);
+                std::string pieceKey = Assets::AssetManager::getPieceKey(piece);
                 const sf::Texture& pieceTexture = assets.getTexture(pieceKey);
                 sf::Sprite pieceSprite(pieceTexture);
 
@@ -270,7 +268,7 @@ namespace BoardRenderer
             if (pieceOpt.has_value())
             {
                 const Chess::Piece& piece = pieceOpt.value();
-                std::string pieceKey = AssetManager::AssetManager::getPieceKey(piece);
+                std::string pieceKey = Assets::AssetManager::getPieceKey(piece);
                 const sf::Texture& pieceTexture = assets.getTexture(pieceKey);
                 sf::Sprite draggedSprite(pieceTexture);
 

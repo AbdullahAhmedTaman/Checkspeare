@@ -6,7 +6,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace AssetManager
+namespace Assets
 {
 
     void AssetManager::loadAllPieceTextures(const std::string& basePath)
@@ -97,4 +97,4 @@ namespace AssetManager
         }
         return colorStr + "_" + typeStr;
     }
-} // namespace AssetManager
+} // namespace Assets

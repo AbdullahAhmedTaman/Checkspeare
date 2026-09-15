@@ -20,6 +20,6 @@ namespace Theme
         std::string Defualt = "Default";
     };
 
-    BoardTheme getBoardTheme(const std::string& tag, const AssetManager::AssetManager& manager);
+    BoardTheme getBoardTheme(const std::string& tag, const Assets::AssetManager& manager);
 
 } // namespace Theme

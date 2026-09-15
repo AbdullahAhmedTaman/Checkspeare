@@ -13,7 +13,7 @@ int main()
 {
     try
     {
-        AssetManager::AssetManager assetManager;
+        Assets::AssetManager assetManager;
 
         assetManager.loadAllPieceTextures("gui/assets/pieces/");
         assetManager.loadAllSquareTextures("gui/assets/squares/");
