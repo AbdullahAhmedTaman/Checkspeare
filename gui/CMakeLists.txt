@@ -12,6 +12,7 @@ target_sources(ChessGUI
 target_include_directories(ChessGUI
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../engine/include
 )
 
 target_link_libraries(ChessGUI
@@ -19,4 +20,5 @@ target_link_libraries(ChessGUI
         SFML::Graphics
         SFML::Audio
         ImGui-SFML::ImGui-SFML
+        ChessEngine
 )
