@@ -1,11 +1,12 @@
-#include "../include/renderUI.h"
-#include "../include/board.h"
+#include "renderUI.h"
 #include "SFML/Graphics/RenderWindow.hpp"
 #include "Theme.h"
+#include "board.h"
 #include <SFML/Graphics.hpp>
 #include <SFML/Window.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
+
 
 namespace RenderUI
 {

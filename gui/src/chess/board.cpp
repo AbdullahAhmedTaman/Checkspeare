@@ -1,4 +1,4 @@
-#include "../include/board.h"
+#include "board.h"
 #include <optional>
 
 namespace Chess

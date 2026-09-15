@@ -1,10 +1,10 @@
-#include "../include/Theme.h"
+#include "theme.h"
 #include <stdexcept>
 #include <string>
 
 namespace Theme
 {
-    BoardTheme getBoardTheme(const std::string& tag, const AssetManager::AssetManager& manager)
+    BoardTheme getBoardTheme(const std::string& tag, const Assets::AssetManager& manager)
     {
         // Factory Like for themes
         BoardTheme theme;

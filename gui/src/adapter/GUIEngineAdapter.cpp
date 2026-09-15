@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../../engine/include/movegen.h"
-#include "../../../engine/include/position.h"
-#include "../../../engine/include/types.h"
+#include "movegen.h"
+#include "position.h"
+#include "types.h"
 #include <vector>
 
 class GUIEngineAdapter
