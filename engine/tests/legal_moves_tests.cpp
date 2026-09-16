@@ -29,124 +29,6 @@ namespace
         }
     };
 
-    Square make_square(int file, int rank)
-    {
-        return static_cast<Square>(rank * 8 + file);
-    }
-
-    Piece piece_from_char(char c)
-    {
-        switch (c)
-        {
-            case 'P':
-                return WHITE_PAWN;
-            case 'N':
-                return WHITE_KNIGHT;
-            case 'B':
-                return WHITE_BISHOP;
-            case 'R':
-                return WHITE_ROOK;
-            case 'Q':
-                return WHITE_QUEEN;
-            case 'K':
-                return WHITE_KING;
-            case 'p':
-                return BLACK_PAWN;
-            case 'n':
-                return BLACK_KNIGHT;
-            case 'b':
-                return BLACK_BISHOP;
-            case 'r':
-                return BLACK_ROOK;
-            case 'q':
-                return BLACK_QUEEN;
-            case 'k':
-                return BLACK_KING;
-            default:
-                return PIECE_NONE;
-        }
-    }
-
-    void put_piece(Position& pos, Square sq, Piece pc)
-    {
-        pos.board[sq] = pc;
-        pos.pieces[color_of(pc)][type_of(pc)] |= square_bb(sq);
-    }
-
-    Position position_from_fen(const std::string& fen)
-    {
-        Position pos;
-        pos.clear();
-
-        std::istringstream ss(fen);
-        std::string boardPart, side, castling, ep;
-        ss >> boardPart >> side >> castling >> ep;
-
-        int rank = 7;
-        int file = 0;
-
-        for (char c : boardPart)
-        {
-            if (c == '/')
-            {
-                --rank;
-                file = 0;
-            }
-            else if (c >= '1' && c <= '8')
-            {
-                file += c - '0';
-            }
-            else
-            {
-                const Piece pc = piece_from_char(c);
-                if (pc != PIECE_NONE)
-                    put_piece(pos, make_square(file, rank), pc);
-                ++file;
-            }
-        }
-
-        pos.sideToMove = (side == "w") ? WHITE : BLACK;
-
-        pos.castlingRights = 0;
-        if (castling != "-")
-        {
-            for (char c : castling)
-            {
-                switch (c)
-                {
-                    case 'K':
-                        pos.castlingRights |= 1;
-                        break;
-                    case 'Q':
-                        pos.castlingRights |= 2;
-                        break;
-                    case 'k':
-                        pos.castlingRights |= 4;
-                        break;
-                    case 'q':
-                        pos.castlingRights |= 8;
-                        break;
-                    default:
-                        break;
-                }
-            }
-        }
-
-        if (ep == "-")
-        {
-            pos.enPassantSquare = SQ_NONE;
-        }
-        else
-        {
-            const int f = ep[0] - 'a';
-            const int r = ep[1] - '1';
-            pos.enPassantSquare = make_square(f, r);
-        }
-
-        pos.update_occupancy();
-        return pos;
-    }
-
     void generate_legal(Position& pos, MoveList& list)
     {
         MoveGen::generate_legal_moves(pos, list);
@@ -177,14 +59,6 @@ namespace
                 return true;
         return false;
     }
-
-    bool has_any_move_from(const MoveList& list, Square from)
-    {
-        for (int i = 0; i < list.count; ++i)
-            if (list.moves[i].from() == from)
-                return true;
-        return false;
-    }
 } // namespace
 
 // -----------------------------------------------------------------------------
@@ -193,7 +67,7 @@ namespace
 
 TEST_CASE_METHOD(EngineFixture, "legal: initial position has exactly 20 moves", "[movegen][legal]")
 {
-    Position pos = position_from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Position pos = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -206,7 +80,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: initial position has exactly 20 moves", 
 TEST_CASE_METHOD(EngineFixture, "legal: no restrictions means legal equals pseudo-legal count", "[movegen][legal]")
 {
     // Quiet position, nothing pinned, no checks.
-    Position pos = position_from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
     MoveList pseudo, legal;
     MoveGen::generate_pseudo_legal_moves(pos, pseudo);
     MoveGen::generate_legal_moves(pos, legal);
@@ -221,7 +95,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: no restrictions means legal equals pseud
 TEST_CASE_METHOD(EngineFixture, "legal: rook check, king must leave the file", "[movegen][legal][check]")
 {
     // Rook e8 checks king e1 along the e-file.
-    Position pos = position_from_fen("4r2k/8/8/8/8/8/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("4r2k/8/8/8/8/8/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -236,7 +110,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: rook check, king must leave the file", "
 TEST_CASE_METHOD(EngineFixture, "legal: bishop check, king must avoid the diagonal", "[movegen][legal][check]")
 {
     // Bishop b4 checks along b4-c3-d2-e1.
-    Position pos = position_from_fen("7k/8/8/8/1b6/8/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/1b6/8/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -251,7 +125,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: bishop check, king must avoid the diagon
 TEST_CASE_METHOD(EngineFixture, "legal: knight check cannot be blocked, only captured or dodged", "[movegen][legal][check]")
 {
     // Knight d3 checks king e1.
-    Position pos = position_from_fen("7k/8/8/8/8/3n4/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/8/3n4/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -266,7 +140,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: knight check cannot be blocked, only cap
 TEST_CASE_METHOD(EngineFixture, "legal: pawn check, king can capture the pawn or flee", "[movegen][legal][check][pawn]")
 {
     // Pawn d4 checks king e3 (pawn attacks c3 and e3).
-    Position pos = position_from_fen("7k/8/8/8/3p4/4K3/8/8 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/3p4/4K3/8/8 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -284,7 +158,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: pawn check, king can capture the pawn or
 TEST_CASE_METHOD(EngineFixture, "legal: only move is to block", "[movegen][legal][check][block]")
 {
     // Rook h1 checks king d1 along rank 1. Bishop c3 can only block at e1.
-    Position pos = position_from_fen("4k3/8/8/8/8/2B5/8/3K3r w - - 0 1");
+    Position pos = Position::from_fen("4k3/8/8/8/8/2B5/8/3K3r w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -298,7 +172,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: only move is to block", "[movegen][legal
 TEST_CASE_METHOD(EngineFixture, "legal: king captures the undefended checker", "[movegen][legal][check][capture]")
 {
     // Rook d2 checks king e2. Rook is undefended, so Kxd2 is legal.
-    Position pos = position_from_fen("7k/8/8/8/8/8/3rK3/8 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/8/8/3rK3/8 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -316,7 +190,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: king captures the undefended checker", "
 TEST_CASE_METHOD(EngineFixture, "legal: king cannot capture a defended checker", "[movegen][legal][check][capture]")
 {
     // Rook d2 checks king e2, defended by pawn c3. Kxd2 is illegal.
-    Position pos = position_from_fen("7k/8/8/8/8/2p5/3rK3/8 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/8/2p5/3rK3/8 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -334,7 +208,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: king cannot capture a defended checker",
 TEST_CASE_METHOD(EngineFixture, "legal: capture the checker with another piece", "[movegen][legal][check]")
 {
     // Knight d3 checks king e1. Knights b4 and c5 can both capture it.
-    Position pos = position_from_fen("7k/8/8/2N5/1N6/3n4/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/2N5/1N6/3n4/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -355,7 +229,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: capture the checker with another piece",
 TEST_CASE_METHOD(EngineFixture, "legal: double check forces king moves only", "[movegen][legal][check][double]")
 {
     // Bishop b4 and knight c2 both give check.
-    Position pos = position_from_fen("7k/8/8/8/1b6/8/2n5/4K3 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/1b6/8/2n5/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -374,7 +248,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: double check forces king moves only", "[
 TEST_CASE_METHOD(EngineFixture, "legal: knight pinned by rook cannot move at all", "[movegen][legal][pin]")
 {
     // Knight e2 pinned by rook e8.
-    Position pos = position_from_fen("4r2k/8/8/8/8/8/4N3/4K3 w - - 0 1");
+    Position pos = Position::from_fen("4r2k/8/8/8/8/8/4N3/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -389,7 +263,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: knight pinned by rook cannot move at all
 TEST_CASE_METHOD(EngineFixture, "legal: knight pinned by bishop cannot move", "[movegen][legal][pin]")
 {
     // Knight b2 pinned by bishop c3 along a1-c3 diagonal.
-    Position pos = position_from_fen("7k/8/8/8/8/2b5/1N6/K7 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/8/8/2b5/1N6/K7 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -403,7 +277,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: knight pinned by bishop cannot move", "[
 TEST_CASE_METHOD(EngineFixture, "legal: pinned rook may move along the pin line and capture the pinner", "[movegen][legal][pin]")
 {
     // Rook e2 pinned by rook e8, but may slide along the e-file and capture.
-    Position pos = position_from_fen("4r2k/8/8/8/8/8/4R3/4K3 w - - 0 1");
+    Position pos = Position::from_fen("4r2k/8/8/8/8/8/4R3/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -421,7 +295,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: pinned rook may move along the pin line 
 TEST_CASE_METHOD(EngineFixture, "legal: pinned pawn may push and capture along the file", "[movegen][legal][pin][pawn]")
 {
     // White pawn e2 pinned by rook e8, but is free to push along e-file.
-    Position pos = position_from_fen("4r2k/8/8/8/8/8/4P3/4K3 w - - 0 1");
+    Position pos = Position::from_fen("4r2k/8/8/8/8/8/4P3/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -437,7 +311,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: pinned pawn may push and capture along t
 
 TEST_CASE_METHOD(EngineFixture, "legal: en passant that exposes king to rook is illegal", "[movegen][legal][ep]")
 {
-    Position pos = position_from_fen("4r2k/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
+    Position pos = Position::from_fen("4r2k/8/8/3pP3/8/8/8/4K3 w - d6 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -459,7 +333,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant that exposes king to rook is 
 
 TEST_CASE_METHOD(EngineFixture, "legal: en passant that exposes king to bishop is illegal", "[movegen][legal][ep]")
 {
-    Position pos = position_from_fen("b6k/8/8/3pP3/8/8/8/7K w - d6 0 1");
+    Position pos = Position::from_fen("b6k/8/8/3pP3/8/8/8/7K w - d6 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -477,7 +351,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant that exposes king to bishop i
 
 TEST_CASE_METHOD(EngineFixture, "legal: en passant is legal when it does not expose the king", "[movegen][legal][ep]")
 {
-    Position pos = position_from_fen("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1");
+    Position pos = Position::from_fen("7k/8/8/3pP3/8/8/8/K7 w - d6 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -490,7 +364,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant is legal when it does not exp
 TEST_CASE_METHOD(EngineFixture, "legal: en passant can resolve a pawn check", "[movegen][legal][ep][check]")
 {
     // Pawn d5 checks king e4. EP c5xd6 captures the pawn and resolves the check.
-    Position pos = position_from_fen("7k/8/8/2Pp4/4K3/8/8/8 w - d6 0 1");
+    Position pos = Position::from_fen("7k/8/8/2Pp4/4K3/8/8/8 w - d6 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -504,7 +378,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: EP target g6 does not resolve a d5 pawn 
 {
     // Pawn d5 gives check to king e4. EP target is g6 (black just played g7-g5).
     // f5xg6 EP does not resolve the check; c5 has no legal move at all.
-    Position pos = position_from_fen("7k/8/8/2Pp1Pp1/4K3/8/8/8 w - g6 0 1");
+    Position pos = Position::from_fen("7k/8/8/2Pp1Pp1/4K3/8/8/8 w - g6 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -534,7 +408,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant is the only move that resolve
     // Every king escape is blocked by a white piece, and b5 is defended by the
     // c6 pawn (so Kxb5 is illegal). No other white piece can capture b5 or
     // block the check. Therefore the only legal move is a5xb6 en passant.
-    Position pos = position_from_fen("7k/8/2p5/Pp6/KN6/PP6/8/8 w - b6 0 1");
+    Position pos = Position::from_fen("7k/8/2p5/Pp6/KN6/PP6/8/8 w - b6 0 1");
 
     MoveList list;
     generate_legal(pos, list);
@@ -564,7 +438,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant is the only move that blocks 
     //   g5-g6, h7-h8=* -> do not block the diagonal
     //   h7xg8 -> no piece there (knight is on e7)
     // Only g5xf6 EP interposes on the diagonal at f6.
-    Position pos = position_from_fen("k6K/4n2P/8/5pP1/8/8/8/b7 w - f6 0 1");
+    Position pos = Position::from_fen("k6K/4n2P/8/5pP1/8/8/8/b7 w - f6 0 1");
 
     MoveList list;
     generate_legal(pos, list);
@@ -589,7 +463,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant is the only move that blocks 
 
 TEST_CASE_METHOD(EngineFixture, "legal: both castles available in a clean position", "[movegen][legal][castling]")
 {
-    Position pos = position_from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    Position pos = Position::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -600,7 +474,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: both castles available in a clean positi
 TEST_CASE_METHOD(EngineFixture, "legal: cannot castle through an attacked square", "[movegen][legal][castling]")
 {
     // Rook f8 attacks f1.
-    Position pos = position_from_fen("r3kr2/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    Position pos = Position::from_fen("r3kr2/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -611,7 +485,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: cannot castle through an attacked square
 TEST_CASE_METHOD(EngineFixture, "legal: cannot castle out of check", "[movegen][legal][castling]")
 {
     // Rook e8 checks king e1.
-    Position pos = position_from_fen("k3r3/8/8/8/8/8/8/R3K2R w KQ - 0 1");
+    Position pos = Position::from_fen("k3r3/8/8/8/8/8/8/R3K2R w KQ - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -628,7 +502,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: cannot castle out of check", "[movegen][
 TEST_CASE_METHOD(EngineFixture, "legal: cannot castle into check", "[movegen][legal][castling]")
 {
     // Rook g8 attacks g1.
-    Position pos = position_from_fen("k5r1/8/8/8/8/8/8/R3K2R w KQ - 0 1");
+    Position pos = Position::from_fen("k5r1/8/8/8/8/8/8/R3K2R w KQ - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -639,7 +513,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: cannot castle into check", "[movegen][le
 TEST_CASE_METHOD(EngineFixture, "legal: attacked rook does not prevent castling", "[movegen][legal][castling]")
 {
     // Bishop a8 attacks h1 (rook square) but not f1 or g1.
-    Position pos = position_from_fen("b3k3/8/8/8/8/8/8/R3K2R w KQ - 0 1");
+    Position pos = Position::from_fen("b3k3/8/8/8/8/8/8/R3K2R w KQ - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -650,7 +524,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: attacked rook does not prevent castling"
 TEST_CASE_METHOD(EngineFixture, "legal: black castling with an attack on f8 is blocked", "[movegen][legal][castling]")
 {
     // White rook f1 attacks f8.
-    Position pos = position_from_fen("r3k2r/8/8/8/8/8/8/R3KR2 b Qkq - 0 1");
+    Position pos = Position::from_fen("r3k2r/8/8/8/8/8/8/R3KR2 b Qkq - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -660,7 +534,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: black castling with an attack on f8 is b
 
 TEST_CASE_METHOD(EngineFixture, "legal: no castle without rights", "[movegen][legal][castling]")
 {
-    Position pos = position_from_fen("r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1");
+    Position pos = Position::from_fen("r3k2r/8/8/8/8/8/8/R3K2R w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -674,7 +548,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: no castle without rights", "[movegen][le
 
 TEST_CASE_METHOD(EngineFixture, "legal: king cannot move adjacent to enemy king", "[movegen][legal][king]")
 {
-    Position pos = position_from_fen("8/8/4k3/8/4K3/8/8/8 w - - 0 1");
+    Position pos = Position::from_fen("8/8/4k3/8/4K3/8/8/8 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -691,7 +565,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: king cannot move adjacent to enemy king"
 
 TEST_CASE_METHOD(EngineFixture, "legal: king captures undefended knight", "[movegen][legal][king]")
 {
-    Position pos = position_from_fen("8/8/8/4n3/4K3/8/8/7k w - - 0 1");
+    Position pos = Position::from_fen("8/8/8/4n3/4K3/8/8/7k w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -703,7 +577,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: king captures undefended knight", "[move
 
 TEST_CASE_METHOD(EngineFixture, "legal: king cannot capture defended knight", "[movegen][legal][king]")
 {
-    Position pos = position_from_fen("8/8/5p2/4n3/4K3/8/8/7k w - - 0 1");
+    Position pos = Position::from_fen("8/8/5p2/4n3/4K3/8/8/7k w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -718,7 +592,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: king cannot capture defended knight", "[
 TEST_CASE_METHOD(EngineFixture, "legal: promotion capture resolves a check", "[movegen][legal][promotion][check]")
 {
     // Rook a8 checks king a1. Pawn b7 may capture-promote on a8.
-    Position pos = position_from_fen("r6k/1P6/8/8/8/8/8/K7 w - - 0 1");
+    Position pos = Position::from_fen("r6k/1P6/8/8/8/8/8/K7 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -735,7 +609,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: promotion capture resolves a check", "[m
 
 TEST_CASE_METHOD(EngineFixture, "legal: promotion moves are all generated when legal", "[movegen][legal][promotion]")
 {
-    Position pos = position_from_fen("7k/P7/8/8/8/8/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("7k/P7/8/8/8/8/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -753,7 +627,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: promotion moves are all generated when l
 TEST_CASE_METHOD(EngineFixture, "legal: stalemate produces zero legal moves", "[movegen][legal][stalemate]")
 {
     // Black king a8 has no legal moves and is not in check.
-    Position pos = position_from_fen("k7/2K5/1Q6/8/8/8/8/8 b - - 0 1");
+    Position pos = Position::from_fen("k7/2K5/1Q6/8/8/8/8/8 b - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -762,7 +636,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: stalemate produces zero legal moves", "[
 
 TEST_CASE_METHOD(EngineFixture, "legal: back-rank mate produces zero legal moves", "[movegen][legal][checkmate]")
 {
-    Position pos = position_from_fen("4R1k1/5ppp/8/8/8/8/8/6K1 b - - 0 1");
+    Position pos = Position::from_fen("4R1k1/5ppp/8/8/8/8/8/6K1 b - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -772,7 +646,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: back-rank mate produces zero legal moves
 TEST_CASE_METHOD(EngineFixture, "legal: mate in the corner with queen and king", "[movegen][legal][checkmate]")
 {
     // King h8 mated by queen g7 supported by king f6.
-    Position pos = position_from_fen("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1");
+    Position pos = Position::from_fen("7k/6Q1/5K2/8/8/8/8/8 b - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -787,7 +661,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: only one move escapes check", "[movegen]
 {
     // Rook a8 checks king a1; only king b1 escapes (b2 also but see below).
     // White pawn b2 blocks b2, so Kb2 is blocked; only Kb1 remains.
-    Position pos = position_from_fen("r6k/8/8/8/8/8/1P6/K7 w - - 0 1");
+    Position pos = Position::from_fen("r6k/8/8/8/8/8/1P6/K7 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -801,7 +675,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: two different pieces can resolve check",
     // Knight d3 checks king e1. King can also be captured by Nb4xd3 or Nc5xd3.
     // The knight f4 can block? No - knight checks can't be blocked. Instead, both
     // other knights capture, doubling the escape count.
-    Position pos = position_from_fen("7k/8/8/2N5/1N6/3n4/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("7k/8/8/2N5/1N6/3n4/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -818,7 +692,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: pinned pawn cannot push sideways but can
 {
     // Pawn e3 is pinned by rook e8. It may push forward but not capture diagonally off the e-file.
     // Black knight on d4 sits on the diagonal, but capturing it would expose the king.
-    Position pos = position_from_fen("4r2k/8/8/8/3n4/4P3/8/4K3 w - - 0 1");
+    Position pos = Position::from_fen("4r2k/8/8/8/3n4/4P3/8/4K3 w - - 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -830,7 +704,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant legal even when the moved paw
                  "[movegen][legal][ep]")
 {
     // EP on the queenside; nothing pins the capturing pawn.
-    Position pos = position_from_fen("7k/8/8/2pP4/8/8/8/K7 w - c6 0 1");
+    Position pos = Position::from_fen("7k/8/8/2pP4/8/8/8/K7 w - c6 0 1");
     MoveList list;
     generate_legal(pos, list);
 
@@ -841,7 +715,7 @@ TEST_CASE_METHOD(EngineFixture, "legal: en passant legal even when the moved paw
 TEST_CASE_METHOD(EngineFixture, "legal: all moves are pseudo-legal moves that pass the check test", "[movegen][legal][sanity]")
 {
     // A busy middlegame-like position: every legal move must be in the pseudo-legal list.
-    Position pos = position_from_fen("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1");
+    Position pos = Position::from_fen("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq - 0 1");
 
     MoveList pseudo, legal;
     MoveGen::generate_pseudo_legal_moves(pos, pseudo);
