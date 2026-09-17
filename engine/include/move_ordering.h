@@ -24,7 +24,7 @@ namespace MoveOrdering
     class MovePicker
     {
     public:
-        MovePicker(const MoveList& list, const Position& pos, Move tt_move = Move{});
+        MovePicker(const MoveList& list, const Position& pos, Move tt_move = Move::none(), int ply = 0);
         Move next_move();
 
     private:

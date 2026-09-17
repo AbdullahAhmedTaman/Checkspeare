@@ -14,15 +14,6 @@ namespace MoveOrdering
             copy_moves(list, moves, index + 1, count);
         }
 
-        void initialize_scores(int* scores, int index, int count)
-        {
-            if (index == count)
-                return;
-
-            scores[index] = 0;
-            initialize_scores(scores, index + 1, count);
-        }
-
         void swap_moves(Move& first_move, int& first_score, Move& second_move, int& second_score)
         {
             Move move = first_move;
@@ -40,6 +31,7 @@ namespace MoveOrdering
                 return;
 
             Move move = moves[index];
+            scores[index] = 0;
             if (move == tt_move)
             {
                 scores[index] = TT_MOVE_SCORE;
@@ -73,12 +65,11 @@ namespace MoveOrdering
         }
     } // namespace
 
-    MovePicker::MovePicker(const MoveList& list, const Position& pos, Move tt_move)
+    MovePicker::MovePicker(const MoveList& list, const Position& pos, Move tt_move, int)
         : count(list.size()),
           current_index(0)
     {
         copy_moves(list, moves, 0, count);
-        initialize_scores(scores, 0, count);
         score_moves(pos, tt_move);
     }
 
