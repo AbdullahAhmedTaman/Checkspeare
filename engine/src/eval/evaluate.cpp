@@ -200,6 +200,60 @@ namespace Eval
         return s;
     }
 
+    Score evaluate_outposts(const Position& pos)
+    {
+        Score s;
+        Bitboard w_pawns = pos.pieces[WHITE][PAWN];
+        Bitboard b_pawns = pos.pieces[BLACK][PAWN];
+
+        Bitboard w_pawn_attacks = ((w_pawns << 9) & NOT_A_FILE) | ((w_pawns << 7) & NOT_H_FILE);
+        Bitboard b_pawn_attacks = ((b_pawns >> 7) & NOT_A_FILE) | ((b_pawns >> 9) & NOT_H_FILE);
+
+        Bitboard w_knights = pos.pieces[WHITE][KNIGHT];
+        while (w_knights)
+        {
+            Square sq = pop_lsb(w_knights);
+            int row = sq >> 3;
+            int col = sq & 7;
+
+            if (row >= 3 && row <= 5)
+            {
+                if (w_pawn_attacks & square_bb(sq))
+                {
+                    Bitboard enemy_pawn_span = ISOLATED_MASKS[col] & (~0ULL << (8 * (row + 1)));
+                    if (!(b_pawns & enemy_pawn_span))
+                    {
+                        s.mg[WHITE] += KNIGHT_OUTPOST_MG;
+                        s.eg[WHITE] += KNIGHT_OUTPOST_EG;
+                    }
+                }
+            }
+        }
+
+        Bitboard b_knights = pos.pieces[BLACK][KNIGHT];
+        while (b_knights)
+        {
+            Square sq = pop_lsb(b_knights);
+            int row = sq >> 3;
+            int col = sq & 7;
+
+            if (row >= 2 && row <= 4)
+            {
+                if (b_pawn_attacks & square_bb(sq))
+                {
+                    Bitboard enemy_pawn_span = ISOLATED_MASKS[col] & ~(~0ULL << (8 * row));
+                    if (!(w_pawns & enemy_pawn_span))
+                    {
+                        s.mg[BLACK] += KNIGHT_OUTPOST_MG;
+                        s.eg[BLACK] += KNIGHT_OUTPOST_EG;
+                    }
+                }
+            }
+        }
+
+        return s;
+    }
+
     Score evaluate_pieces(const Position& pos)
     {
         Score s;
@@ -334,6 +388,7 @@ namespace Eval
         score += evaluate_king_shield(pos);
         score += evaluate_pieces(pos);
         score += evaluate_pawns(pos); 
+        score += evaluate_outposts(pos);
 
         int mg_total = score.mg[WHITE] - score.mg[BLACK];
         int eg_total = score.eg[WHITE] - score.eg[BLACK];

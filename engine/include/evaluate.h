@@ -46,6 +46,7 @@ namespace Eval
     constexpr int PASSED_PAWN_BONUS_MG[8] = { 0,  5, 10, 20, 35,  60, 100, 0 };
     constexpr int PASSED_PAWN_BONUS_EG[8] = { 0, 10, 20, 40, 70, 110, 160, 0 };
 
+    // knight outpost bonus
     constexpr int KNIGHT_OUTPOST_MG = 20;
     constexpr int KNIGHT_OUTPOST_EG = 10;
 
