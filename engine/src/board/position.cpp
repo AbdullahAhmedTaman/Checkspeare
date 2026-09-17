@@ -540,3 +540,10 @@ Position Position::from_fen(const std::string& fen)
 
     return pos;
 }
+
+bool Position::in_check() const
+{
+    const Square ksq = king_square(sideToMove);
+    const Color them = static_cast<Color>(sideToMove ^ 1);
+    return is_square_attacked(ksq, them);
+}

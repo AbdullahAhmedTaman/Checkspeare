@@ -10,6 +10,16 @@
 namespace Search
 {
     /**
+     * @brief Node types for template-specialized search dispatching.
+     */
+    enum NodeType
+    {
+        ROOT,
+        PV,
+        NON_PV
+    };
+
+    /**
      * @brief Flag to asynchronously interrupt the search (e.g., UCI 'stop' or time up).
      */
     class HistoryTable;
@@ -69,16 +79,19 @@ namespace Search
     void start_search(Position& pos, const SearchLimits& limits);
 
     /**
-     * @brief Core recursive alpha-beta search.
+     * @brief Core recursive template-based alpha-beta search.
      *
+     * @tparam NT Node type (ROOT, PV, or NON_PV) for compile-time branch optimization.
      * @param pos Current board position.
      * @param depth Remaining search depth.
      * @param ply Distance from the root node.
      * @param alpha Lower bound of the search window.
      * @param beta Upper bound of the search window.
+     * @param ctx Execution context and heuristics state.
      * @param do_null Permits Null-Move Pruning at this node.
      * @return Evaluated score for the position.
      */
+    template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null = true);
 
     /**
