@@ -21,12 +21,6 @@ namespace MoveOrdering
     };
     // clang-format on
 
-    struct ScoredMove
-    {
-        Move move;
-        int score;
-    };
-
     class MovePicker
     {
     public:
@@ -34,11 +28,11 @@ namespace MoveOrdering
         Move next_move();
 
     private:
-        ScoredMove moves[MAX_MOVES];
+        Move moves[MAX_MOVES];
+        int scores[MAX_MOVES];
         int count;
         int current_index;
 
         void score_moves(const Position& pos, Move tt_move);
-        PieceType get_piece_type(Piece p) const;
     };
 } // namespace MoveOrdering

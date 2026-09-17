@@ -1,58 +1,90 @@
 #include "move_ordering.h"
-#include <algorithm>
+#include <types.h>
 
 namespace MoveOrdering
 {
+    namespace
+    {
+        void copy_moves(const MoveList& list, Move* moves, int index, int count)
+        {
+            if (index == count)
+                return;
+
+            moves[index] = list.moves[index];
+            copy_moves(list, moves, index + 1, count);
+        }
+
+        void initialize_scores(int* scores, int index, int count)
+        {
+            if (index == count)
+                return;
+
+            scores[index] = 0;
+            initialize_scores(scores, index + 1, count);
+        }
+
+        void swap_moves(Move& first_move, int& first_score, Move& second_move, int& second_score)
+        {
+            Move move = first_move;
+            first_move = second_move;
+            second_move = move;
+
+            int score = first_score;
+            first_score = second_score;
+            second_score = score;
+        }
+
+        void score_moves_recursive(const Position& pos, Move* moves, int* scores, int index, int count, Move tt_move)
+        {
+            if (index == count)
+                return;
+
+            Move move = moves[index];
+            if (move == tt_move)
+            {
+                scores[index] = TT_MOVE_SCORE;
+            }
+            else if (move.flag() == MoveFlag::CAPTURE || move.flag() == MoveFlag::EP_CAPTURE)
+            {
+                Piece attacker = pos.board[move.from()];
+                Piece victim = pos.board[move.to()];
+                PieceType attacker_type = type_of(attacker);
+                PieceType victim_type = type_of(victim);
+
+                if (move.flag() == MoveFlag::EP_CAPTURE)
+                    victim_type = PieceType::PAWN;
+
+                if (attacker_type != PieceType::NONE && victim_type != PieceType::NONE)
+                    scores[index] = CAPTURE_BONUS + MVV_LVA[victim_type][attacker_type];
+            }
+
+            score_moves_recursive(pos, moves, scores, index + 1, count, tt_move);
+        }
+
+        int find_best_index(const int* scores, int index, int count, int best_index, int best_score)
+        {
+            if (index == count)
+                return best_index;
+
+            if (scores[index] > best_score)
+                return find_best_index(scores, index + 1, count, index, scores[index]);
+
+            return find_best_index(scores, index + 1, count, best_index, best_score);
+        }
+    } // namespace
+
     MovePicker::MovePicker(const MoveList& list, const Position& pos, Move tt_move)
         : count(list.size()),
           current_index(0)
     {
-        for (int i = 0; i < count; ++i)
-        {
-            moves[i].move = list.begin()[i];
-            moves[i].score = 0;
-        }
+        copy_moves(list, moves, 0, count);
+        initialize_scores(scores, 0, count);
         score_moves(pos, tt_move);
-    }
-
-    PieceType MovePicker::get_piece_type(Piece p) const
-    {
-        if (p == PIECE_NONE)
-            return PieceType::NONE;
-        return static_cast<PieceType>(p % 6);
     }
 
     void MovePicker::score_moves(const Position& pos, Move tt_move)
     {
-        for (int i = 0; i < count; ++i)
-        {
-            Move m = moves[i].move;
-            if (m == tt_move)
-            {
-                moves[i].score = TT_MOVE_SCORE;
-                continue;
-            }
-            if (m.flag() == MoveFlag::CAPTURE || m.flag() == MoveFlag::EP_CAPTURE)
-            {
-                Piece attacker = pos.board[m.from()];
-                Piece victim = pos.board[m.to()];
-
-                PieceType attacker_type = get_piece_type(attacker);
-                PieceType victim_type = get_piece_type(victim);
-
-                if (m.flag() == MoveFlag::EP_CAPTURE)
-                    victim_type = PieceType::PAWN;
-
-                if (attacker_type != PieceType::NONE && victim_type != PieceType::NONE)
-                {
-                    moves[i].score = CAPTURE_BONUS + MVV_LVA[victim_type][attacker_type];
-                }
-            }
-            else
-            {
-                moves[i].score = 0;
-            }
-        }
+        score_moves_recursive(pos, moves, scores, 0, count, tt_move);
     }
 
     Move MovePicker::next_move()
@@ -62,19 +94,9 @@ namespace MoveOrdering
             return Move{};
         }
 
-        int best_score = -1;
-        int best_index = current_index;
+        int best_index = find_best_index(scores, current_index, count, current_index, -1);
 
-        for (int i = current_index; i < count; ++i)
-        {
-            if (moves[i].score > best_score)
-            {
-                best_score = moves[i].score;
-                best_index = i;
-            }
-        }
-
-        std::swap(moves[current_index], moves[best_index]);
-        return moves[current_index++].move;
+        swap_moves(moves[current_index], scores[current_index], moves[best_index], scores[best_index]);
+        return moves[current_index++];
     }
 } // namespace MoveOrdering
