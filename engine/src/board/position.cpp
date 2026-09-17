@@ -385,3 +385,158 @@ Square Position::king_square(Color c) const
 {
     return lsb(pieces[c][KING]);
 }
+
+Position Position::from_fen(const std::string& fen)
+{
+    Position pos;
+    pos.clear();
+
+    const char* c = fen.c_str();
+    int rank = 7;
+    int file = 0;
+
+    // Parse piece placement data
+    while (*c != ' ' && *c != '\0')
+    {
+        if (*c == '/')
+        {
+            --rank;
+            file = 0;
+        }
+        else if (*c >= '1' && *c <= '8')
+        {
+            file += *c - '0';
+        }
+        else
+        {
+            Square sq = static_cast<Square>(rank * 8 + file);
+            Piece p = PIECE_NONE;
+            switch (*c)
+            {
+                case 'P':
+                    p = WHITE_PAWN;
+                    break;
+                case 'N':
+                    p = WHITE_KNIGHT;
+                    break;
+                case 'B':
+                    p = WHITE_BISHOP;
+                    break;
+                case 'R':
+                    p = WHITE_ROOK;
+                    break;
+                case 'Q':
+                    p = WHITE_QUEEN;
+                    break;
+                case 'K':
+                    p = WHITE_KING;
+                    break;
+                case 'p':
+                    p = BLACK_PAWN;
+                    break;
+                case 'n':
+                    p = BLACK_KNIGHT;
+                    break;
+                case 'b':
+                    p = BLACK_BISHOP;
+                    break;
+                case 'r':
+                    p = BLACK_ROOK;
+                    break;
+                case 'q':
+                    p = BLACK_QUEEN;
+                    break;
+                case 'k':
+                    p = BLACK_KING;
+                    break;
+            }
+            if (p != PIECE_NONE)
+            {
+                pos.board[sq] = p;
+                pos.pieces[color_of(p)][type_of(p)] |= square_bb(sq);
+            }
+            ++file;
+        }
+        ++c;
+    }
+
+    if (*c == '\0')
+        return pos;
+    ++c;
+
+    // Parse active color
+    pos.sideToMove = (*c == 'b') ? BLACK : WHITE;
+
+    ++c;
+    if (*c == '\0')
+        return pos;
+    ++c;
+
+    // Parse castling availability
+    pos.castlingRights = 0;
+    if (*c == '-')
+    {
+        ++c;
+    }
+    else
+    {
+        while (*c != ' ' && *c != '\0')
+        {
+            switch (*c)
+            {
+                case 'K':
+                    pos.castlingRights |= 1;
+                    break;
+                case 'Q':
+                    pos.castlingRights |= 2;
+                    break;
+                case 'k':
+                    pos.castlingRights |= 4;
+                    break;
+                case 'q':
+                    pos.castlingRights |= 8;
+                    break;
+            }
+            ++c;
+        }
+    }
+
+    if (*c == '\0')
+        return pos;
+    ++c;
+
+    // Parse en passant target square
+    if (*c == '-')
+    {
+        pos.enPassantSquare = SQ_NONE;
+        ++c;
+    }
+    else
+    {
+        int f = c[0] - 'a';
+        int r = c[1] - '1';
+        pos.enPassantSquare = static_cast<Square>(r * 8 + f);
+        c += 2;
+    }
+
+    if (*c == '\0')
+        return pos;
+    ++c;
+
+    // Parse halfmove clock
+    pos.halfmoveClock = 0;
+    while (*c != ' ' && *c != '\0')
+    {
+        pos.halfmoveClock = pos.halfmoveClock * 10 + (*c - '0');
+        ++c;
+    }
+
+    // Fullmove number is discarded as it does not affect engine search state
+
+    // Synchronize engine state subsystems
+    pos.update_occupancy();
+    pos.key = Zobrist::generate_key(pos);
+    Eval::init_scores(pos);
+
+    return pos;
+}
