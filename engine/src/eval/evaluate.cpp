@@ -63,8 +63,8 @@ namespace Eval
         // 3. Build Passed Pawn Masks
         for (int sq = 0; sq < 64; ++sq)
         {
-            int col = sq % 8;
-            int row = sq / 8;
+            int col = sq & 7;
+            int row = sq >> 3;
 
             Bitboard front_cols = FILE_MASKS[col] | ISOLATED_MASKS[col];
 
@@ -178,7 +178,7 @@ namespace Eval
             Square sq = pop_lsb(tempW);
             if (!(WHITE_PASSED_MASKS[sq] & bPawns))
             {
-                int row = sq / 8;
+                int row = sq >> 3;
                 s.mg[WHITE] += PASSED_PAWN_BONUS_MG[row];
                 s.eg[WHITE] += PASSED_PAWN_BONUS_EG[row];
             }
@@ -191,7 +191,7 @@ namespace Eval
             Square sq = pop_lsb(tempB);
             if (!(BLACK_PASSED_MASKS[sq] & wPawns))
             {
-                int row = 7 - (sq / 8); // Perspective relative rank
+                int row = 7 - (sq >> 3); // Perspective relative rank
                 s.mg[BLACK] += PASSED_PAWN_BONUS_MG[row];
                 s.eg[BLACK] += PASSED_PAWN_BONUS_EG[row];
             }
