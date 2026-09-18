@@ -17,21 +17,31 @@ namespace Search
     };
 
     /**
-     * @brief A single entry in the Transposition Table.
-     *        Packed to minimize memory footprint.
+     * @brief 16-byte packed Transposition Table entry.
+     *        Explicit alignment prevents memory boundary crossing in the CPU cache.
      */
-    struct TTEntry
+    struct alignas(16) TTEntry
     {
-        Key key = 0;                   /**< 64-bit Zobrist hash to verify position collisions. */
-        Move best_move = Move::none(); /**< Best move found in this position. */
-        Value score = VALUE_ZERO;      /**< Evaluated score. */
-        int depth = 0;                 /**< Search depth at which this score was calculated. */
-        TTFlag flag = TT_EXACT;        /**< Node evaluation type (Exact, Lower, Upper). */
+        Key key = 0;                   /**< 64-bit Zobrist hash (8 bytes). */
+        Move best_move = Move::none(); /**< Best move found (2 bytes). */
+        int16_t score = 0;             /**< Evaluated score (2 bytes). */
+        int8_t depth = 0;              /**< Search depth (1 byte). */
+        TTFlag flag = TT_EXACT;        /**< Node evaluation type (1 byte). */
+        // 2 bytes of implicit compiler padding to reach exactly 16 bytes.
+    };
+
+    /**
+     * @brief 64-byte bucket matching a standard CPU L1 cache line.
+     *        Contains 4 entries for lockless collision resolution.
+     */
+    struct alignas(64) TTBucket
+    {
+        TTEntry entries[4];
     };
 
     /**
      * @brief The global transposition table (Hash Table).
-     *        Draft implementation using a flat array and modulo mapping.
+     *        Utilizes power-of-two bitmask indexing and 4-way associativity.
      */
     class TranspositionTable
     {
@@ -40,20 +50,20 @@ namespace Search
         ~TranspositionTable() = default;
 
         /**
-         * @brief Allocates memory for the TT.
+         * @brief Allocates memory for the TT based on a strict power-of-two size.
          *
-         * @param mb Requested size in megabytes.
+         * @param mb Requested size in megabytes, typically 64MB-256MB[cite: 2].
          */
         void resize(int mb);
 
         /**
-         * @brief Clears all entries in the table.
+         * @brief Clears all entries in the table by zeroing memory.
          */
         void clear();
 
         /**
          * @brief Saves a position's evaluation to the cache.
-         *        Currently uses a simple depth-preferred replacement strategy.
+         *        Utilizes manual loop unrolling and a branchless Two-Tier replacement strategy.
          *
          * @param key Zobrist key of the position.
          * @param depth Depth searched.
@@ -65,6 +75,7 @@ namespace Search
 
         /**
          * @brief Attempts to retrieve a cached evaluation for the current position.
+         *        Executes a manually unrolled, single cache-line fetch.
          *
          * @param key Zobrist key to look up.
          * @param out_entry Reference to populate if a valid match is found.
@@ -73,14 +84,14 @@ namespace Search
         bool probe(Key key, TTEntry& out_entry) const;
 
         /**
-         * @brief Returns how full the TT is (per thousand entries).
-         *        Used for UCI 'hashfull' telemetry.
+         * @brief Samples the table to determine how full it is (per thousand entries).
+         *        Required for UCI 'hashfull' telemetry.
          */
         int hashfull() const;
 
     private:
-        std::vector<TTEntry> table;
-        uint64_t entry_count = 0; /**< Tracks total occupied slots for telemetry. */
+        std::vector<TTBucket> table;
+        uint64_t bucket_mask = 0; /**< Bitmask for fast O(1) index calculation. */
     };
 
     /**
