@@ -15,6 +15,16 @@ namespace Search
 
     Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
     {
+        ctx.info.nodes++;
+
+        Value stand_pat = VALUE_ZERO;
+
+        if (stand_pat >= beta)
+            return beta;
+        if (stand_pat > alpha)
+            alpha = stand_pat;
+
+        return alpha;
     }
 
     template <NodeType NT>
@@ -37,8 +47,7 @@ namespace Search
 
         bool in_check = pos.in_check();
 
-        // Null-Move Pruning Hook
-        // Compile-time check: Never execute NMP on PV or ROOT nodes
+        // Null-Move Pruning Hook (Stripped out entirely at compile-time for PV/ROOT)
         if constexpr (!IsPV)
         {
             if (do_null && depth >= 3 && !in_check)
@@ -137,10 +146,30 @@ namespace Search
 
     void start_search(Position& pos, const SearchLimits& limits)
     {
+        init();
+        SearchContext ctx(limits, Signals_stop);
+
+        for (int current_depth = 1; current_depth <= limits.depth; ++current_depth)
+        {
+            if (Signals_stop.load(std::memory_order_relaxed))
+                break;
+
+            ctx.info.depth = current_depth;
+
+            Value score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
+
+            if (!Signals_stop.load(std::memory_order_relaxed))
+            {
+                std::cout << "info depth " << current_depth << " score cp " << score << " nodes " << ctx.info.nodes << std::endl;
+            }
+        }
+
+        std::cout << "bestmove " << ctx.info.best_move << std::endl;
     }
 
     // Explicit template instantiations to optimize compilation boundaries
     template Value negamax<ROOT>(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null);
     template Value negamax<PV>(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null);
     template Value negamax<NON_PV>(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null);
+
 } // namespace Search
