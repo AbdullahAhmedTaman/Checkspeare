@@ -6,6 +6,15 @@
 
 namespace Search
 {
+
+    constexpr int MAX_SEARCH_PLY = 256;
+    /**
+     * @brief Threshold to detect forced mate scores.
+     *        Any score beyond +/- this bound is a mate sequence.
+     */
+
+    constexpr Value MATE_BOUND = VALUE_MATE - MAX_SEARCH_PLY;
+
     /**
      * @brief Node evaluation bounds for Alpha-Beta pruning.
      */
@@ -71,7 +80,7 @@ namespace Search
          * @param flag Bound type (Exact, Lower, Upper).
          * @param move Best move found.
          */
-        void store(Key key, int depth, Value score, TTFlag flag, Move move);
+        void store(Key key, int ply, int depth, Value score, TTFlag flag, Move move);
 
         /**
          * @brief Attempts to retrieve a cached evaluation for the current position.
@@ -81,7 +90,7 @@ namespace Search
          * @param out_entry Reference to populate if a valid match is found.
          * @return True if a valid match was found, false otherwise.
          */
-        bool probe(Key key, TTEntry& out_entry) const;
+        bool probe(Key key, int ply, TTEntry& out_entry) const;
 
         /**
          * @brief Samples the table to determine how full it is (per thousand entries).

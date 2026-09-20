@@ -30,11 +30,15 @@ namespace Search
         std::fill(table.begin(), table.end(), TTBucket{});
     }
 
-    void TranspositionTable::store(Key key, int depth, Value score, TTFlag flag, Move move)
+    void TranspositionTable::store(Key key, int ply, int depth, Value score, TTFlag flag, Move move)
     {
         if (table.empty())
             return;
 
+        if (score >= MATE_BOUND)
+            score += ply;
+        else if (score <= -MATE_BOUND)
+            score -= ply;
         TTBucket& bucket = table[key & bucket_mask];
 
         int target_slot = -1;
@@ -74,7 +78,7 @@ namespace Search
         }
     }
 
-    bool TranspositionTable::probe(Key key, TTEntry& out_entry) const
+    bool TranspositionTable::probe(Key key, int ply, TTEntry& out_entry) const
     {
         if (table.empty())
             return false;
@@ -84,25 +88,31 @@ namespace Search
         if (bucket.entries[0].key == key)
         {
             out_entry = bucket.entries[0];
-            return true;
         }
-        if (bucket.entries[1].key == key)
+        else if (bucket.entries[1].key == key)
         {
             out_entry = bucket.entries[1];
-            return true;
         }
-        if (bucket.entries[2].key == key)
+        else if (bucket.entries[2].key == key)
         {
             out_entry = bucket.entries[2];
-            return true;
         }
-        if (bucket.entries[3].key == key)
+        else if (bucket.entries[3].key == key)
         {
             out_entry = bucket.entries[3];
-            return true;
         }
+        else
+        {
+            return false;
+        } // Cache miss
 
-        return false;
+        // Decouple the stored score from the table's depth to match the current search ply
+        if (out_entry.score >= MATE_BOUND)
+            out_entry.score -= ply;
+        else if (out_entry.score <= -MATE_BOUND)
+            out_entry.score += ply;
+
+        return true;
     }
 
     int TranspositionTable::hashfull() const
