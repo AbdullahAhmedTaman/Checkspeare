@@ -3,15 +3,13 @@
 #include "BoardGeometry.hpp"
 #include "ChessGame.hpp"
 #include "InputEvent.hpp"
-#include "types.h" // Square, SQ_NONE, Piece, PIECE_NONE
+#include "types.h"
 
 #include <SFML/System/Vector2.hpp>
 
 namespace Gui
 {
 
-    /// State of an in-progress drag.
-    /// `offset` is the click position relative to the unpadded square top-left.
     struct DragState
     {
         bool active = false;
@@ -19,36 +17,43 @@ namespace Gui
         sf::Vector2f offset{0.0f, 0.0f};
     };
 
-    /// Structured outcome of the most recent controller action.
-    /// The controller never builds display strings; consumers (ImGui text,
-    /// sound effects, move-log panels) interpret this value themselves.
+    /// Set while a promotion is pending: the drop has been accepted, but the
+    /// piece type is not known yet. While `active`, input is ignored until
+    /// completePromotion() or cancelPromotion() is called.
+    struct PendingPromotion
+    {
+        bool active = false;
+        Square from = SQ_NONE;
+        Square to = SQ_NONE;
+        Color side = WHITE;
+    };
+
+    /// Structured outcome of the most recent controller action. The controller
+    /// never builds display strings; consumers interpret this themselves.
     struct ActionResult
     {
         enum class Kind
         {
-            Ready,               // Initial state, no interaction yet.
-            NotYourTurn,         // Pressed an opponent's piece.
-            Dragging,            // A friendly piece was picked up.
-            MoveCancelled,       // Drop on same square, or drag cancelled.
-            DroppedOutsideBoard, // Release landed off-board.
-            MovePlayed,          // Legal move applied.
-            IllegalMove          // from -> to was rejected by the engine.
+            Ready,
+            NotYourTurn,
+            Dragging,
+            MoveCancelled,
+            DroppedOutsideBoard,
+            MovePlayed,
+            IllegalMove,
+            PromotionPending
         };
 
         Kind kind = Kind::Ready;
 
-        // Populated for Dragging / MovePlayed / IllegalMove.
         Square from = SQ_NONE;
         Square to = SQ_NONE;
-
-        // Populated for Dragging (the piece being dragged).
         Piece piece = PIECE_NONE;
     };
 
-    /// Translates backend-agnostic input events into engine moves.
-    /// Owns no resources; it references a ChessGame supplied at construction.
-    /// Knows nothing about SFML -- see SfmlInputAdapter.hpp for the boundary
-    /// that turns sf::Event into the InputEvent this class consumes.
+    /// Translates backend-agnostic input events into moves on a ChessGame.
+    /// Owns no resources and knows nothing about SFML; see SfmlInputAdapter.hpp
+    /// for the boundary that produces the InputEvent vocabulary.
     class GuiGameController
     {
     public:
@@ -70,12 +75,28 @@ namespace Gui
             return result_;
         }
 
+        const PendingPromotion& pendingPromotion() const
+        {
+            return promo_;
+        }
+
+        /// Plays the pending promotion with the chosen piece type.
+        /// No-op if no promotion is pending.
+        /// @note Not yet implemented.
+        void completePromotion(PieceType type);
+
+        /// Clears a pending promotion without playing a move.
+        /// No-op if no promotion is pending.
+        /// @note Not yet implemented.
+        void cancelPromotion();
+
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
 
         ChessGame& game_;
         DragState drag_;
+        PendingPromotion promo_;
         ActionResult result_{};
     };
 

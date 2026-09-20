@@ -1,6 +1,6 @@
 #include "Application.hpp"
-#include "AssetsManager.h"
-#include "Config.h"
+#include "Config.hpp"
+#include "TextureLibrary.hpp"
 #include "attacks.h"
 #include "zobrist.h"
 #include <iostream>
@@ -12,12 +12,12 @@ int main()
         init_attacks();
         Zobrist::init();
 
-        Assets::AssetManager assets;
-        assets.loadAllPieceTextures("gui/assets/pieces/");
-        assets.loadAllSquareTextures("gui/assets/squares/");
+        Assets::TextureLibrary textures;
+        textures.loadAllPieceTextures("gui/textures/pieces/");
+        textures.loadAllSquareTextures("gui/textures/squares/");
 
         Config conf;
-        Application app(conf, assets);
+        Application app(conf, textures);
         app.run();
     }
     catch (const std::exception& e)

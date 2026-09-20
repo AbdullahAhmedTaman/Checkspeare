@@ -1,7 +1,7 @@
 #pragma once
 
 #include "BoardGeometry.hpp"
-#include "Config.h"
+#include "Config.hpp"
 #include "GuiGameController.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>

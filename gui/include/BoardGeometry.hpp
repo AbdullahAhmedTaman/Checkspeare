@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h" // Square, SQ_NONE
+#include "types.h"
 
 #include <SFML/System/Vector2.hpp>
 
@@ -9,13 +9,13 @@
 namespace Gui
 {
 
-    /// Maps between board squares and pixel coordinates on the render target.
-    /// Assumes White at the bottom of the screen (no board flipping).
+    /// Maps between board squares and pixel coordinates.
+    /// `flipped == true` places Black at the bottom of the view.
     struct BoardGeometry
     {
         float squareSize = 80.0f;
         sf::Vector2f boardOrigin{40.0f, 40.0f};
-        bool flipped = false; // true = Black at bottom
+        bool flipped = false;
 
         float boardWidth() const
         {

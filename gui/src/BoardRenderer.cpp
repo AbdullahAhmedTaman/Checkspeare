@@ -1,14 +1,14 @@
 #include "BoardRenderer.hpp"
-#include "AssetsManager.h"
+#include "TextureLibrary.hpp"
 
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Window/Mouse.hpp>
 
 namespace
 {
-    sf::Sprite makePieceSprite(const Assets::AssetManager& assets, Piece pc, const Gui::BoardGeometry& geo)
+    sf::Sprite makePieceSprite(const Assets::TextureLibrary& assets, Piece pc, const Gui::BoardGeometry& geo)
     {
-        const sf::Texture& tex = assets.getTexture(Assets::AssetManager::getPieceKey(pc));
+        const sf::Texture& tex = assets.getTexture(Assets::TextureLibrary::getPieceKey(pc));
         sf::Sprite sprite(tex);
 
         const float targetSize = geo.squareSize * Gui::PieceSpriteScale;
@@ -21,18 +21,14 @@ namespace
 namespace Gui
 {
 
-    void renderBoard(sf::RenderWindow& window, const BoardGeometry& geo, const BoardTheme& theme, const ChessGame& game,
-                     const Assets::AssetManager& assets, const DragState& drag)
+    void renderBoard(sf::RenderWindow& window, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
+                     const Assets::TextureLibrary& assets, const DragState& drag)
     {
         const float padding = piecePadding(geo.squareSize);
 
         const sf::Texture& lightTex = assets.getTexture(theme.lightKey);
         const sf::Texture& darkTex = assets.getTexture(theme.darkKey);
 
-        // ---- Squares --------------------------------------------------------
-        // Iterate over real squares rather than screen cells so the light/dark
-        // pattern stays tied to the board itself, and the flip is expressed
-        // entirely through geo.topLeft().
         for (int i = 0; i < 64; ++i)
         {
             const Square sq = static_cast<Square>(i);
@@ -48,14 +44,15 @@ namespace Gui
 
             window.draw(square);
         }
-        // ---- Static pieces --------------------------------------------------
+
+        // Static pieces. The dragged piece is skipped here and drawn on top below.
         for (int i = 0; i < 64; ++i)
         {
             const Square sq = static_cast<Square>(i);
             if (drag.active && sq == drag.from)
                 continue;
 
-            const Piece pc = game.pieceAt(sq);
+            const Piece pc = board.pieceAt(sq);
             if (pc == PIECE_NONE)
                 continue;
 
@@ -65,10 +62,9 @@ namespace Gui
             window.draw(sprite);
         }
 
-        // ---- Dragged piece (on top) ----------------------------------------
         if (drag.active)
         {
-            const Piece pc = game.pieceAt(drag.from);
+            const Piece pc = board.pieceAt(drag.from);
             if (pc != PIECE_NONE)
             {
                 sf::Sprite sprite = makePieceSprite(assets, pc, geo);

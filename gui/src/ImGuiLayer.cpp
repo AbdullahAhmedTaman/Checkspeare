@@ -11,9 +11,9 @@ namespace Gui
 
     namespace
     {
-        /// The single place where an ActionResult is turned into human text.
-        /// Sound effects, a move-log panel, or telemetry would hook in
-        /// alongside this function without touching GuiGameController.
+        /// The single place where ActionResult is turned into human text.
+        /// Additional consumers (sound, telemetry, logging) hook in here
+        /// without touching GuiGameController.
         std::string formatActionResult(const ActionResult& result)
         {
             std::ostringstream oss;
@@ -36,6 +36,8 @@ namespace Gui
                 case ActionResult::Kind::IllegalMove:
                     oss << "Illegal move " << result.from << "-" << result.to;
                     return oss.str();
+                case ActionResult::Kind::PromotionPending:
+                    return "Promotion pending";
             }
             return {};
         }

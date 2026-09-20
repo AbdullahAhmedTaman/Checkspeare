@@ -1,4 +1,4 @@
-#include "Theme.h"
+#include "Theme.hpp"
 
 #include <stdexcept>
 #include <string>
@@ -6,7 +6,7 @@
 namespace Gui
 {
 
-    BoardTheme getBoardTheme(const std::string& tag, const Assets::AssetManager& manager)
+    BoardTheme getBoardTheme(const std::string& tag, const Assets::TextureLibrary& manager)
     {
         BoardTheme theme;
 
@@ -24,8 +24,8 @@ namespace Gui
             throw std::runtime_error("[Theme Error] Unknown theme tag: " + tag);
         }
 
-        // Validate now: getTexture throws std::out_of_range if the key is
-        // missing, so an asset-loading mistake surfaces at construction.
+        // Validate keys now so a missing asset fails at construction, not on
+        // the first draw. getTexture throws std::out_of_range on missing keys.
         (void) manager.getTexture(theme.lightKey);
         (void) manager.getTexture(theme.darkKey);
 

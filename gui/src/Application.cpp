@@ -11,11 +11,11 @@
 
 #include <stdexcept>
 
-Application::Application(Config& conf, const Assets::AssetManager& assets)
+Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     : conf_(conf),
       assets_(assets),
       window_(sf::VideoMode({1000, 700}), "Chess GUI - SFML + ImGui"),
-      controller_(game_), // was controller_(engine_)
+      controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets))
 {
     window_.setFramerateLimit(60);
@@ -53,9 +53,9 @@ void Application::processEvents()
             continue;
         }
 
-        // Do not forward events to the controller while ImGui owns the mouse,
-        // except for a release that ends an in-progress drag. Otherwise the
-        // drag state can get stuck if the user releases over an ImGui panel.
+        // Do not forward to the controller while ImGui owns the mouse, except
+        // for a release that ends an in-progress drag, otherwise the drag
+        // state can get stuck when the user releases over an ImGui panel.
         const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
         const bool endsDrag = event->is<sf::Event::MouseButtonReleased>() && controller_.drag().active;
         const bool focusLost = event->is<sf::Event::FocusLost>();
@@ -77,7 +77,7 @@ void Application::update(float dtSeconds)
 void Application::render()
 {
     window_.clear(sf::Color::White);
-    Gui::renderBoard(window_, geo_, theme_, game_, assets_, controller_.drag());
+    Gui::renderBoard(window_, geo_, theme_, game_.board(), assets_, controller_.drag());
     ImGui::SFML::Render(window_);
     window_.display();
 }

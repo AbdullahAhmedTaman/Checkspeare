@@ -1,4 +1,4 @@
-#include "AssetsManager.h"
+#include "TextureLibrary.hpp"
 
 #include <SFML/Graphics/Texture.hpp>
 
@@ -35,12 +35,12 @@ namespace Assets
                 case KING:
                     return Key::King;
                 default:
-                    return Key::Pawn; // unreachable for a well-formed PieceType
+                    return Key::Pawn;
             }
         }
     } // namespace
 
-    void AssetManager::loadAllPieceTextures(const std::string& basePath)
+    void TextureLibrary::loadAllPieceTextures(const std::string& basePath)
     {
         const char* colors[] = {Key::White, Key::Black};
         const char* types[] = {Key::Pawn, Key::Knight, Key::Bishop, Key::Rook, Key::Queen, Key::King};
@@ -54,16 +54,16 @@ namespace Assets
 
                 sf::Texture texture;
                 if (!texture.loadFromFile(fullPath))
-                    throw std::runtime_error("[AssetManager Error] Failed to load: " + fullPath);
+                    throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath);
 
                 m_textures[key] = std::move(texture);
             }
         }
 
-        std::cout << "[AssetManager] All 12 piece textures loaded successfully!\n";
+        std::cout << "[TextureLibrary] All 12 piece textures loaded successfully!\n";
     }
 
-    void AssetManager::loadAllSquareTextures(const std::string& basePath)
+    void TextureLibrary::loadAllSquareTextures(const std::string& basePath)
     {
         const char* keys[] = {Key::SquareWhite, Key::SquareBlack};
 
@@ -73,20 +73,20 @@ namespace Assets
 
             sf::Texture texture;
             if (!texture.loadFromFile(fullPath))
-                throw std::runtime_error("[AssetManager Error] Failed to load: " + fullPath);
+                throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath);
 
             m_textures[key] = std::move(texture);
         }
 
-        std::cout << "[AssetManager] All square textures loaded successfully!\n";
+        std::cout << "[TextureLibrary] All square textures loaded successfully!\n";
     }
 
-    const sf::Texture& AssetManager::getTexture(const std::string& key) const
+    const sf::Texture& TextureLibrary::getTexture(const std::string& key) const
     {
         return m_textures.at(key);
     }
 
-    std::string AssetManager::getPieceKey(Piece pc)
+    std::string TextureLibrary::getPieceKey(Piece pc)
     {
         assert(pc != PIECE_NONE && "getPieceKey called with PIECE_NONE");
         return std::string(colorKey(color_of(pc))) + "_" + pieceTypeKey(type_of(pc));

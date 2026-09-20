@@ -5,7 +5,6 @@ namespace Gui
 
     void GuiGameController::handleEvent(const InputEvent& event, const BoardGeometry& geo)
     {
-        // Window losing focus cancels a drag, otherwise the state can leak.
         switch (event.kind)
         {
             case InputEvent::Kind::FocusLost:
@@ -84,7 +83,7 @@ namespace Gui
             return;
         }
 
-        if (game_.tryMove(from, to))
+        if (game_.play(from, to))
             result_ = {ActionResult::Kind::MovePlayed, from, to};
         else
             result_ = {ActionResult::Kind::IllegalMove, from, to};
