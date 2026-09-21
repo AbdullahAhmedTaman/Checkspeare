@@ -54,10 +54,8 @@ struct UciSearchLimits
 class UciEngine
 {
 public:
-    /// @note Not yet implemented.
     UciEngine();
 
-    /// @note Not yet implemented.
     ~UciEngine();
 
     UciEngine(const UciEngine&) = delete;
@@ -67,7 +65,6 @@ public:
     UciEngine& operator=(UciEngine&&) = delete;
 
     /// Spawns the engine at `path`. Throws std::runtime_error on failure.
-    /// @note Not yet implemented.
     void start(const std::filesystem::path& path);
 
     /// Stops the engine and joins the reader thread. Idempotent.
