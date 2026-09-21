@@ -61,7 +61,7 @@ namespace Search
         /**
          * @brief Allocates memory for the TT based on a strict power-of-two size.
          *
-         * @param mb Requested size in megabytes, typically 64MB-256MB[cite: 2].
+         * @param mb Requested size in megabytes, typically 64MB-256MB.
          */
         void resize(int mb);
 
