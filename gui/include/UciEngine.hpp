@@ -3,6 +3,7 @@
 #include "types.h"
 
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -17,8 +18,8 @@ struct UciInfo
     std::int64_t nodes = 0;
     std::int64_t nps = 0;
     std::int64_t timeMs = 0;
-    int scoreCp = 0;
-    int scoreMate = 0;
+    std::optional<int> scoreCp;
+    std::optional<int> scoreMate;
     std::vector<Move> pv;
     std::string raw;
 };
@@ -62,11 +63,14 @@ public:
     UciEngine(const UciEngine&) = delete;
     UciEngine& operator=(const UciEngine&) = delete;
 
+    UciEngine(UciEngine&&) = delete;
+    UciEngine& operator=(UciEngine&&) = delete;
+
     /// Spawns the engine at `path`. Throws std::runtime_error on failure.
     /// @note Not yet implemented.
-    void start(const std::string& path);
+    void start(const std::filesystem::path& path);
 
-    /// Sends `quit` and joins the reader thread. Idempotent.
+    /// Stops the engine and joins the reader thread. Idempotent.
     /// @note Not yet implemented.
     void stop();
 
