@@ -183,7 +183,7 @@ namespace Search
                     // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
-                        // Store Killer Move heuristic for non-captures (Engineer 2 Hook)
+                        // Store Killer Move heuristic for non-captures to improve move ordering in future searches
                         if (!move.is_capture() && ply < MAX_PLY)
                         {
                             ctx.killer_moves[ply][1] = ctx.killer_moves[ply][0];
