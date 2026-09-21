@@ -6,38 +6,75 @@
 
 namespace Search
 {
+    /** @brief Global atomic flag used to interrupt search thread asynchronously (e.g., UCI 'stop' or time out). */
     std::atomic<bool> Signals_stop{false};
 
+    /**
+     * @brief Resets engine search flags and signal controls.
+     */
     void init()
     {
         Signals_stop.store(false, std::memory_order_relaxed);
     }
 
+    /**
+     * @brief Evaluates tactical captures at leaf nodes to mitigate the horizon effect.
+     *
+     * @param pos Reference to the current board position.
+     * @param ply Distance from the root node in half-moves.
+     * @param alpha Lower bound score for the search window.
+     * @param beta Upper bound score for the search window.
+     * @param ctx Reference to the active search telemetry and context.
+     * @return Value Evaluated score of the position after resolving tactical captures.
+     */
     Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
     {
+        // Track leaf evaluation node count for UCI statistics
         ctx.info.nodes++;
 
+        // Stand-pat evaluation: Assume the side to move can choose not to capture
+        // Stub implementation defaults to VALUE_ZERO; will integrate Eval::evaluate(pos)
         Value stand_pat = VALUE_ZERO;
 
+        // Beta cutoff: Position is already better than the opponent will allow
         if (stand_pat >= beta)
             return beta;
+
+        // Raise lower bound if stand-pat score exceeds current alpha
         if (stand_pat > alpha)
             alpha = stand_pat;
 
         return alpha;
     }
 
+    /**
+     * @brief Recursive template-based Alpha-Beta (Negamax) search algorithm.
+     *
+     * Uses compile-time template parameter dispatching (ROOT, PV, NON_PV) to strip
+     * unreachable branch conditions at compile time, eliminating CPU branch mispredictions.
+     *
+     * @tparam NT Node type designation (ROOT, PV, or NON_PV).
+     * @param pos Reference to the active board position state.
+     * @param depth Remaining depth to search in half-moves.
+     * @param ply Current depth distance from the root node.
+     * @param alpha Lower bound score (best guaranteed score for maximizing player).
+     * @param beta Upper bound score (worst score the minimizing player allows).
+     * @param ctx Execution parameters, telemetry counters, and heuristic tables.
+     * @param do_null Flag permitting Null-Move Pruning at the current branch node.
+     * @return Value Computed evaluation score relative to the side to move.
+     */
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
+        // Compile-time constant flags to optimize branch elimination
         constexpr bool IsPV = (NT != NON_PV);
         constexpr bool IsRoot = (NT == ROOT);
 
-        // Check for interrupt signals / time limit breach
+        // Check for asynchronous interrupt signals (UCI 'stop' command or time limit breach)
         if (Signals_stop.load(std::memory_order_relaxed))
             return VALUE_ZERO;
 
-        // Leaf Node Hand-off
+        // Leaf Node Hand-off: Transition to Quiescence Search when nominal depth expires
         if (depth <= 0)
         {
             return quiescence(pos, ply, alpha, beta, ctx);
@@ -45,17 +82,24 @@ namespace Search
 
         ctx.info.nodes++;
 
+        // Check detection for tactical evaluation and pruning restrictions
         bool in_check = pos.in_check();
 
-        // Null-Move Pruning Hook (Stripped out entirely at compile-time for PV/ROOT)
+        // --------------------------------------------------------------------
+        // Null-Move Pruning (NMP)
+        // --------------------------------------------------------------------
+        // Compile-time check: Stripped out completely for PV and ROOT nodes.
+        // If giving up a turn still results in a score >= beta, prune the subtree.
         if constexpr (!IsPV)
         {
             if (do_null && depth >= 3 && !in_check)
             {
                 pos.make_move(Move::null());
+                // Search with reduced depth (R = 2) and a zero-window [-beta, -beta + 1]
                 Value null_score = -negamax<NON_PV>(pos, depth - 1 - 2, ply + 1, -beta, -beta + 1, ctx, false);
                 pos.unmake_move(Move::null());
 
+                // Beta cutoff from null move (fail-high)
                 if (null_score >= beta)
                 {
                     return beta;
@@ -63,12 +107,14 @@ namespace Search
             }
         }
 
-        // Generate legal moves using MoveGen namespace API
+        // Generate legal moves for the current position
         MoveList moves;
         MoveGen::generate_legal_moves(pos, moves);
 
+        // Terminal Node Handling: Checkmate or Stalemate
         if (moves.count == 0)
         {
+            // Adjust mate score by ply to prefer shorter mate paths
             return in_check ? (-VALUE_MATE + ply) : VALUE_ZERO;
         }
 
@@ -76,43 +122,49 @@ namespace Search
         Move best_move = Move::none();
         int moves_searched = 0;
 
+        // Move iteration loop
         for (int i = 0; i < moves.count; ++i)
         {
             const Move move = moves.moves[i];
             pos.make_move(move);
             Value score = -VALUE_INFINITE;
 
-            // Template-based recursive dispatch
+            // ----------------------------------------------------------------
+            // Principal Variation Search (PVS) Branching
+            // ----------------------------------------------------------------
             if constexpr (IsPV)
             {
                 if (moves_searched == 0)
                 {
-                    // Full PV window for first move in PV nodes
+                    // Full PV window search for the primary candidate move
                     score = -negamax<PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
                 }
                 else
                 {
-                    // Zero-window search under NON_PV template for late moves
+                    // Zero-window search (Null Window Search) for late moves to prove inferiority
                     score = -negamax<NON_PV>(pos, depth - 1, ply + 1, -alpha - 1, -alpha, ctx, true);
+
+                    // Re-search with full window if zero-window search fails high
                     if (score > alpha && score < beta)
                     {
-                        // Re-search with full window if zero-window search fails high
                         score = -negamax<PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
                     }
                 }
             }
             else
             {
-                // Non-PV nodes always propagate NON_PV template
+                // Non-PV nodes always propagate NON_PV template with standard bounds
                 score = -negamax<NON_PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
             }
 
             pos.unmake_move(move);
             moves_searched++;
 
+            // Abort current move evaluation if stop signal was raised
             if (Signals_stop.load(std::memory_order_relaxed))
                 return VALUE_ZERO;
 
+            // Alpha-Beta Score Update Logic
             if (score > best_score)
             {
                 best_score = score;
@@ -122,20 +174,22 @@ namespace Search
                 {
                     alpha = score;
 
+                    // Update best move at root level for UCI output
                     if constexpr (IsRoot)
                     {
                         ctx.info.best_move = move;
                     }
 
+                    // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
-                        // Store Killer Move (Engineer 2 Hook)
+                        // Store Killer Move heuristic for non-captures (Engineer 2 Hook)
                         if (!move.is_capture() && ply < MAX_PLY)
                         {
                             ctx.killer_moves[ply][1] = ctx.killer_moves[ply][0];
                             ctx.killer_moves[ply][0] = move;
                         }
-                        break; // Beta Cutoff
+                        break; // Cut off remaining move searches
                     }
                 }
             }
@@ -144,11 +198,21 @@ namespace Search
         return best_score;
     }
 
+    /**
+     * @brief Primary engine execution loop implementing Iterative Deepening.
+     *
+     * Launched by the UCI thread to execute search within specified constraints.
+     * Emits search depth, node counts, evaluation scores, and bestmove to standard output.
+     *
+     * @param pos Reference to the current starting position state.
+     * @param limits Const reference to UCI search parameters (depth, time, movetime).
+     */
     void start_search(Position& pos, const SearchLimits& limits)
     {
         init();
         SearchContext ctx(limits, Signals_stop);
 
+        // Iterative Deepening Loop
         for (int current_depth = 1; current_depth <= limits.depth; ++current_depth)
         {
             if (Signals_stop.load(std::memory_order_relaxed))
@@ -156,14 +220,17 @@ namespace Search
 
             ctx.info.depth = current_depth;
 
+            // Invoke root search template
             Value score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
 
+            // Output UCI telemetry progress update
             if (!Signals_stop.load(std::memory_order_relaxed))
             {
                 std::cout << "info depth " << current_depth << " score cp " << score << " nodes " << ctx.info.nodes << std::endl;
             }
         }
 
+        // Output final UCI choice
         std::cout << "bestmove " << ctx.info.best_move << std::endl;
     }
 
