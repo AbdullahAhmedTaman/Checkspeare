@@ -50,11 +50,10 @@ namespace Search
         // Time tracking
         std::chrono::steady_clock::time_point start_time;
 
-        // Hooks for Engineer 2 (Move Ordering)
         Move killer_moves[MAX_PLY][2]{};
         HistoryTable* history_table = nullptr;
 
-        // Hooks for Engineer 3 (Caching)
+        // Optional Transposition Table for caching previously evaluated positions
         TranspositionTable* tt = nullptr;
 
         SearchContext(const SearchLimits& l, std::atomic<bool>& stop)
