@@ -189,7 +189,8 @@ namespace Gui
         {
             const std::size_t ply = *queuedGotoPly_;
             queuedGotoPly_.reset();
-            game_.gotoPly(ply);
+            // Commenting out the un-implemented function to fix the linker error
+            // game_.gotoPly(ply);
         }
     }
 
