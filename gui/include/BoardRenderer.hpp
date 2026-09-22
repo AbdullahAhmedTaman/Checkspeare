@@ -21,6 +21,6 @@ namespace Gui
     /// Draws squares, static pieces, and (if a drag is active) the dragged
     /// piece on top.
     void renderBoard(sf::RenderWindow& window, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
-                     const Assets::TextureLibrary& assets, const DragState& drag);
+                     const Assets::TextureLibrary& assets, const DragState& drag, const PendingPromotion& promo);
 
 } // namespace Gui
