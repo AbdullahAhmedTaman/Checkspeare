@@ -19,27 +19,9 @@ namespace UCI
         for (int i = 0; i < legal_moves.count; ++i)
         {
             Move m = legal_moves.moves[i];
-
-            std::string current_move_str = "";
-            current_move_str += char('a' + (m.from() % 8));
-            current_move_str += char('1' + (m.from() / 8));
-            current_move_str += char('a' + (m.to() % 8));
-            current_move_str += char('1' + (m.to() / 8));
-
-            if (m.is_promotion())
-            {
-                PieceType pt = promotion_type(m);
-                if (pt == QUEEN)
-                    current_move_str += 'q';
-                else if (pt == ROOK)
-                    current_move_str += 'r';
-                else if (pt == BISHOP)
-                    current_move_str += 'b';
-                else if (pt == KNIGHT)
-                    current_move_str += 'n';
-            }
-
-            if (move_str == current_move_str)
+            std::stringstream ss;
+            ss << m;
+            if (ss.str() == move_str)
             {
                 return m;
             }
