@@ -3,6 +3,7 @@
 #include <atomic>
 #include <mutex>
 #include <queue>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
 #include <windows.h>
@@ -41,7 +42,7 @@ UciEngine::~UciEngine()
 
 void UciEngine::start(const std::filesystem::path& path)
 {
-    if (isRunning())
+    if (impl_->processHandle != nullptr)
         stop();
 
     impl_->start(path);
@@ -305,4 +306,81 @@ void UciEngine::stop()
     Impl::closeHandle(impl_->processHandle);
 
     impl_->running = false;
+}
+
+void UciEngine::newGame()
+{
+    if (!isRunning())
+        return;
+
+    impl_->writeLine("ucinewgame");
+}
+
+void UciEngine::stopSearch()
+{
+    if (!isRunning())
+        return;
+
+    impl_->writeLine("stop");
+}
+
+void UciEngine::setPosition(const std::string& fen, const std::vector<Move>& moves)
+{
+    if (!isRunning())
+        return;
+
+    std::ostringstream command;
+
+    if (fen.empty())
+    {
+        command << "position startpos";
+    }
+    else
+    {
+        command << "position fen " << fen;
+    }
+
+    if (!moves.empty())
+    {
+        command << " moves";
+
+        for (const Move& move : moves)
+        {
+            command << ' ' << move;
+        }
+    }
+
+    impl_->writeLine(command.str());
+}
+
+void UciEngine::go(const UciSearchLimits& limits)
+{
+    if (!isRunning())
+        return;
+
+    std::ostringstream command;
+    command << "go";
+
+    if (limits.wtimeMs)
+        command << " wtime " << *limits.wtimeMs;
+
+    if (limits.btimeMs)
+        command << " btime " << *limits.btimeMs;
+
+    if (limits.wincMs)
+        command << " winc " << *limits.wincMs;
+
+    if (limits.bincMs)
+        command << " binc " << *limits.bincMs;
+
+    if (limits.movetimeMs)
+        command << " movetime " << *limits.movetimeMs;
+
+    if (limits.depth)
+        command << " depth " << *limits.depth;
+
+    if (limits.infinite)
+        command << " infinite";
+
+    impl_->writeLine(command.str());
 }

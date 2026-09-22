@@ -68,23 +68,19 @@ public:
     void start(const std::filesystem::path& path);
 
     /// Stops the engine and joins the reader thread. Idempotent.
-    /// @note Not yet implemented.
     void stop();
 
     /// True from a successful start() until the engine process exits
     /// (detected by the reader thread hitting EOF) or stop() is called.
     bool isRunning() const;
 
-    /// @note Not yet implemented.
     void newGame();
 
-    /// @note Not yet implemented.
     void setPosition(const std::string& fen, const std::vector<Move>& moves);
 
-    /// @note Not yet implemented.
+    /// Validation against contradictory limits argument is not yet implemented.
     void go(const UciSearchLimits& limits);
 
-    /// @note Not yet implemented.
     void stopSearch();
 
     /// Drains pending output. Never blocks.
