@@ -34,7 +34,7 @@ namespace Search
         Key key = 0;                   /**< 64-bit Zobrist hash (8 bytes). */
         Move best_move = Move::none(); /**< Best move found (2 bytes). */
         int16_t score = 0;             /**< Evaluated score (2 bytes). */
-        int8_t depth = 0;              /**< Search depth (1 byte). */
+        int16_t depth = 0;             /**< Search depth (2 bytes). */
         TTFlag flag = TT_EXACT;        /**< Node evaluation type (1 byte). */
         // 2 bytes of implicit compiler padding to reach exactly 16 bytes.
     };
