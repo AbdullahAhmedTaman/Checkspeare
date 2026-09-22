@@ -129,9 +129,6 @@ namespace Search
             pos.make_move(move);
             Value score = -VALUE_INFINITE;
 
-            // ----------------------------------------------------------------
-            // Principal Variation Search (PVS) Branching
-            // ----------------------------------------------------------------
             if constexpr (IsPV)
             {
                 if (moves_searched == 0)
