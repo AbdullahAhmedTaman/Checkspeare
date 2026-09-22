@@ -1,4 +1,5 @@
 #include "ChessGame.hpp"
+#include "GameResult.hpp"
 #include "San.hpp"
 
 namespace
@@ -98,6 +99,45 @@ std::vector<MoveRecord> ChessGame::historyToCursor() const
     return {moves_.begin(), moves_.begin() + static_cast<std::ptrdiff_t>(cursor_)};
 }
 
+GameResult ChessGame::result() const
+{
+    // 1. Checkmate / stalemate. Board caches the legal move list, so these
+    //    are cheap.
+    if (board_.isCheckmate())
+    {
+        const Color loser = board_.sideToMove();
+        const Color winner = (loser == WHITE) ? BLACK : WHITE;
+        return {GameResultKind::Checkmate, winner};
+    }
+    if (board_.isStalemate())
+        return {GameResultKind::Stalemate};
+
+    // 2. Fifty-move rule. The engine's halfmove field counts plies since
+    //    the last capture or pawn move. 100 plies = 50 full moves.
+    if (board_.position().halfmoveClock >= 100)
+        return {GameResultKind::FiftyMove};
+
+    // 3. Threefold repetition. Walk the history up to the cursor and
+    //    count how many times the current position's key appeared.
+    const Key currentKey = board_.position().key;
+    int occurrences = 0;
+    for (std::size_t i = 0; i < cursor_; ++i)
+    {
+        if (moves_[i].positionKeyAfter == currentKey)
+        {
+            ++occurrences;
+            if (occurrences >= 3)
+                return {GameResultKind::Threefold};
+        }
+    }
+
+    // 4. Insufficient material.
+    if (isInsufficientMaterial())
+        return {GameResultKind::InsufficientMaterial};
+
+    return {};
+}
+
 void ChessGame::stepForward()
 {
     // Precondition: cursor_ < moves_.size()
@@ -129,4 +169,62 @@ std::optional<Move> ChessGame::findLegalMove(Square from, Square to, PieceType p
         return m;
     }
     return std::nullopt;
+}
+
+bool ChessGame::isInsufficientMaterial() const
+{
+    int minorCount = 0;
+    bool knightSeen = false;
+    bool bishopSeen = false;
+    bool firstBishopIsLight = false;
+    bool firstBishopSet = false;
+    bool oppositeColorBishops = false;
+
+    for (int i = 0; i < 64; ++i)
+    {
+        const Square sq = static_cast<Square>(i);
+        const Piece pc = board_.pieceAt(sq);
+        if (pc == PIECE_NONE)
+            continue;
+
+        const PieceType t = type_of(pc);
+
+        // Any of these means material is sufficient.
+        if (t == PAWN || t == ROOK || t == QUEEN)
+            return false;
+
+        if (t == KNIGHT)
+        {
+            ++minorCount;
+            knightSeen = true;
+        }
+        else if (t == BISHOP)
+        {
+            ++minorCount;
+            bishopSeen = true;
+
+            const int file = i % 8;
+            const int rank = i / 8;
+            const bool isLight = ((file + rank) % 2) != 0;
+
+            if (!firstBishopSet)
+            {
+                firstBishopIsLight = isLight;
+                firstBishopSet = true;
+            }
+            else if (firstBishopIsLight != isLight)
+            {
+                oppositeColorBishops = true;
+            }
+        }
+    }
+
+    if (minorCount == 0)
+        return true; // K vs K
+    if (minorCount == 1)
+        return true; // K+minor vs K
+    if (minorCount == 2 && bishopSeen && !knightSeen && !oppositeColorBishops)
+        return true; // K+B vs K+B, same color
+
+    return false;
 }

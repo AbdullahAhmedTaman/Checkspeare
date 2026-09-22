@@ -1,16 +1,18 @@
 // gui/tests/ChessGameTest.cpp
 //
-// Standalone unit test for ChessGame's history navigation.
+// Standalone unit test for ChessGame: history navigation and result().
 // No SFML. No ImGui. No Application.
 
 #include "ChessGame.hpp"
 #include "Board.hpp"
+#include "GameResult.hpp"
 #include "types.h"
 
 #include "attacks.h"
 #include "zobrist.h"
 
 #include <iostream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -86,7 +88,6 @@ namespace
         return static_cast<Square>(rank * 8 + file);
     }
 
-    /// Play a coordinate-pair move like "e2e4". Returns true on success.
     bool play(ChessGame& g, const std::string& fromTo)
     {
         const Square from = parseSquare(fromTo.substr(0, 2));
@@ -94,7 +95,6 @@ namespace
         return g.play(from, to).has_value();
     }
 
-    /// Concatenate the SAN of every record in the given list, space-separated.
     std::string joinSan(const std::vector<MoveRecord>& records)
     {
         std::string out;
@@ -105,6 +105,26 @@ namespace
             out += records[i].san;
         }
         return out;
+    }
+
+    std::string describe(const GameResult& r)
+    {
+        switch (r.kind)
+        {
+            case GameResultKind::Ongoing:
+                return "Ongoing";
+            case GameResultKind::Checkmate:
+                return "Checkmate";
+            case GameResultKind::Stalemate:
+                return "Stalemate";
+            case GameResultKind::FiftyMove:
+                return "FiftyMove";
+            case GameResultKind::Threefold:
+                return "Threefold";
+            case GameResultKind::InsufficientMaterial:
+                return "InsufficientMaterial";
+        }
+        return "?";
     }
 
 } // namespace
@@ -208,7 +228,7 @@ int main()
         play(g, "e2e4");
         play(g, "e7e5");
         play(g, "g1f3");
-        g.undo(); // cursor = 2, total = 3
+        g.undo();
 
         test::expectEq(g.historyToCursor().size(), std::size_t{2}, "historyToCursor size == 2");
         test::expectEq(g.history().size(), std::size_t{3}, "history size == 3");
@@ -223,7 +243,7 @@ int main()
         play(g, "e2e4");
         play(g, "e7e5");
         play(g, "g1f3");
-        g.gotoStart(); // cursor = 0, total = 3
+        g.gotoStart();
 
         test::expectTrue(play(g, "d2d4"), "play d2d4 after gotoStart");
         test::expectEq(g.cursor(), std::size_t{1}, "cursor == 1");
@@ -237,13 +257,12 @@ int main()
         ChessGame g;
         play(g, "e2e4");
         play(g, "e7e5");
-        g.gotoStart(); // cursor = 0, total = 2
+        g.gotoStart();
 
         test::expectTrue(!play(g, "e2e5"), "e2e5 illegal returns false");
         test::expectEq(g.cursor(), std::size_t{0}, "cursor still 0");
         test::expectEq(g.totalMoves(), std::size_t{2}, "totalMoves still 2 (tail preserved)");
 
-        // Both redo moves should still be there.
         test::expectTrue(g.redo(), "redo #1");
         test::expectTrue(g.redo(), "redo #2");
         test::expectEq(g.cursor(), std::size_t{2}, "back at end");
@@ -257,13 +276,11 @@ int main()
         play(g, "e2e4");
         play(g, "e7e5");
 
-        // At cursor 2: e4 and e5 have been played.
         test::expectEq(g.pieceAt(parseSquare("e4")) != PIECE_NONE, true, "e4 occupied at cursor 2");
         test::expectEq(g.pieceAt(parseSquare("e5")) != PIECE_NONE, true, "e5 occupied at cursor 2");
 
         g.gotoPly(0);
 
-        // At cursor 0: back to the start position.
         test::expectEq(g.pieceAt(parseSquare("e4")) == PIECE_NONE, true, "e4 empty at cursor 0");
         test::expectEq(g.pieceAt(parseSquare("e5")) == PIECE_NONE, true, "e5 empty at cursor 0");
         test::expectEq(g.pieceAt(parseSquare("e2")) != PIECE_NONE, true, "e2 pawn is home at cursor 0");
@@ -283,6 +300,108 @@ int main()
         g.loadFEN("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
         test::expectEq(g.cursor(), std::size_t{0}, "loadFEN cursor == 0");
         test::expectEq(g.totalMoves(), std::size_t{0}, "loadFEN totalMoves == 0");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[result: ongoing at start]\n";
+    {
+        ChessGame g;
+        test::expectEq(describe(g.result()), std::string{"Ongoing"}, "start position is Ongoing");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[result: checkmate]\n";
+    {
+        ChessGame g;
+        play(g, "f2f3");
+        play(g, "e7e5");
+        play(g, "g2g4");
+        play(g, "d8h4");
+
+        const GameResult r = g.result();
+        test::expectEq(describe(r), std::string{"Checkmate"}, "Fool's mate is Checkmate");
+        test::expectEq(r.winner == BLACK, true, "Black delivered mate");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[result: stalemate]\n";
+    {
+        ChessGame g;
+        g.loadFEN("k7/2K5/1Q6/8/8/8/8/8 b - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"Stalemate"}, "classic stalemate position");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[result: fifty-move]\n";
+    {
+        ChessGame g;
+        g.loadFEN("4k3/8/8/8/8/8/8/4K3 w - - 100 51");
+        test::expectEq(describe(g.result()), std::string{"FiftyMove"}, "halfmove >= 100 -> FiftyMove");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[result: insufficient material]\n";
+    {
+        ChessGame g;
+        g.loadFEN("4k3/8/8/8/8/8/8/4K3 w - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"InsufficientMaterial"}, "K vs K");
+    }
+    {
+        ChessGame g;
+        g.loadFEN("4k3/8/8/8/8/8/8/4KN2 w - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"InsufficientMaterial"}, "K+N vs K");
+    }
+    {
+        ChessGame g;
+        g.loadFEN("4k3/8/8/8/8/8/8/4KB2 w - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"InsufficientMaterial"}, "K+B vs K");
+    }
+    {
+        // Bishops on f1 and g8. Both are on light squares
+        // (f1: file=5, rank=0 -> sum 5 -> odd -> light;
+        //  g8: file=6, rank=7 -> sum 13 -> odd -> light).
+        // Same color -> insufficient material.
+        ChessGame g;
+        g.loadFEN("4k1b1/8/8/8/8/8/8/4KB2 w - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"InsufficientMaterial"},
+                       "K+B vs K+B, same color -> InsufficientMaterial");
+    }
+    {
+        // Bishops on f1 and f8. f1 is light, f8 is dark
+        // (f1: 5+0 = 5 -> odd -> light;
+        //  f8: 5+7 = 12 -> even -> dark).
+        // Opposite colors -> sufficient material for a mate.
+        ChessGame g;
+        g.loadFEN("4kb2/8/8/8/8/8/8/4KB2 w - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"Ongoing"}, "K+B vs K+B, opposite colors -> Ongoing");
+    }
+
+    {
+        ChessGame g;
+        g.loadFEN("4k3/8/8/8/8/8/8/4KR2 w - - 0 1");
+        test::expectEq(describe(g.result()), std::string{"Ongoing"}, "K+R vs K -> Ongoing");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[result: threefold]\n";
+    {
+        // Shuffle knights back and forth. After 12 plies, the start
+        // position's key has appeared at moves_[3], moves_[7], moves_[11].
+        ChessGame g;
+        play(g, "g1f3");
+        play(g, "g8f6");
+        play(g, "f3g1");
+        play(g, "f6g8");
+        play(g, "g1f3");
+        play(g, "g8f6");
+        play(g, "f3g1");
+        play(g, "f6g8");
+        play(g, "g1f3");
+        play(g, "g8f6");
+        play(g, "f3g1");
+        play(g, "f6g8");
+
+        test::expectEq(describe(g.result()), std::string{"Threefold"}, "threefold by knight shuffling");
     }
 
     return test::summary();

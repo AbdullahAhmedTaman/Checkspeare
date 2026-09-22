@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Board.hpp"
+#include "GameResult.hpp"
 #include "MoveRecord.hpp"
 #include "types.h"
 
@@ -65,6 +66,9 @@ public:
     /// Entries [0, cursor_). What the move-list panel should render.
     std::vector<MoveRecord> historyToCursor() const;
 
+    /// Classifies the current position. Never mutates.
+    GameResult result() const;
+
     Board& board()
     {
         return board_;
@@ -95,6 +99,11 @@ private:
     /// Finds the matching legal move in the current position without
     /// mutating anything. Returns nullopt if from -> to is not legal.
     std::optional<Move> findLegalMove(Square from, Square to, PieceType promo) const;
+
+    /// True if the position has no pawns, rooks, or queens, and at most
+    /// one minor piece, or two bishops on the same color. Not exhaustive
+    /// for every FIDE-insufficient-material case, but covers the common ones.
+    bool isInsufficientMaterial() const;
 
     Board board_;
     std::vector<MoveRecord> moves_;
