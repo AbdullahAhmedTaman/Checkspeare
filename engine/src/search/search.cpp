@@ -1,17 +1,50 @@
 #include "search.h"
+#include "evaluate.h"
 #include "movegen.h"
 #include "position.h"
+#include "transposition.h"
 #include "types.h"
 #include <iostream>
 
 namespace Search
 {
-    /** @brief Global atomic flag used to interrupt search thread asynchronously (e.g., UCI 'stop' or time out). */
+
+    inline bool try_null_move_pruning(Position& pos, int depth, int ply, Value beta, SearchContext& ctx, Value& out_score)
+    {
+        Value static_eval = Eval::evaluate(pos);
+        Color us = pos.sideToMove;
+
+        // Zugzwang Material Guard
+        Bitboard non_pawn_material =
+            pos.pieces[us][KNIGHT] | pos.pieces[us][BISHOP] | pos.pieces[us][ROOK] | pos.pieces[us][QUEEN];
+
+        // Static Evaluation Guard
+        if (static_eval >= beta && non_pawn_material != 0)
+        {
+            // Adaptive Reduction
+            int R = 2 + (depth / 4);
+
+            pos.make_move(Move::null());
+
+            // Zero-window search at reduced depth. do_null = false prevents double-nulling.
+            Value null_score = -negamax<NON_PV>(pos, depth - 1 - R, ply + 1, -beta, -beta + 1, ctx, false);
+
+            pos.unmake_move(Move::null());
+
+            // Beta Cutoff Evaluation
+            if (null_score >= beta)
+            {
+                // Safeguard against artificial mate scores
+                out_score = (null_score >= MATE_BOUND) ? beta : null_score;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     std::atomic<bool> Signals_stop{false};
 
-    /**
-     * @brief Resets engine search flags and signal controls.
-     */
     void init()
     {
         Signals_stop.store(false, std::memory_order_relaxed);
@@ -63,17 +96,13 @@ namespace Search
         // If giving up a turn still results in a score >= beta, prune the subtree.
         if constexpr (!IsPV)
         {
+            // Only try NMP if permitted, depth is sufficient, and king is safe.
             if (do_null && depth >= 3 && !in_check)
             {
-                pos.make_move(Move::null());
-                // Search with reduced depth (R = 2) and a zero-window [-beta, -beta + 1]
-                Value null_score = -negamax<NON_PV>(pos, depth - 1 - 2, ply + 1, -beta, -beta + 1, ctx, false);
-                pos.unmake_move(Move::null());
-
-                // Beta cutoff from null move (fail-high)
-                if (null_score >= beta)
+                Value nmp_score;
+                if (try_null_move_pruning(pos, depth, ply, beta, ctx, nmp_score))
                 {
-                    return beta;
+                    return nmp_score; // Cutoff achieved, prune the subtree
                 }
             }
         }

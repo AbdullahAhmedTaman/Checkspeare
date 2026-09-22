@@ -7,6 +7,8 @@ namespace Search
 
     void TranspositionTable::resize(int mb)
     {
+        if (mb <= 0)
+            mb = 1; // Minimum size of 1MB
         // Calculate maximum 64-byte buckets that fit in the requested memory.
         uint64_t bytes = static_cast<uint64_t>(mb) * 1024 * 1024;
         uint64_t target_buckets = bytes / sizeof(TTBucket);

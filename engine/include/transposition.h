@@ -39,6 +39,8 @@ namespace Search
         // 2 bytes of implicit compiler padding to reach exactly 16 bytes.
     };
 
+    static_assert(sizeof(TTEntry) == 16, "TTEntry must remain exactly 16 bytes");
+
     /**
      * @brief 64-byte bucket matching a standard CPU L1 cache line.
      *        Contains 4 entries for lockless collision resolution.
@@ -47,6 +49,8 @@ namespace Search
     {
         TTEntry entries[4];
     };
+
+    static_assert(sizeof(TTBucket) == 64, "TTBucket must remain exactly 64 bytes");
 
     /**
      * @brief The global transposition table (Hash Table).

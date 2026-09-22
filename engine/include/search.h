@@ -25,6 +25,7 @@ namespace Search
     class HistoryTable;
     class TranspositionTable;
 
+    /** @brief Global atomic flag used to interrupt search thread asynchronously (e.g., UCI 'stop' or time out). */
     extern std::atomic<bool> Signals_stop;
 
     /**
@@ -70,25 +71,31 @@ namespace Search
     void init();
 
     /**
-     * @brief Root entry point for Iterative Deepening. Launched by the UCI thread.
+     * @brief Primary engine execution loop implementing Iterative Deepening.
      *
-     * @param pos Current board position.
-     * @param limits UCI time and depth constraints.
+     * Launched by the UCI thread to execute search within specified constraints.
+     * Emits search depth, node counts, evaluation scores, and bestmove to standard output.
+     *
+     * @param pos Reference to the current starting position state.
+     * @param limits Const reference to UCI search parameters (depth, time, movetime).
      */
     void start_search(Position& pos, const SearchLimits& limits);
 
     /**
-     * @brief Core recursive template-based alpha-beta search.
+     * @brief Recursive template-based Alpha-Beta (Negamax) search algorithm.
      *
-     * @tparam NT Node type (ROOT, PV, or NON_PV) for compile-time branch optimization.
-     * @param pos Current board position.
-     * @param depth Remaining search depth.
-     * @param ply Distance from the root node.
-     * @param alpha Lower bound of the search window.
-     * @param beta Upper bound of the search window.
-     * @param ctx Execution context and heuristics state.
-     * @param do_null Permits Null-Move Pruning at this node.
-     * @return Evaluated score for the position.
+     * Uses compile-time template parameter dispatching (ROOT, PV, NON_PV) to strip
+     * unreachable branch conditions at compile time, eliminating CPU branch mispredictions.
+     *
+     * @tparam NT Node type designation (ROOT, PV, or NON_PV).
+     * @param pos Reference to the active board position state.
+     * @param depth Remaining depth to search in half-moves.
+     * @param ply Current depth distance from the root node.
+     * @param alpha Lower bound score (best guaranteed score for maximizing player).
+     * @param beta Upper bound score (worst score the minimizing player allows).
+     * @param ctx Execution parameters, telemetry counters, and heuristic tables.
+     * @param do_null Flag permitting Null-Move Pruning at the current branch node.
+     * @return Value Computed evaluation score relative to the side to move.
      */
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null = true);
@@ -103,5 +110,18 @@ namespace Search
      * @return Stable, tactically quiet score.
      */
     Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx);
+
+    /**
+     * @brief Attempts Null-Move Pruning (NMP) to aggressively prune the search tree.
+     *
+     * @param pos Current board position.
+     * @param depth Current search depth.
+     * @param ply Distance from root.
+     * @param beta Upper bound for the cutoff check.
+     * @param ctx Execution context and telemetry.
+     * @param out_score Reference populated with the cutoff score if pruning succeeds.
+     * @return true if a beta cutoff is achieved, false otherwise.
+     */
+    inline bool try_null_move_pruning(Position& pos, int depth, int ply, Value beta, SearchContext& ctx, Value& out_score);
 
 } // namespace Search
