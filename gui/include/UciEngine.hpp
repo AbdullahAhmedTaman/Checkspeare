@@ -20,14 +20,14 @@ struct UciInfo
     std::int64_t timeMs = 0;
     std::optional<int> scoreCp;
     std::optional<int> scoreMate;
-    std::vector<Move> pv;
+    std::vector<std::string> pv;
     std::string raw;
 };
 
 struct UciPollResult
 {
     std::vector<UciInfo> infos;
-    std::optional<Move> bestMove;
+    std::optional<std::string> bestMove;
 };
 
 /// Limits for a `go` command. Unset optional fields are omitted from the
@@ -73,6 +73,8 @@ public:
     /// True from a successful start() until the engine process exits
     /// (detected by the reader thread hitting EOF) or stop() is called.
     bool isRunning() const;
+
+    bool isReady() const;
 
     void newGame();
 

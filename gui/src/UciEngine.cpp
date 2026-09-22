@@ -8,8 +8,91 @@
 #include <thread>
 #include <windows.h>
 
+namespace
+{
+    bool parseInfoLine(const std::string& line, UciInfo& info)
+    {
+        if (!line.starts_with("info "))
+            return false;
+
+        // "info string ..." is a free-form message, not a search update.
+        if (line.starts_with("info string "))
+            return false;
+
+        info.raw = line;
+
+        std::istringstream stream(line);
+        std::string token;
+
+        stream >> token; // "info"
+
+        while (stream >> token)
+        {
+            if (token == "depth")
+            {
+                stream >> info.depth;
+            }
+            else if (token == "seldepth")
+            {
+                stream >> info.seldepth;
+            }
+            else if (token == "nodes")
+            {
+                stream >> info.nodes;
+            }
+            else if (token == "nps")
+            {
+                stream >> info.nps;
+            }
+            else if (token == "time")
+            {
+                stream >> info.timeMs;
+            }
+            else if (token == "score")
+            {
+                std::string scoreType;
+                int score = 0;
+
+                stream >> scoreType >> score;
+
+                if (scoreType == "cp")
+                {
+                    info.scoreCp = score;
+                }
+                else if (scoreType == "mate")
+                {
+                    info.scoreMate = score;
+                }
+            }
+            else if (token == "pv")
+            {
+                std::string move;
+
+                while (stream >> move)
+                    info.pv.push_back(std::move(move));
+
+                break;
+            }
+            else
+            {
+                // Ignore UCI fields that the UI doesn't currently use.
+            }
+        }
+
+        return true;
+    }
+} // namespace
+
 struct UciEngine::Impl
 {
+    enum class State
+    {
+        Stopped,
+        Starting,
+        Ready,
+        Searching
+    };
+
     HANDLE processHandle = nullptr;
     HANDLE stdinWrite = nullptr;
     HANDLE stdoutRead = nullptr;
@@ -20,6 +103,8 @@ struct UciEngine::Impl
     std::queue<std::string> outputQueue;
 
     std::atomic<bool> running = false;
+
+    State state = State::Stopped;
 
     void start(const std::filesystem::path& path);
     void createPipes(HANDLE& childStdinRead, HANDLE& childStdoutWrite);
@@ -53,6 +138,14 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
     HANDLE childStdinRead = nullptr;
     HANDLE childStdoutWrite = nullptr;
 
+    {
+        std::lock_guard lock(queueMutex);
+        std::queue<std::string> empty;
+        outputQueue.swap(empty);
+    }
+
+    state = State::Starting;
+
     try
     {
         createPipes(childStdinRead, childStdoutWrite);
@@ -66,6 +159,8 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
         running = true;
 
         startReaderThread();
+
+        writeLine("uci");
     }
     catch (...)
     {
@@ -77,7 +172,16 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
         if (processHandle != nullptr)
         {
             TerminateProcess(processHandle, 1);
-            WaitForSingleObject(processHandle, INFINITE);
+
+            // Wait until the process is definitely gone.
+            WaitForSingleObject(processHandle, 2000);
+        }
+
+        if (readerThread.joinable())
+        {
+            readerThread.request_stop();
+            CancelIoEx(stdoutRead, nullptr); // cancels all I/O on that handle
+            readerThread.join();
         }
 
         closeHandle(processHandle);
@@ -85,6 +189,7 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
         closeHandle(stdoutRead);
 
         running = false;
+        state = State::Stopped;
 
         throw;
     }
@@ -264,6 +369,13 @@ bool UciEngine::isRunning() const
     return impl_->running.load();
 }
 
+bool UciEngine::isReady() const
+{
+    if (!impl_->running.load(std::memory_order_acquire))
+        return false;
+    return impl_->state == Impl::State::Ready;
+}
+
 void UciEngine::stop()
 {
     if (impl_->processHandle == nullptr)
@@ -291,12 +403,14 @@ void UciEngine::stop()
         TerminateProcess(impl_->processHandle, 1);
 
         // Wait until the process is definitely gone.
-        WaitForSingleObject(impl_->processHandle, INFINITE);
+        WaitForSingleObject(impl_->processHandle, 2000);
     }
 
     if (impl_->readerThread.joinable())
     {
         impl_->readerThread.request_stop();
+        CancelIoEx(impl_->stdoutRead, nullptr); // cancels all I/O on that handle
+
         impl_->readerThread.join();
     }
 
@@ -306,11 +420,12 @@ void UciEngine::stop()
     Impl::closeHandle(impl_->processHandle);
 
     impl_->running = false;
+    impl_->state = Impl::State::Stopped;
 }
 
 void UciEngine::newGame()
 {
-    if (!isRunning())
+    if (!isReady())
         return;
 
     impl_->writeLine("ucinewgame");
@@ -318,15 +433,17 @@ void UciEngine::newGame()
 
 void UciEngine::stopSearch()
 {
-    if (!isRunning())
+    if (!isRunning() || impl_->state != Impl::State::Searching)
+    {
         return;
+    }
 
     impl_->writeLine("stop");
 }
 
 void UciEngine::setPosition(const std::string& fen, const std::vector<Move>& moves)
 {
-    if (!isRunning())
+    if (!isReady())
         return;
 
     std::ostringstream command;
@@ -355,10 +472,11 @@ void UciEngine::setPosition(const std::string& fen, const std::vector<Move>& mov
 
 void UciEngine::go(const UciSearchLimits& limits)
 {
-    if (!isRunning())
+    if (!isReady())
         return;
 
     std::ostringstream command;
+
     command << "go";
 
     if (limits.wtimeMs)
@@ -383,4 +501,80 @@ void UciEngine::go(const UciSearchLimits& limits)
         command << " infinite";
 
     impl_->writeLine(command.str());
+
+    impl_->state = Impl::State::Searching;
+}
+
+UciPollResult UciEngine::poll()
+{
+    UciPollResult result;
+
+    std::queue<std::string> pendingLines;
+
+    {
+        std::lock_guard lock(impl_->queueMutex);
+        std::swap(pendingLines, impl_->outputQueue);
+    }
+
+    while (!pendingLines.empty())
+    {
+        std::string line = std::move(pendingLines.front());
+        pendingLines.pop();
+
+        if (line.starts_with("info "))
+        {
+            UciInfo info;
+
+            if (parseInfoLine(line, info))
+                result.infos.push_back(std::move(info));
+        }
+        else if (line.starts_with("bestmove "))
+        {
+            std::istringstream stream(line);
+
+            std::string token;
+            std::string bestMove;
+
+            stream >> token; // "bestmove"
+            stream >> bestMove;
+
+            if (!bestMove.empty() && bestMove != "(none)")
+                result.bestMove = std::move(bestMove);
+
+            if (impl_->state == Impl::State::Searching)
+                impl_->state = Impl::State::Ready;
+        }
+
+        if (line == "uciok")
+        {
+            if (isRunning() && impl_->state == Impl::State::Starting)
+            {
+                try
+                {
+                    impl_->writeLine("isready");
+                }
+                catch (...)
+                {
+                    impl_->state = Impl::State::Stopped;
+                }
+            }
+        }
+        else if (line == "readyok")
+        {
+            if (isRunning() && impl_->state == Impl::State::Starting)
+            {
+                impl_->state = Impl::State::Ready;
+            }
+        }
+        // intentionally ignored for now:
+        // id ...
+        // option ...
+        // info string ...
+        // etc.
+    }
+
+    if (!isRunning())
+        impl_->state = Impl::State::Stopped;
+
+    return result;
 }
