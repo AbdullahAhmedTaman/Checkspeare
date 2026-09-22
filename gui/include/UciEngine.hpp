@@ -71,7 +71,8 @@ public:
     /// @note Not yet implemented.
     void stop();
 
-    /// @note Not yet implemented.
+    /// True from a successful start() until the engine process exits
+    /// (detected by the reader thread hitting EOF) or stop() is called.
     bool isRunning() const;
 
     /// @note Not yet implemented.

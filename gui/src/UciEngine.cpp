@@ -24,6 +24,7 @@ struct UciEngine::Impl
     void createPipes(HANDLE& childStdinRead, HANDLE& childStdoutWrite);
     void launchProcess(const std::filesystem::path& path, HANDLE childStdinRead, HANDLE childStdoutWrite);
     void startReaderThread();
+    void writeLine(const std::string& line);
 
     static void closeHandle(HANDLE& handle);
 };
@@ -69,6 +70,14 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
     {
         closeHandle(childStdinRead);
         closeHandle(childStdoutWrite);
+
+        // If the process was already spawned (e.g. startReaderThread() is
+        // what threw), it's still alive and orphaned unless we kill it here.
+        if (processHandle != nullptr)
+        {
+            TerminateProcess(processHandle, 1);
+            WaitForSingleObject(processHandle, INFINITE);
+        }
 
         closeHandle(processHandle);
         closeHandle(stdinWrite);
@@ -162,8 +171,13 @@ void UciEngine::Impl::startReaderThread()
 {
     Impl* impl = this;
 
+    // Captured by value (not read via impl->stdoutRead each iteration): if a
+    // later start() reassigns the member while this thread is still alive,
+    // it must keep reading from the pipe it was actually started with.
+    HANDLE stdoutHandle = stdoutRead;
+
     readerThread = std::jthread(
-        [impl](std::stop_token stop)
+        [impl, stdoutHandle](std::stop_token stop)
         {
             char buffer[4096];
             std::string pending;
@@ -172,7 +186,7 @@ void UciEngine::Impl::startReaderThread()
             {
                 DWORD bytesRead = 0;
 
-                const BOOL success = ReadFile(impl->stdoutRead, buffer, sizeof(buffer), &bytesRead, nullptr);
+                const BOOL success = ReadFile(stdoutHandle, buffer, sizeof(buffer), &bytesRead, nullptr);
 
                 if (!success || bytesRead == 0)
                     break;
@@ -225,4 +239,70 @@ void UciEngine::Impl::closeHandle(HANDLE& handle)
         CloseHandle(handle);
         handle = nullptr;
     }
+}
+
+void UciEngine::Impl::writeLine(const std::string& line)
+{
+    const std::string data = line + '\n';
+
+    DWORD bytesWritten = 0;
+
+    const BOOL success = WriteFile(stdinWrite, data.data(), static_cast<DWORD>(data.size()), &bytesWritten, nullptr);
+
+    if (!success || bytesWritten != data.size())
+    {
+        throw std::runtime_error("Failed to write to UCI engine.");
+    }
+}
+
+bool UciEngine::isRunning() const
+{
+    // `running` is set true once the process is launched and cleared either
+    // by stop(), by a failed start(), or by the reader thread itself when
+    // ReadFile() hits EOF (i.e. the engine process has exited on its own).
+    return impl_->running.load();
+}
+
+void UciEngine::stop()
+{
+    if (impl_->processHandle == nullptr)
+        return;
+
+    // Ask the engine to exit.
+    if (impl_->stdinWrite != nullptr)
+    {
+        try
+        {
+            impl_->writeLine("quit");
+        }
+        catch (...)
+        {
+            // Ignore write failures during shutdown.
+        }
+    }
+
+    // Wait for it to terminate.
+    DWORD result = WaitForSingleObject(impl_->processHandle, 2000);
+
+    // Force termination if necessary.
+    if (result == WAIT_TIMEOUT)
+    {
+        TerminateProcess(impl_->processHandle, 1);
+
+        // Wait until the process is definitely gone.
+        WaitForSingleObject(impl_->processHandle, INFINITE);
+    }
+
+    if (impl_->readerThread.joinable())
+    {
+        impl_->readerThread.request_stop();
+        impl_->readerThread.join();
+    }
+
+    // Clean up handles.
+    Impl::closeHandle(impl_->stdinWrite);
+    Impl::closeHandle(impl_->stdoutRead);
+    Impl::closeHandle(impl_->processHandle);
+
+    impl_->running = false;
 }
