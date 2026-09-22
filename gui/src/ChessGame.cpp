@@ -1,4 +1,5 @@
 #include "ChessGame.hpp"
+#include "San.hpp"
 
 namespace
 {
@@ -39,7 +40,8 @@ std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
 
     MoveRecord rec;
     rec.move = *m;
-    // rec.san = toSan(before, *m); not yet imlemented toSan()
+    // the San appliance
+    // rec.san = toSan(before, *m);
     rec.positionKeyAfter = board_.position().key;
     moves_.push_back(std::move(rec));
 
