@@ -34,22 +34,16 @@ public:
     std::optional<Move> play(Square from, Square to, PieceType promo = QUEEN);
 
     /// Steps the cursor one ply back. False if already at ply 0.
-    /// @note Not yet implemented.
     bool undo();
 
     /// Steps the cursor one ply forward. False if already at the end.
-    /// @note Not yet implemented.
     bool redo();
 
     /// Moves the cursor to `ply` (0 = start position), clamped to
-    /// [0, totalMoves()]. Uses make/unmake in whichever direction is shorter.
-    /// @note Not yet implemented.
+    /// [0, totalMoves()].
     void gotoPly(std::size_t ply);
 
-    /// @note Not yet implemented.
     void gotoEnd();
-
-    /// @note Not yet implemented.
     void gotoStart();
 
     std::size_t totalMoves() const
@@ -69,7 +63,6 @@ public:
     }
 
     /// Entries [0, cursor_). What the move-list panel should render.
-    /// @note Not yet implemented.
     std::vector<MoveRecord> historyToCursor() const;
 
     Board& board()
@@ -94,12 +87,14 @@ public:
 
 private:
     /// Applies moves_[cursor_] and advances. Precondition: cursor_ < size.
-    /// @note Not yet implemented.
     void stepForward();
 
     /// Unapplies moves_[cursor_-1] and retreats. Precondition: cursor_ > 0.
-    /// @note Not yet implemented.
     void stepBackward();
+
+    /// Finds the matching legal move in the current position without
+    /// mutating anything. Returns nullopt if from -> to is not legal.
+    std::optional<Move> findLegalMove(Square from, Square to, PieceType promo) const;
 
     Board board_;
     std::vector<MoveRecord> moves_;

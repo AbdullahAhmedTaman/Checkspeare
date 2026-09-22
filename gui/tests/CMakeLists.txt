@@ -30,3 +30,24 @@ target_link_libraries(SanTest
 
 # Optional: register with CTest so `ctest` runs it.
 add_test(NAME SanTest COMMAND SanTest)
+
+# --- ChessGame history navigation test ---
+add_executable(ChessGameTest
+    ChessGameTest.cpp
+    ${GUI_SRC_DIR}/ChessGame.cpp
+    ${GUI_SRC_DIR}/Board.cpp
+    ${GUI_SRC_DIR}/San.cpp
+)
+
+target_include_directories(ChessGameTest
+    PRIVATE
+        ${GUI_INC_DIR}
+        ${ENGINE_INC_DIR}
+)
+
+target_link_libraries(ChessGameTest
+    PRIVATE
+        ChessEngine
+)
+
+add_test(NAME ChessGameTest COMMAND ChessGameTest)
