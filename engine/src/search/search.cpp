@@ -6,6 +6,8 @@
 #include "types.h"
 #include <iostream>
 
+bool is_repetition(const Position& pos);
+
 namespace Search
 {
 
@@ -81,6 +83,21 @@ namespace Search
         if (Signals_stop.load(std::memory_order_relaxed))
             return VALUE_ZERO;
 
+        // Draw Detection: 50-move rule and Zobrist repetition
+        if (ply > 0 && (pos.halfmoveClock >= 100 || is_repetition(pos)))
+        {
+            return VALUE_ZERO;
+        }
+
+        // Check detection for tactical evaluation and pruning restrictions
+        bool in_check = pos.in_check();
+
+        // Check Extension: Force evasion resolution in main loop before dropping into Q-search
+        if (in_check)
+        {
+            depth++;
+        }
+
         // Leaf Node Hand-off: Transition to Quiescence Search when nominal depth expires
         if (depth <= 0)
         {
@@ -88,9 +105,6 @@ namespace Search
         }
 
         ctx.info.nodes++;
-
-        // Check detection for tactical evaluation and pruning restrictions
-        bool in_check = pos.in_check();
 
         // Compile-time check: Stripped out completely for PV and ROOT nodes.
         // If giving up a turn still results in a score >= beta, prune the subtree.
@@ -200,6 +214,9 @@ namespace Search
         init();
         SearchContext ctx(limits, Signals_stop);
 
+        // Retain move from the last fully completed depth iteration
+        Move safe_best_move = Move::none();
+
         // Iterative Deepening Loop
         for (int current_depth = 1; current_depth <= limits.depth; ++current_depth)
         {
@@ -211,15 +228,18 @@ namespace Search
             // Invoke root search template
             Value score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
 
+            // Discard partial depth results if interrupted mid-search
+            if (Signals_stop.load(std::memory_order_relaxed))
+                break;
+
+            safe_best_move = ctx.info.best_move;
+
             // Output UCI telemetry progress update
-            if (!Signals_stop.load(std::memory_order_relaxed))
-            {
-                std::cout << "info depth " << current_depth << " score cp " << score << " nodes " << ctx.info.nodes << std::endl;
-            }
+            std::cout << "info depth " << current_depth << " score cp " << score << " nodes " << ctx.info.nodes << std::endl;
         }
 
         // Output final UCI choice
-        std::cout << "bestmove " << ctx.info.best_move << std::endl;
+        std::cout << "bestmove " << safe_best_move << std::endl;
     }
 
     // Explicit template instantiations to optimize compilation boundaries
