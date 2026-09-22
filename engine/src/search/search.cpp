@@ -17,16 +17,6 @@ namespace Search
         Signals_stop.store(false, std::memory_order_relaxed);
     }
 
-    /**
-     * @brief Evaluates tactical captures at leaf nodes to mitigate the horizon effect.
-     *
-     * @param pos Reference to the current board position.
-     * @param ply Distance from the root node in half-moves.
-     * @param alpha Lower bound score for the search window.
-     * @param beta Upper bound score for the search window.
-     * @param ctx Reference to the active search telemetry and context.
-     * @return Value Evaluated score of the position after resolving tactical captures.
-     */
     Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
     {
         // Track leaf evaluation node count for UCI statistics
@@ -47,22 +37,6 @@ namespace Search
         return alpha;
     }
 
-    /**
-     * @brief Recursive template-based Alpha-Beta (Negamax) search algorithm.
-     *
-     * Uses compile-time template parameter dispatching (ROOT, PV, NON_PV) to strip
-     * unreachable branch conditions at compile time, eliminating CPU branch mispredictions.
-     *
-     * @tparam NT Node type designation (ROOT, PV, or NON_PV).
-     * @param pos Reference to the active board position state.
-     * @param depth Remaining depth to search in half-moves.
-     * @param ply Current depth distance from the root node.
-     * @param alpha Lower bound score (best guaranteed score for maximizing player).
-     * @param beta Upper bound score (worst score the minimizing player allows).
-     * @param ctx Execution parameters, telemetry counters, and heuristic tables.
-     * @param do_null Flag permitting Null-Move Pruning at the current branch node.
-     * @return Value Computed evaluation score relative to the side to move.
-     */
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
@@ -85,9 +59,6 @@ namespace Search
         // Check detection for tactical evaluation and pruning restrictions
         bool in_check = pos.in_check();
 
-        // --------------------------------------------------------------------
-        // Null-Move Pruning (NMP)
-        // --------------------------------------------------------------------
         // Compile-time check: Stripped out completely for PV and ROOT nodes.
         // If giving up a turn still results in a score >= beta, prune the subtree.
         if constexpr (!IsPV)
@@ -195,15 +166,6 @@ namespace Search
         return best_score;
     }
 
-    /**
-     * @brief Primary engine execution loop implementing Iterative Deepening.
-     *
-     * Launched by the UCI thread to execute search within specified constraints.
-     * Emits search depth, node counts, evaluation scores, and bestmove to standard output.
-     *
-     * @param pos Reference to the current starting position state.
-     * @param limits Const reference to UCI search parameters (depth, time, movetime).
-     */
     void start_search(Position& pos, const SearchLimits& limits)
     {
         init();

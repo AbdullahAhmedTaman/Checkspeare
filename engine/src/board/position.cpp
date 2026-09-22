@@ -547,3 +547,19 @@ bool Position::in_check() const
     const Color them = static_cast<Color>(sideToMove ^ 1);
     return is_square_attacked(ksq, them);
 }
+
+bool is_repetition(const Position& pos)
+{
+    // Limit the search to the last irreversible move.
+    int limit = pos.ply - pos.halfmoveClock;
+    if (limit < 0)
+        limit = 0;
+
+    // Check every second half-move (since only the same side to move can repeat a position).
+    for (int i = pos.ply - 2; i >= limit; i -= 2)
+    {
+        if (pos.history[i].key == pos.key)
+            return true;
+    }
+    return false;
+}

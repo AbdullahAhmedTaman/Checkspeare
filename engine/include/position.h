@@ -48,4 +48,5 @@ struct Position
     bool is_square_attacked(Square sq, Color attackingColor) const;
     Square king_square(Color c) const;
     [[nodiscard]] bool in_check() const;
+    [[nodiscard]] bool is_repetition() const;
 };
