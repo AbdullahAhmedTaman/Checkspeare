@@ -20,6 +20,14 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
 {
     window_.setFramerateLimit(60);
 
+    // Default time control: 5 minutes + 3 seconds increment per move.
+    // Adjust here or, later, read from Config.
+    ChessClock::TimeControl tc;
+    tc.initialMs = 5 * 60 * 1000;
+    tc.incrementMs = 3 * 1000;
+    clock_.configure(tc);
+    clock_.start();
+
     if (!ImGui::SFML::Init(window_))
         throw std::runtime_error("[ImGui] Initialization failed!");
 }
@@ -71,7 +79,33 @@ void Application::processEvents()
 void Application::update(float dtSeconds)
 {
     ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
-    Gui::renderImGui(window_, conf_, geo_, controller_);
+
+    // Detect cursor advancement since the last frame. Each new ply means a
+    // move was committed: notify the clock so it can add the mover's
+    // increment and flip to the other side.
+    //
+    // The mover of ply `i` (0-based) is White when i is even, Black when
+    // odd. That holds for any game that starts from the standard position
+    // with White to move. A FEN-loaded game where Black is to move would
+    // require resetting lastCursor_ and reconfiguring the clock; that
+    // feature isn't wired yet.
+    const std::size_t curr = game_.cursor();
+    while (lastCursor_ < curr)
+    {
+        const Color mover = (lastCursor_ % 2 == 0) ? WHITE : BLACK;
+        clock_.onMovePlayed(mover);
+        ++lastCursor_;
+    }
+
+    // If the cursor moved backwards (undo, or a jump in the history),
+    // resync lastCursor_ but do NOT rewind the clock. Time already spent
+    // is gone — that's the standard MVP compromise.
+    if (curr < lastCursor_)
+        lastCursor_ = curr;
+
+    clock_.update(dtSeconds);
+
+    Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_);
 }
 
 void Application::render()
