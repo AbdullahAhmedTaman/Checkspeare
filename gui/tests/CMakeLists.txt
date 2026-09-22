@@ -51,3 +51,15 @@ target_link_libraries(ChessGameTest
 )
 
 add_test(NAME ChessGameTest COMMAND ChessGameTest)
+
+# ---- ChessClockTest ----
+add_executable(ChessClockTest
+    ChessClockTest.cpp
+    ${GUI_SRC_DIR}/ChessClock.cpp
+)
+target_include_directories(ChessClockTest PRIVATE
+    ${GUI_INC_DIR}
+    ${ENGINE_INC_DIR}
+)
+# ChessClock only needs types.h; it does not link ChessEngine.
+add_test(NAME ChessClockTest COMMAND ChessClockTest)
