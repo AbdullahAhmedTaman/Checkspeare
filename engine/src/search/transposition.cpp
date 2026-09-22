@@ -42,15 +42,40 @@ namespace Search
         TTBucket& bucket = table[key & bucket_mask];
 
         int target_slot = -1;
-        if (bucket.entries[0].key == key || bucket.entries[0].key == 0)
-            target_slot = 0;
-        else if (bucket.entries[1].key == key || bucket.entries[1].key == 0)
-            target_slot = 1;
-        else if (bucket.entries[2].key == key || bucket.entries[2].key == 0)
-            target_slot = 2;
-        else if (bucket.entries[3].key == key || bucket.entries[3].key == 0)
-            target_slot = 3;
+        bool found_key = false;
 
+        if (bucket.entries[0].key == key)
+        {
+            target_slot = 0;
+            found_key = true;
+        }
+        else if (bucket.entries[1].key == key)
+        {
+            target_slot = 1;
+            found_key = true;
+        }
+        else if (bucket.entries[2].key == key)
+        {
+            target_slot = 2;
+            found_key = true;
+        }
+        else if (bucket.entries[3].key == key)
+        {
+            target_slot = 3;
+            found_key = true;
+        }
+
+        if (!found_key)
+        {
+            if (bucket.entries[0].key == 0)
+                target_slot = 0;
+            else if (bucket.entries[1].key == 0)
+                target_slot = 1;
+            else if (bucket.entries[2].key == 0)
+                target_slot = 2;
+            else if (bucket.entries[3].key == 0)
+                target_slot = 3;
+        }
         // Collision Resolution: Two-Tier Replacement Strategy.
         if (target_slot == -1)
         {
@@ -66,6 +91,15 @@ namespace Search
             }
         }
 
+        if (found_key && depth < bucket.entries[target_slot].depth)
+        {
+            return;
+        }
+
+        Move preserved_move = Move::none();
+        if (found_key)
+            preserved_move = bucket.entries[target_slot].best_move;
+
         bucket.entries[target_slot].key = key;
         bucket.entries[target_slot].depth = depth;
         bucket.entries[target_slot].score = score;
@@ -76,6 +110,8 @@ namespace Search
         {
             bucket.entries[target_slot].best_move = move;
         }
+        else
+            bucket.entries[target_slot].best_move = preserved_move; // Clears the move if it's a new key eviction
     }
 
     bool TranspositionTable::probe(Key key, int ply, TTEntry& out_entry) const
