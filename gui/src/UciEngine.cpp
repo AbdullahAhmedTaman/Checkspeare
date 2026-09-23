@@ -205,16 +205,12 @@ void UciEngine::Impl::startReaderThread()
 
                     // UCI engines normally use CRLF on Windows.
                     if (!line.empty() && line.back() == '\r')
-                    {
                         line.pop_back();
-                    }
 
                     {
                         std::lock_guard lock(impl->queueMutex);
-
                         impl->outputQueue.push(std::move(line));
                     }
-
                     lineStart = newline + 1;
                 }
 
