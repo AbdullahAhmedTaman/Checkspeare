@@ -1,5 +1,6 @@
 #include "search.h"
 #include "evaluate.h"
+#include "heuristics.h"
 #include "move_ordering.h"
 #include "movegen.h"
 #include "position.h"
@@ -217,7 +218,7 @@ namespace Search
 
             bool needs_full_search = true;
 
-            int R = calculate_lmr_reduction(IsPV, depth, moves_searched, in_check, move, ctx.killer_moves[ply]);
+            int R = calculate_lmr_reduction(IsPV, depth, moves_searched, in_check, move, Search::killer_moves[ply]);
 
             // If R > 0, the helper function approved the reduction
             if (R > 0)
@@ -285,8 +286,7 @@ namespace Search
                         // Store Killer Move heuristic for non-captures
                         if (!move.is_capture() && ply < MAX_PLY)
                         {
-                            ctx.killer_moves[ply][1] = ctx.killer_moves[ply][0];
-                            ctx.killer_moves[ply][0] = move;
+                            Search::update_killers(move, ply);
                         }
                         break; // Cut off remaining move searches
                     }

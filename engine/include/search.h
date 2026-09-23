@@ -51,7 +51,6 @@ namespace Search
         // Time tracking
         std::chrono::steady_clock::time_point start_time;
 
-        Move killer_moves[MAX_PLY][2]{};
         HistoryTable* history_table = nullptr;
 
         // Optional Transposition Table for caching previously evaluated positions
