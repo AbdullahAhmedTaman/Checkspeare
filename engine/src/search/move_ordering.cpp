@@ -1,4 +1,5 @@
 #include "move_ordering.h"
+#include "heuristics.h"
 #include <types.h>
 
 namespace MoveOrdering
@@ -25,7 +26,41 @@ namespace MoveOrdering
             second_score = score;
         }
 
-        void score_moves_recursive(const Position& pos, Move* moves, int* scores, int index, int count, Move tt_move)
+        int promotion_score(Move move)
+        {
+            if (!move.is_promotion())
+                return 0;
+
+            return PROMOTION_BONUS + static_cast<int>(promotion_type(move)) * 10;
+        }
+
+        int capture_score(const Position& pos, Move move)
+        {
+            if (!move.is_capture())
+                return 0;
+
+            const Piece attacker = pos.board[move.from()];
+            const PieceType attacker_type = type_of(attacker);
+            PieceType victim_type = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
+
+            if (attacker_type == NONE || victim_type == NONE)
+                return 0;
+
+            return CAPTURE_BONUS + MVV_LVA[victim_type][attacker_type] + promotion_score(move);
+        }
+
+        int quiet_score(const Position& pos, Move move, int ply)
+        {
+            if (move.is_capture() || move.is_promotion())
+                return promotion_score(move);
+
+            const Piece piece = pos.board[move.from()];
+            const bool is_killer = ply >= 0 && ply < Search::MAX_PLY &&
+                                   (Search::killer_moves[ply][0] == move || Search::killer_moves[ply][1] == move);
+            return (is_killer ? KILLER_SCORE : 0) + Search::history_score(move, piece);
+        }
+
+        void score_moves_recursive(const Position& pos, Move* moves, int* scores, int index, int count, Move tt_move, int ply)
         {
             if (index == count)
                 return;
@@ -36,21 +71,12 @@ namespace MoveOrdering
             {
                 scores[index] = TT_MOVE_SCORE;
             }
-            else if (move.flag() == MoveFlag::CAPTURE || move.flag() == MoveFlag::EP_CAPTURE)
-            {
-                Piece attacker = pos.board[move.from()];
-                Piece victim = pos.board[move.to()];
-                PieceType attacker_type = type_of(attacker);
-                PieceType victim_type = type_of(victim);
+            else if (move.is_capture())
+                scores[index] = capture_score(pos, move);
+            else
+                scores[index] = quiet_score(pos, move, ply);
 
-                if (move.flag() == MoveFlag::EP_CAPTURE)
-                    victim_type = PieceType::PAWN;
-
-                if (attacker_type != PieceType::NONE && victim_type != PieceType::NONE)
-                    scores[index] = CAPTURE_BONUS + MVV_LVA[victim_type][attacker_type];
-            }
-
-            score_moves_recursive(pos, moves, scores, index + 1, count, tt_move);
+            score_moves_recursive(pos, moves, scores, index + 1, count, tt_move, ply);
         }
 
         int find_best_index(const int* scores, int index, int count, int best_index, int best_score)
@@ -65,9 +91,10 @@ namespace MoveOrdering
         }
     } // namespace
 
-    MovePicker::MovePicker(const MoveList& list, const Position& pos, Move tt_move, int)
+    MovePicker::MovePicker(const MoveList& list, const Position& pos, Move tt_move, int ply)
         : count(list.size()),
-          current_index(0)
+          current_index(0),
+          ply(ply)
     {
         copy_moves(list, moves, 0, count);
         score_moves(pos, tt_move);
@@ -75,7 +102,7 @@ namespace MoveOrdering
 
     void MovePicker::score_moves(const Position& pos, Move tt_move)
     {
-        score_moves_recursive(pos, moves, scores, 0, count, tt_move);
+        score_moves_recursive(pos, moves, scores, 0, count, tt_move, ply);
     }
 
     Move MovePicker::next_move()

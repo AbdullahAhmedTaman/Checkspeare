@@ -72,11 +72,15 @@ namespace Search
             if (!move.is_ok())
                 break;
 
-            if (!is_tactical(move, in_check) || !is_legal_move(pos, move))
+            if (!is_legal_move(pos, move))
+                continue;
+
+            ++legal_moves;
+
+            if (!is_tactical(move, in_check))
                 continue;
 
             pos.make_move(move);
-            ++legal_moves;
             const Value score = -quiescence(pos, ply + 1, -beta, -alpha);
             pos.unmake_move(move);
 
@@ -88,6 +92,9 @@ namespace Search
 
         if (in_check && legal_moves == 0)
             return -VALUE_MATE + ply;
+
+        if (!in_check && legal_moves == 0)
+            return VALUE_ZERO;
 
         return alpha;
     }

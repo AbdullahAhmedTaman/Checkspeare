@@ -1,7 +1,13 @@
 add_executable(EngineTests
     ${CMAKE_CURRENT_SOURCE_DIR}/perft/perft.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/perft/perft_test.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bitboard_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/legal_moves_tests.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/position_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/position_zobrist_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/pseudo_legal_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/search_tests.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_attacks.cpp
 )
 
 # Force GCC runtime libraries to link statically on Windows

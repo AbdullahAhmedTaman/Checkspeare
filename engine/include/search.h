@@ -27,6 +27,9 @@ namespace Search
         std::vector<Move> pv;          /**< Principal Variation (expected best line). */
     };
 
+    /** @brief Search telemetry updated by the active search. */
+    extern SearchInfo CurrentInfo;
+
     /**
      * @brief Clears search heuristics (history, killers, etc.) before a new search.
      */

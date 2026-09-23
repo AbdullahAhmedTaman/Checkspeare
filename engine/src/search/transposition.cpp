@@ -7,6 +7,13 @@ namespace Search
 
     void TranspositionTable::resize(int mb)
     {
+        if (mb <= 0)
+        {
+            table.clear();
+            bucket_mask = 0;
+            return;
+        }
+
         // Calculate maximum 64-byte buckets that fit in the requested memory.
         uint64_t bytes = static_cast<uint64_t>(mb) * 1024 * 1024;
         uint64_t target_buckets = bytes / sizeof(TTBucket);
@@ -66,10 +73,13 @@ namespace Search
             }
         }
 
+        const bool same_key = bucket.entries[target_slot].key == key;
         bucket.entries[target_slot].key = key;
         bucket.entries[target_slot].depth = depth;
         bucket.entries[target_slot].score = score;
         bucket.entries[target_slot].flag = flag;
+        if (!same_key)
+            bucket.entries[target_slot].best_move = Move::none();
 
         // Preserve existing PV moves if the new evaluation fails low (null move).
         if (move.is_ok() && !move.is_null())
