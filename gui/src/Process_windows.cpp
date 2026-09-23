@@ -231,6 +231,7 @@ void Process::terminate() noexcept
 
     TerminateProcess(processHandle_, 1);
 
+    // Wait until the process is definitely gone.
     WaitForSingleObject(processHandle_, INFINITE);
 }
 

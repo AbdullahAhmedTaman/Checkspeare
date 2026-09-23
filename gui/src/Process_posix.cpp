@@ -98,10 +98,7 @@ void Process::start(const std::filesystem::path& executable)
         throw std::system_error(result, std::generic_category(), "Failed to initialize process spawn actions.");
     }
 
-    // Connect the child's stdin to the stdin pipe.
-    result = posix_spawn_file_actions_adddup2(&actions, stdinPipe[0], STDIN_FILENO);
-
-    if (result != 0)
+    auto fail = [&](const char* message) -> void
     {
         posix_spawn_file_actions_destroy(&actions);
 
@@ -110,74 +107,56 @@ void Process::start(const std::filesystem::path& executable)
         closeFd(stdoutPipe[0]);
         closeFd(stdoutPipe[1]);
 
-        throw std::system_error(result, std::generic_category(), "Failed to configure child stdin.");
-    }
+        throw std::system_error(result, std::generic_category(), message);
+    };
+
+    // Connect the child's stdin to the stdin pipe.
+    result = posix_spawn_file_actions_adddup2(&actions, stdinPipe[0], STDIN_FILENO);
+    if (result != 0)
+        fail("Failed to configure child stdin.");
 
     // Connect the child's stdout to the stdout pipe.
     result = posix_spawn_file_actions_adddup2(&actions, stdoutPipe[1], STDOUT_FILENO);
-
     if (result != 0)
-    {
-        posix_spawn_file_actions_destroy(&actions);
+        fail("Failed to configure child stdout.");
 
-        closeFd(stdinPipe[0]);
-        closeFd(stdinPipe[1]);
-        closeFd(stdoutPipe[0]);
-        closeFd(stdoutPipe[1]);
-
-        throw std::system_error(result, std::generic_category(), "Failed to configure child stdout.");
-    }
-
-    // Match the Windows implementation:
-    // stderr is sent to the same pipe as stdout.
+    // Match the Windows implementation: stderr goes to the same pipe as stdout.
     result = posix_spawn_file_actions_adddup2(&actions, stdoutPipe[1], STDERR_FILENO);
-
     if (result != 0)
-    {
-        posix_spawn_file_actions_destroy(&actions);
-
-        closeFd(stdinPipe[0]);
-        closeFd(stdinPipe[1]);
-        closeFd(stdoutPipe[0]);
-        closeFd(stdoutPipe[1]);
-
-        throw std::system_error(result, std::generic_category(), "Failed to configure child stderr.");
-    }
+        fail("Failed to configure child stderr.");
 
     // The child does not need the parent's stdin write end.
     if (stdinPipe[1] != STDIN_FILENO && stdinPipe[1] != STDOUT_FILENO && stdinPipe[1] != STDERR_FILENO)
     {
         result = posix_spawn_file_actions_addclose(&actions, stdinPipe[1]);
-
         if (result != 0)
-        {
-            posix_spawn_file_actions_destroy(&actions);
-
-            closeFd(stdinPipe[0]);
-            closeFd(stdinPipe[1]);
-            closeFd(stdoutPipe[0]);
-            closeFd(stdoutPipe[1]);
-
-            throw std::system_error(result, std::generic_category(), "Failed to configure child stdin pipe.");
-        }
+            fail("Failed to configure child stdin pipe.");
     }
 
     // The child does not need the parent's stdout read end.
     if (stdoutPipe[0] != STDIN_FILENO && stdoutPipe[0] != STDOUT_FILENO && stdoutPipe[0] != STDERR_FILENO)
     {
         result = posix_spawn_file_actions_addclose(&actions, stdoutPipe[0]);
-
         if (result != 0)
-        {
-            posix_spawn_file_actions_destroy(&actions);
+            fail("Failed to configure child stdout pipe.");
+    }
 
-            closeFd(stdinPipe[0]);
-            closeFd(stdinPipe[1]);
-            closeFd(stdoutPipe[0]);
-            closeFd(stdoutPipe[1]);
+    // The child's stdin read end was dup2'd onto STDIN_FILENO, so the
+    // original fd is a redundant copy that must not leak into the child.
+    if (stdinPipe[0] != STDIN_FILENO && stdinPipe[0] != STDOUT_FILENO && stdinPipe[0] != STDERR_FILENO)
+    {
+        result = posix_spawn_file_actions_addclose(&actions, stdinPipe[0]);
+        if (result != 0)
+            fail("Failed to configure child stdin read end.");
+    }
 
-            throw std::system_error(result, std::generic_category(), "Failed to configure child stdout pipe.");
-        }
+    // The child's stdout write end was dup2'd onto STDOUT_FILENO and
+    // STDERR_FILENO, so the original fd is a redundant copy.
+    if (stdoutPipe[1] != STDIN_FILENO && stdoutPipe[1] != STDOUT_FILENO && stdoutPipe[1] != STDERR_FILENO)
+    {
+        result = posix_spawn_file_actions_addclose(&actions, stdoutPipe[1]);
+        if (result != 0)
+            fail("Failed to configure child stdout write end.");
     }
 
     const char* executablePath = executable.c_str();
@@ -226,21 +205,17 @@ bool Process::write(std::string_view data)
 
     while (remaining > 0)
     {
-        const ssize_t bytesWritten = write(stdinWrite_, current, remaining);
+        const ssize_t bytesWritten = ::write(stdinWrite_, current, remaining);
 
         if (bytesWritten > 0)
         {
             current += bytesWritten;
-
             remaining -= static_cast<std::size_t>(bytesWritten);
-
             continue;
         }
 
         if (bytesWritten < 0 && errno == EINTR)
-        {
             continue;
-        }
 
         return false;
     }
@@ -251,21 +226,17 @@ bool Process::write(std::string_view data)
 std::ptrdiff_t Process::read(char* buffer, std::size_t size)
 {
     if (stdoutRead_ == -1 || buffer == nullptr)
-    {
         return -1;
-    }
 
     if (size == 0)
         return 0;
 
     while (true)
     {
-        const ssize_t result = read(stdoutRead_, buffer, size);
+        const ssize_t result = ::read(stdoutRead_, buffer, size);
 
         if (result < 0 && errno == EINTR)
-        {
             continue;
-        }
 
         return static_cast<std::ptrdiff_t>(result);
     }

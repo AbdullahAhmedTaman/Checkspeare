@@ -9,13 +9,16 @@
 #include <sstream>
 #include <stdexcept>
 #include <thread>
-#include <utility>
 
 namespace
 {
     bool parseInfoLine(const std::string& line, UciInfo& info)
     {
         if (!line.starts_with("info "))
+            return false;
+
+        // "info string ..." is a free-form message, not a search update.
+        if (line.starts_with("info string "))
             return false;
 
         info.raw = line;
@@ -141,7 +144,7 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
     {
         process.start(path);
 
-        running.store(true);
+        running = true;
 
         startReaderThread();
 
@@ -149,6 +152,8 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
     }
     catch (...)
     {
+        // If the process was already spawned (e.g. startReaderThread() is
+        // what threw), it must be stopped here before rethrowing.
         process.terminate();
 
         if (readerThread.joinable())
@@ -159,7 +164,7 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
 
         process.reset();
 
-        running.store(false);
+        running = false;
         state = State::Stopped;
 
         throw;
@@ -169,19 +174,18 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
 void UciEngine::Impl::startReaderThread()
 {
     Impl* impl = this;
-    Process* process = &this->process;
 
-    // The reader thread owns the processing of raw engine output.
-    // It only places complete lines into outputQueue.
+    // The reader thread uses the Process object that belongs to this Impl.
+    // The Process object stays alive until the reader thread has been joined.
     readerThread = std::jthread(
-        [impl, process](std::stop_token stop)
+        [impl](std::stop_token stop)
         {
             char buffer[4096];
             std::string pending;
 
             while (!stop.stop_requested())
             {
-                const std::ptrdiff_t bytesRead = process->read(buffer, sizeof(buffer));
+                const std::ptrdiff_t bytesRead = impl->process.read(buffer, sizeof(buffer));
 
                 if (bytesRead <= 0)
                     break;
@@ -195,9 +199,7 @@ void UciEngine::Impl::startReaderThread()
                     const std::size_t newline = pending.find('\n', lineStart);
 
                     if (newline == std::string::npos)
-                    {
                         break;
-                    }
 
                     std::string line = pending.substr(lineStart, newline - lineStart);
 
@@ -229,7 +231,7 @@ void UciEngine::Impl::startReaderThread()
                 impl->outputQueue.push(std::move(pending));
             }
 
-            impl->running.store(false);
+            impl->running = false;
         });
 }
 
@@ -245,38 +247,38 @@ void UciEngine::Impl::writeLine(const std::string& line)
 
 bool UciEngine::isRunning() const
 {
+    // `running` is set true once the process is launched and cleared either
+    // by stop(), by a failed start(), or by the reader thread itself when
+    // ReadFile() hits EOF (i.e. the engine process has exited on its own).
     return impl_->running.load();
 }
 
 bool UciEngine::isReady() const
 {
-    return impl_->running.load() && impl_->state == Impl::State::Ready;
+    if (!impl_->running.load(std::memory_order_acquire))
+    {
+        return false;
+    }
+
+    return impl_->state == Impl::State::Ready;
 }
 
 void UciEngine::stop()
 {
     if (!impl_->process.hasProcess())
-    {
-        if (impl_->readerThread.joinable())
-        {
-            impl_->readerThread.request_stop();
-            impl_->readerThread.join();
-        }
-
-        impl_->running.store(false);
-        impl_->state = Impl::State::Stopped;
-
         return;
-    }
 
     // Ask the engine to exit.
-    try
+    if (impl_->process.hasProcess())
     {
-        impl_->writeLine("quit");
-    }
-    catch (...)
-    {
-        // Ignore write failures during shutdown.
+        try
+        {
+            impl_->writeLine("quit");
+        }
+        catch (...)
+        {
+            // Ignore write failures during shutdown.
+        }
     }
 
     // Wait for it to terminate.
@@ -284,7 +286,9 @@ void UciEngine::stop()
 
     // Force termination if necessary.
     if (!exited)
+    {
         impl_->process.terminate();
+    }
 
     if (impl_->readerThread.joinable())
     {
@@ -292,9 +296,11 @@ void UciEngine::stop()
         impl_->readerThread.join();
     }
 
+    // Clean up process resources after the reader thread has stopped
+    // using the stdout pipe.
     impl_->process.reset();
 
-    impl_->running.store(false);
+    impl_->running = false;
     impl_->state = Impl::State::Stopped;
 }
 
@@ -308,8 +314,10 @@ void UciEngine::newGame()
 
 void UciEngine::stopSearch()
 {
-    if (impl_->state != Impl::State::Searching)
+    if (!isRunning() || impl_->state != Impl::State::Searching)
+    {
         return;
+    }
 
     impl_->writeLine("stop");
 }
@@ -418,12 +426,15 @@ UciPollResult UciEngine::poll()
                 result.bestMove = std::move(bestMove);
             }
 
-            impl_->state = Impl::State::Ready;
+            if (impl_->state == Impl::State::Searching)
+            {
+                impl_->state = Impl::State::Ready;
+            }
         }
 
         if (line == "uciok")
         {
-            if (impl_->running.load() && impl_->state == Impl::State::Starting)
+            if (isRunning() && impl_->state == Impl::State::Starting)
             {
                 try
                 {
@@ -437,19 +448,20 @@ UciPollResult UciEngine::poll()
         }
         else if (line == "readyok")
         {
-            if (impl_->running.load() && impl_->state == Impl::State::Starting)
+            if (isRunning() && impl_->state == Impl::State::Starting)
             {
                 impl_->state = Impl::State::Ready;
             }
         }
 
+        // Intentionally ignored for now:
         // id ...
         // option ...
         // info string ...
         // etc.
     }
 
-    if (!impl_->running.load())
+    if (!isRunning())
         impl_->state = Impl::State::Stopped;
 
     return result;
