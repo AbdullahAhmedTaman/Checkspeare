@@ -85,6 +85,7 @@ void Application::update(float dtSeconds)
 {
     enginePlayer_.tick(game_, clock_);
     ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
+    controller_.updateAnnotations();
 
     // Detect cursor advancement since the last frame. Each new ply means a
     // move was committed: notify the clock so it can add the mover's

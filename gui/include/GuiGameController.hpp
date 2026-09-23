@@ -101,7 +101,7 @@ namespace Gui
             return annotations_;
         }
 
-        void updateAnnotations(const BoardGeometry& geo);
+        void updateAnnotations();
 
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);

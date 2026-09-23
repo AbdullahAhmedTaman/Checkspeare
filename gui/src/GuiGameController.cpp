@@ -242,4 +242,9 @@ namespace Gui
         }
     }
 
+    void GuiGameController::updateAnnotations()
+    {
+        annotations_.refreshFrom(game_);
+    }
+
 } // namespace Gui
