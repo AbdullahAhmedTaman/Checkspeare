@@ -1,4 +1,5 @@
 #include "BoardRenderer.hpp"
+#include "BoardAnnotations.hpp"
 #include "TextureLibrary.hpp"
 
 #include <SFML/Graphics.hpp>
@@ -60,13 +61,66 @@ namespace
             window.draw(sprite);
         }
     }
+
+    void drawAnnotations(sf::RenderWindow& window, const Gui::BoardGeometry& geo, const Gui::BoardAnnotations& annotations,
+                         const Gui::DragState& drag)
+    {
+        const float padding = Gui::piecePadding(geo.squareSize);
+
+        sf::Color lastMoveColor(155, 199, 0, 120);
+        for (std::optional<Square> sqOpt : {annotations.lastMoveFrom, annotations.lastMoveTo})
+        {
+            if (sqOpt.has_value())
+            {
+                sf::RectangleShape hl({geo.squareSize, geo.squareSize});
+                hl.setPosition(geo.topLeft(*sqOpt));
+                hl.setFillColor(lastMoveColor);
+                window.draw(hl);
+            }
+        }
+
+        if (annotations.selected.has_value())
+        {
+            sf::RectangleShape sel({geo.squareSize, geo.squareSize});
+            sel.setPosition(geo.topLeft(*annotations.selected));
+            sel.setFillColor(sf::Color(20, 85, 30, 100));
+            sel.setOutlineThickness(3.0f);
+            sel.setOutlineColor(sf::Color(20, 85, 30, 200));
+            window.draw(sel);
+        }
+
+        if (annotations.selected.has_value() || drag.active)
+        {
+            sf::Color targetColor(0, 0, 0, 60);
+            for (Square sq : annotations.legalTargets)
+            {
+                sf::CircleShape target(geo.squareSize * 0.15f);
+                target.setFillColor(targetColor);
+                sf::Vector2f tl = geo.topLeft(sq);
+                // Center the circle in the square
+                target.setPosition(
+                    {tl.x + (geo.squareSize / 2.0f) - target.getRadius(), tl.y + (geo.squareSize / 2.0f) - target.getRadius()});
+                window.draw(target);
+            }
+        }
+
+        if (annotations.checkedKing.has_value())
+        {
+            sf::RectangleShape checkHl({geo.squareSize, geo.squareSize});
+            checkHl.setPosition(geo.topLeft(*annotations.checkedKing));
+            // Red gradient-like effect using a semi-transparent red overlay
+            checkHl.setFillColor(sf::Color(255, 0, 0, 130));
+            window.draw(checkHl);
+        }
+    }
 } // namespace
 
 namespace Gui
 {
 
     void renderBoard(sf::RenderWindow& window, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
-                     const Assets::TextureLibrary& assets, const DragState& drag, const PendingPromotion& promo)
+                     const Assets::TextureLibrary& assets, const DragState& drag, const PendingPromotion& promo,
+                     const BoardAnnotations& annotations)
     {
         const float padding = piecePadding(geo.squareSize);
 
@@ -119,6 +173,8 @@ namespace Gui
                 window.draw(sprite);
             }
         }
+        drawAnnotations(window, geo, annotations, drag);
+
         drawPromotionPicker(window, geo, assets, promo);
     }
 

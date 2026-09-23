@@ -24,6 +24,17 @@ void ChessGame::reset()
     cursor_ = 0;
 }
 
+void ChessGame::gotoPly(std::size_t ply)
+{
+    if (ply > moves_.size())
+        ply = moves_.size();
+
+    while (cursor_ < ply)
+        stepForward();
+    while (cursor_ > ply)
+        stepBackward();
+}
+
 std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
 {
     // Playing after navigating back discards the redo tail.
@@ -31,7 +42,7 @@ std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
         moves_.resize(cursor_);
 
     // SAN needs the position before the move; copy the board first.
-    Board before = board_;
+    // Board before = board_;
 
     auto m = board_.tryMove(from, to, promo);
     if (!m)

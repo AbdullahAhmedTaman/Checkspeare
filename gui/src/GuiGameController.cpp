@@ -33,6 +33,8 @@ namespace Gui
         {
             drag_ = {};
             result_ = {ActionResult::Kind::MoveCancelled};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
         }
     }
 
@@ -65,13 +67,23 @@ namespace Gui
             return;
         }
         if (pc == PIECE_NONE)
+        {
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
+        }
 
         if (color_of(pc) != game_.sideToMove())
         {
             result_ = {ActionResult::Kind::NotYourTurn};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
+
+        annotations_.selected = sq;
+        annotations_.legalTargets = game_.board().legalDestinations(sq);
+        annotations_.refreshFrom(game_);
 
         drag_.active = true;
         drag_.from = sq;
@@ -93,6 +105,8 @@ namespace Gui
         {
             result_ = {ActionResult::Kind::DroppedOutsideBoard};
             drag_ = {};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
 
@@ -103,6 +117,8 @@ namespace Gui
         {
             result_ = {ActionResult::Kind::MoveCancelled};
             drag_ = {};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
 
@@ -153,6 +169,8 @@ namespace Gui
             result_ = {ActionResult::Kind::IllegalMove, from, to};
 
         drag_ = {};
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::completePromotion(PieceType type)
@@ -169,6 +187,9 @@ namespace Gui
             result_ = {ActionResult::Kind::MovePlayed, from, to};
         else
             result_ = {ActionResult::Kind::IllegalMove, from, to};
+
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::cancelPromotion()
@@ -181,6 +202,9 @@ namespace Gui
 
         promo_ = {};
         result_ = {ActionResult::Kind::MoveCancelled, from, to};
+
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::applyQueuedActions()
@@ -190,6 +214,8 @@ namespace Gui
             const std::size_t ply = *queuedGotoPly_;
             queuedGotoPly_.reset();
             game_.gotoPly(ply);
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
         }
     }
 
