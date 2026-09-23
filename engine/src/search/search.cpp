@@ -78,26 +78,6 @@ namespace Search
         Signals_stop.store(false, std::memory_order_relaxed);
     }
 
-    Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
-    {
-        // Track leaf evaluation node count for UCI statistics
-        ctx.info.nodes++;
-
-        // Stand-pat evaluation: Assume the side to move can choose not to capture
-        // Stub implementation defaults to VALUE_ZERO; will integrate Eval::evaluate(pos)
-        Value stand_pat = VALUE_ZERO;
-
-        // Beta cutoff: Position is already better than the opponent will allow
-        if (stand_pat >= beta)
-            return beta;
-
-        // Raise lower bound if stand-pat score exceeds current alpha
-        if (stand_pat > alpha)
-            alpha = stand_pat;
-
-        return alpha;
-    }
-
     /**
      * @brief Calculates the depth reduction for Late Move Reductions (LMR).
      *        Returns 0 if LMR should be skipped (hard filters).
