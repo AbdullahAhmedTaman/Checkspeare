@@ -113,6 +113,7 @@ namespace Search
         // Mate Distance Pruning: clamp search bounds relative to distance from root
         alpha = std::max(alpha, -VALUE_MATE + ply);
         beta = std::min(beta, VALUE_MATE - ply - 1);
+        Value alpha_orig = alpha;
 
         if (alpha >= beta)
             return alpha;
@@ -160,6 +161,18 @@ namespace Search
                     return nmp_score; // Cutoff achieved, prune the subtree
                 }
             }
+        }
+        TTEntry tt_entry;
+        bool tt_hit = TT.probe(pos.key, ply, tt_entry);
+
+        if (tt_hit && tt_entry.depth >= depth && !IsRoot)
+        {
+            if (tt_entry.flag == TT_EXACT)
+                return tt_entry.score;
+            if (tt_entry.flag == TT_LOWERBOUND && tt_entry.score >= beta)
+                return tt_entry.score;
+            if (tt_entry.flag == TT_UPPERBOUND && tt_entry.score <= alpha)
+                return tt_entry.score;
         }
 
         // Generate legal moves for the current position
@@ -261,6 +274,12 @@ namespace Search
                     }
                 }
             }
+        }
+        if (!Signals_stop.load(std::memory_order_relaxed))
+        {
+            TTFlag flag = (best_score >= beta) ? TT_LOWERBOUND : (best_score > alpha_orig) ? TT_EXACT : TT_UPPERBOUND;
+
+            TT.store(pos.key, ply, depth, best_score, flag, best_move);
         }
 
         return best_score;
