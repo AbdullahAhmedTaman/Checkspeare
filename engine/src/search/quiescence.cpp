@@ -2,55 +2,93 @@
 #include "move_ordering.h"
 #include "movegen.h"
 #include "search.h"
+#include "transposition.h"
 
 namespace Search
 {
     namespace
     {
-        Value search_captures(Position& pos, MoveOrdering::MovePicker& picker, int ply, Value alpha, Value beta)
+        /**
+         * @brief Checks a pseudo-legal move without changing the position.
+         *
+         * The move is made temporarily so the moving side's king can be
+         * tested for attacks, then the original position is restored.
+         */
+        bool is_legal_move(Position& pos, Move move)
         {
-            Move move = picker.next_move();
-            if (!move.is_ok())
-                return alpha;
+            const Color us = pos.sideToMove;
+            pos.make_move(move);
+            const bool legal = !pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
+            pos.unmake_move(move);
+            return legal;
+        }
 
-            if (!move.is_capture())
-                return search_captures(pos, picker, ply, alpha, beta);
+        /**
+         * @brief Identifies moves that must be searched in quiescence.
+         *
+         * Check evasions are all tactical in this context; otherwise only
+         * captures and promotions are searched to resolve forcing sequences.
+         */
+        bool is_tactical(Move move, bool in_check)
+        {
+            return in_check || move.is_capture() || move.is_promotion();
+        }
+    } // namespace
+
+    /**
+     * @brief Extends leaf search through forcing tactical moves.
+     *
+     * Stand-pat evaluation is used only when the side to move is not in
+     * check. Legal captures, promotions, and check evasions are searched until
+     * the position is quiet or the alpha-beta window is resolved.
+     */
+    Value quiescence(Position& pos, int ply, Value alpha, Value beta)
+    {
+        const Color us = pos.sideToMove;
+        const bool in_check = pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
+
+        if (ply >= MAX_SEARCH_PLY - 1 && !in_check)
+            return Eval::evaluate(pos);
+
+        Value stand_pat = Eval::evaluate(pos);
+
+        if (!in_check)
+        {
+            if (stand_pat >= beta)
+                return beta;
+            if (stand_pat > alpha)
+                alpha = stand_pat;
+        }
+
+        MoveList list;
+        MoveGen::generate_pseudo_legal_moves(pos, list);
+
+        MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
+        int legal_moves = 0;
+
+        while (true)
+        {
+            const Move move = picker.next_move();
+            if (!move.is_ok())
+                break;
+
+            if (!is_tactical(move, in_check) || !is_legal_move(pos, move))
+                continue;
 
             pos.make_move(move);
-
-            Color us = static_cast<Color>(pos.sideToMove ^ 1);
-            bool legal = !pos.is_square_attacked(pos.king_square(us), pos.sideToMove);
-            if (!legal)
-            {
-                pos.unmake_move(move);
-                return search_captures(pos, picker, ply, alpha, beta);
-            }
-
-            Value score = -quiescence(pos, ply + 1, -beta, -alpha);
+            ++legal_moves;
+            const Value score = -quiescence(pos, ply + 1, -beta, -alpha);
             pos.unmake_move(move);
 
             if (score >= beta)
                 return beta;
             if (score > alpha)
                 alpha = score;
-
-            return search_captures(pos, picker, ply, alpha, beta);
         }
-    } // namespace
 
-    Value quiescence(Position& pos, int ply, Value alpha, Value beta)
-    {
-        Value stand_pat = Eval::evaluate(pos);
+        if (in_check && legal_moves == 0)
+            return -VALUE_MATE + ply;
 
-        if (stand_pat >= beta)
-            return beta;
-        if (stand_pat > alpha)
-            alpha = stand_pat;
-
-        MoveList list;
-        MoveGen::generate_pseudo_legal_moves(pos, list);
-
-        MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
-        return search_captures(pos, picker, ply, alpha, beta);
+        return alpha;
     }
 } // namespace Search

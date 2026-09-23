@@ -24,7 +24,19 @@ namespace MoveOrdering
     class MovePicker
     {
     public:
+        /**
+         * @brief Copies and scores moves for best-first selection.
+         * @param list Candidate moves to order.
+         * @param pos Position used for capture scoring.
+         * @param tt_move Previously stored transposition-table move.
+         * @param ply Search ply used by search heuristics.
+         */
         MovePicker(const MoveList& list, const Position& pos, Move tt_move = Move::none(), int ply = 0);
+
+        /**
+         * @brief Returns the highest-scoring remaining move.
+         * @return The next move, or Move::none() when exhausted.
+         */
         Move next_move();
 
     private:
@@ -33,6 +45,7 @@ namespace MoveOrdering
         int count;
         int current_index;
 
+        /** @brief Assigns ordering scores to the copied move list. */
         void score_moves(const Position& pos, Move tt_move);
     };
 } // namespace MoveOrdering

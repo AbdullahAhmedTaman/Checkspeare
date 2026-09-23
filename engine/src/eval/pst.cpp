@@ -1,4 +1,5 @@
 #include "pst.h"
+#include "types.h"
 
 namespace Eval
 { // NOTE: these tables are from black's perspective

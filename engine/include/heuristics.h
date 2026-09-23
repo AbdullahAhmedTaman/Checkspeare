@@ -12,6 +12,12 @@ namespace Search
     extern Move killer_moves[MAX_PLY][2]; // saves best 2 killer moves got the best beta cuttoff
     extern int history_table[MAX_PIECES][MAX_SQUARES];
 
+    /**
+     * @brief Records a quiet move that caused a beta cutoff at a ply.
+     *
+     * The newest distinct move is kept first and the previous first move is
+     * shifted into the second killer slot.
+     */
     inline void update_killers(Move move, int ply)
     {
         if (ply < 0 || ply >= MAX_PLY || !move.is_ok())
@@ -24,6 +30,12 @@ namespace Search
         }
     }
 
+    /**
+     * @brief Rewards a move that contributed to a successful search cutoff.
+     *
+     * Scores are indexed by moving piece and destination square and are
+     * capped to keep the heuristic bounded.
+     */
     inline void update_history(Move move, int depth, Piece piece)
     {
         if (depth <= 0 || piece >= MAX_PIECES || !is_valid(move.to()))
