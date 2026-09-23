@@ -113,17 +113,22 @@ enum MoveFlag
 // bits 0-5: from square, bits 6-11: to square, bits 12-15: flag.
 struct Move
 {
-    uint16_t data;
+    uint16_t data = 0;
 
     Move() = default;
 
+    /**
+     * @brief Creates a packed move from its source, destination, and flag.
+     * @param from Source square.
+     * @param to Destination square.
+     * @param moveFlag Encoded move type.
+     */
     constexpr Move(Square from, Square to, MoveFlag moveFlag)
         : data(from | (to << 6) | (moveFlag << 12))
     {
         assert(is_valid(from) && is_valid(to));
     }
 
-    // data == 0, never a legal move.
     static constexpr Move none()
     {
         return Move();

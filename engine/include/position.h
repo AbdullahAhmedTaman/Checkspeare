@@ -1,5 +1,4 @@
 #pragma once
-#include "attacks.h"
 #include "types.h"
 
 struct UndoState

@@ -1,4 +1,5 @@
 #include "position.h"
+#include "attacks.h"
 #include "bitboard.h"
 #include "evaluate.h"
 #include "pst.h"
