@@ -142,6 +142,7 @@ namespace Gui
 
             window.draw(square);
         }
+        drawAnnotations(window, geo, annotations, drag);
 
         // Static pieces. The dragged piece is skipped here and drawn on top below.
         for (int i = 0; i < 64; ++i)
@@ -173,7 +174,6 @@ namespace Gui
                 window.draw(sprite);
             }
         }
-        drawAnnotations(window, geo, annotations, drag);
 
         drawPromotionPicker(window, geo, assets, promo);
     }
