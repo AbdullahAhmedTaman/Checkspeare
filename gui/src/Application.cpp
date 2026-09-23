@@ -70,9 +70,10 @@ void Application::processEvents()
         const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
         const bool endsDrag = event->is<sf::Event::MouseButtonReleased>() && controller_.drag().active;
         const bool focusLost = event->is<sf::Event::FocusLost>();
-        const bool pickerOpen = controller_.pendingPromotion().active;
+        const bool engineToMove = enginePlayer_.isSideControlled(game_.sideToMove());
+        const bool shouldForward = focusLost || endsDrag || (!imguiCaptures && !engineToMove);
 
-        if (!imguiCaptures || endsDrag || focusLost || pickerOpen)
+        if (shouldForward)
         {
             if (const auto inputEvent = Gui::toInputEvent(*event))
                 controller_.handleEvent(*inputEvent, geo_);
