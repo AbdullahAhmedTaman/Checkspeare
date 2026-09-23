@@ -12,9 +12,22 @@ struct MoveList
     Move moves[MAX_MOVES];
     int count = 0;
 
+    /**
+     * @brief Appends a generated move to the list.
+     * @param m Move to append; callers must keep the list below MAX_MOVES.
+     */
     void add(Move m)
     {
         moves[count++] = m;
+    }
+
+    /**
+     * @brief Reports whether the list contains no moves.
+     * @return True when no moves have been generated.
+     */
+    bool empty() const
+    {
+        return count == 0;
     }
 
     int size() const

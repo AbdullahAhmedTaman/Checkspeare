@@ -8,6 +8,7 @@ namespace MoveOrdering
     constexpr int TT_MOVE_SCORE = 1000000;
     constexpr int CAPTURE_BONUS = 100000;
     constexpr int KILLER_SCORE = 90000;
+    constexpr int PROMOTION_BONUS = 80000;
 
     // Values: Pawn=0, Knight=1, Bishop=2, Rook=3, Queen=4, King=5
     // clang-format off
@@ -39,11 +40,21 @@ namespace MoveOrdering
          */
         Move next_move();
 
+        /**
+         * @brief Returns the number of moves still waiting to be selected.
+         * @return Count of unselected moves.
+         */
+        int remaining() const
+        {
+            return count - current_index;
+        }
+
     private:
         Move moves[MAX_MOVES];
         int scores[MAX_MOVES];
         int count;
         int current_index;
+        int ply = 0;
 
         /** @brief Assigns ordering scores to the copied move list. */
         void score_moves(const Position& pos, Move tt_move);

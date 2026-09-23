@@ -34,7 +34,7 @@ namespace Search
         Key key = 0;                   /**< 64-bit Zobrist hash (8 bytes). */
         Move best_move = Move::none(); /**< Best move found (2 bytes). */
         int16_t score = 0;             /**< Evaluated score (2 bytes). */
-        int8_t depth = 0;              /**< Search depth (1 byte). */
+        int16_t depth = 0;             /**< Search depth in plies. */
         TTFlag flag = TT_EXACT;        /**< Node evaluation type (1 byte). */
         // 2 bytes of implicit compiler padding to reach exactly 16 bytes.
     };
@@ -75,9 +75,10 @@ namespace Search
          *        Utilizes manual loop unrolling and a branchless Two-Tier replacement strategy.
          *
          * @param key Zobrist key of the position.
-         * @param depth Depth searched.
+         * @param ply Root-relative ply used for mate-score normalization.
+         * @param depth Depth searched in plies.
          * @param score Evaluated score.
-         * @param flag Bound type (Exact, Lower, Upper).
+         * @param flag Bound type (exact, lower, or upper).
          * @param move Best move found.
          */
         void store(Key key, int ply, int depth, Value score, TTFlag flag, Move move);
