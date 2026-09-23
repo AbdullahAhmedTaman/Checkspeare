@@ -42,9 +42,29 @@ namespace Gui
     {
         if (button != MouseButton::Left)
             return;
-        if (drag_.active)
-            return;
         if (promo_.active)
+        {
+            const auto sqOpt = geo.squareAt(position);
+
+            if (!sqOpt)
+            {
+                cancelPromotion();
+                return;
+            }
+
+            for (int i = 0; i < 4; ++i)
+            {
+                if (promo_.choiceSquares[i] == *sqOpt)
+                {
+                    completePromotion(kPromotionOrder[i]);
+                    return;
+                }
+            }
+
+            cancelPromotion();
+            return;
+        }
+        if (drag_.active)
             return;
 
         const auto sqOpt = geo.squareAt(position);
@@ -53,19 +73,6 @@ namespace Gui
 
         const Square sq = *sqOpt;
         const Piece pc = game_.pieceAt(sq);
-        if (promo_.active)
-        {
-            for (int i = 0; i < 4; ++i)
-            {
-                if (promo_.choiceSquares[i] == sq)
-                {
-                    completePromotion(kPromotionOrder[i]);
-                    return;
-                }
-            }
-            cancelPromotion();
-            return;
-        }
         if (pc == PIECE_NONE)
         {
             annotations_.clearSelection();
