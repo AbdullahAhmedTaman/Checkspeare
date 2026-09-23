@@ -183,16 +183,9 @@ namespace Search
             }
         }
 
-        // Generate legal moves for the current position
+        // Generate pseudo-legal moves for performance (lazy king-safety filtering)
         MoveList moves;
-        MoveGen::generate_legal_moves(pos, moves);
-
-        // Terminal Node Handling: Checkmate or Stalemate
-        if (moves.count == 0)
-        {
-            // Adjust mate score by ply to prefer shorter mate paths
-            return in_check ? (-VALUE_MATE + ply) : VALUE_ZERO;
-        }
+        MoveGen::generate_pseudo_legal_moves(pos, moves);
 
         // Instantiate MovePicker with TT best move hint for move ordering
         MoveOrdering::MovePicker picker(moves, pos, tt_move, ply);
@@ -200,6 +193,9 @@ namespace Search
         Value best_score = -VALUE_INFINITE;
         Move best_move = Move::none();
         int moves_searched = 0;
+        int legal_moves_count = 0;
+
+        const Color us = pos.sideToMove;
 
         // Move iteration loop driven by MovePicker
         while (true)
@@ -208,7 +204,15 @@ namespace Search
             if (!move.is_ok())
                 break;
 
+            // Lazy Legality Check: execute move and verify our King is not under attack
             pos.make_move(move);
+            if (pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1)))
+            {
+                pos.unmake_move(move);
+                continue; // Skip illegal move
+            }
+
+            legal_moves_count++;
             Value score = -VALUE_INFINITE;
 
             bool needs_full_search = true;
@@ -288,6 +292,13 @@ namespace Search
                     }
                 }
             }
+        }
+
+        // Terminal Node Handling: Checkmate or Stalemate
+        if (legal_moves_count == 0)
+        {
+            // Adjust mate score by ply to prefer shorter mate paths
+            return in_check ? (-VALUE_MATE + ply) : VALUE_ZERO;
         }
 
         if (!Signals_stop.load(std::memory_order_relaxed))
