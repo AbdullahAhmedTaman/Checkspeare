@@ -4,9 +4,11 @@
 #include "ChessClock.hpp"
 #include "ChessGame.hpp"
 #include "Config.hpp"
+#include "EnginePlayer.hpp"
 #include "GuiGameController.hpp"
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
+#include "UciEngine.hpp"
 
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Clock.hpp>
@@ -39,15 +41,13 @@ private:
     sf::Clock deltaClock_;
 
     ChessGame game_;
+    ChessClock clock_;
+    UciEngine engine_;
+    EnginePlayer enginePlayer_{engine_};
     Gui::GuiGameController controller_;
     Gui::BoardGeometry geo_;
     Gui::BoardTheme theme_;
-
     /// Tracks the game cursor across frames so Application can detect when
     /// a move was committed and notify the clock (increment + side flip).
     std::size_t lastCursor_ = 0;
-
-    /// The game clock. Declared after game_ so destruction order is sane
-    /// even if the clock ever takes a reference to the game.
-    ChessClock clock_;
 };

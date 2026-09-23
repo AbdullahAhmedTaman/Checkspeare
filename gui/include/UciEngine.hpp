@@ -20,14 +20,14 @@ struct UciInfo
     std::int64_t timeMs = 0;
     std::optional<int> scoreCp;
     std::optional<int> scoreMate;
-    std::vector<Move> pv;
+    std::vector<std::string> pv;
     std::string raw;
 };
 
 struct UciPollResult
 {
     std::vector<UciInfo> infos;
-    std::optional<Move> bestMove;
+    std::optional<std::string> bestMove;
 };
 
 /// Limits for a `go` command. Unset optional fields are omitted from the
@@ -54,10 +54,8 @@ struct UciSearchLimits
 class UciEngine
 {
 public:
-    /// @note Not yet implemented.
     UciEngine();
 
-    /// @note Not yet implemented.
     ~UciEngine();
 
     UciEngine(const UciEngine&) = delete;
@@ -67,26 +65,24 @@ public:
     UciEngine& operator=(UciEngine&&) = delete;
 
     /// Spawns the engine at `path`. Throws std::runtime_error on failure.
-    /// @note Not yet implemented.
     void start(const std::filesystem::path& path);
 
     /// Stops the engine and joins the reader thread. Idempotent.
-    /// @note Not yet implemented.
     void stop();
 
-    /// @note Not yet implemented.
+    /// True from a successful start() until the engine process exits
+    /// (detected by the reader thread hitting EOF) or stop() is called.
     bool isRunning() const;
 
-    /// @note Not yet implemented.
+    bool isReady() const;
+
     void newGame();
 
-    /// @note Not yet implemented.
     void setPosition(const std::string& fen, const std::vector<Move>& moves);
 
-    /// @note Not yet implemented.
+    /// Validation against contradictory limits argument is not yet implemented.
     void go(const UciSearchLimits& limits);
 
-    /// @note Not yet implemented.
     void stopSearch();
 
     /// Drains pending output. Never blocks.

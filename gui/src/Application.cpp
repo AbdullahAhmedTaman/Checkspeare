@@ -23,13 +23,16 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     // Default time control: 5 minutes + 3 seconds increment per move.
     // Adjust here or, later, read from Config.
     ChessClock::TimeControl tc;
-    tc.initialMs = 5 * 60 * 1000;
+    tc.initialMs = 60 * 1000;
     tc.incrementMs = 3 * 1000;
     clock_.configure(tc);
     clock_.start();
 
     if (!ImGui::SFML::Init(window_))
         throw std::runtime_error("[ImGui] Initialization failed!");
+
+    engine_.start(conf_.enginePath);
+    enginePlayer_.setSideControlled(BLACK, true);
 }
 
 Application::~Application()
@@ -67,9 +70,10 @@ void Application::processEvents()
         const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
         const bool endsDrag = event->is<sf::Event::MouseButtonReleased>() && controller_.drag().active;
         const bool focusLost = event->is<sf::Event::FocusLost>();
-        const bool pickerOpen = controller_.pendingPromotion().active;
+        const bool engineToMove = enginePlayer_.isSideControlled(game_.sideToMove());
+        const bool shouldForward = focusLost || endsDrag || (!imguiCaptures && !engineToMove);
 
-        if (!imguiCaptures || endsDrag || focusLost || pickerOpen)
+        if (shouldForward)
         {
             if (const auto inputEvent = Gui::toInputEvent(*event))
                 controller_.handleEvent(*inputEvent, geo_);
@@ -79,6 +83,7 @@ void Application::processEvents()
 
 void Application::update(float dtSeconds)
 {
+    enginePlayer_.tick(game_, clock_);
     ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
 
     // Detect cursor advancement since the last frame. Each new ply means a
