@@ -41,9 +41,18 @@ namespace Search
      * Stand-pat evaluation is used only when the side to move is not in
      * check. Legal captures, promotions, and check evasions are searched until
      * the position is quiet or the alpha-beta window is resolved.
+     *
+     * @param pos Current board position.
+     * @param ply Current search ply.
+     * @param alpha Lower alpha-beta bound.
+     * @param beta Upper alpha-beta bound.
+     * @param ctx Active search context and stop state.
      */
-    Value quiescence(Position& pos, int ply, Value alpha, Value beta)
+    Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
     {
+        if (ctx.stop_flag)
+            return Eval::evaluate(pos);
+
         const Color us = pos.sideToMove;
         const bool in_check = pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
 
@@ -77,7 +86,7 @@ namespace Search
 
             pos.make_move(move);
             ++legal_moves;
-            const Value score = -quiescence(pos, ply + 1, -beta, -alpha);
+            const Value score = -quiescence(pos, ply + 1, -beta, -alpha, ctx);
             pos.unmake_move(move);
 
             if (score >= beta)
