@@ -7,7 +7,6 @@
 #include <cmath>
 #include <iostream>
 
-
 bool is_repetition(const Position& pos);
 
 namespace Search
@@ -131,6 +130,13 @@ namespace Search
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
+        // Mate Distance Pruning: clamp search bounds relative to distance from root
+        alpha = std::max(alpha, -VALUE_MATE + ply);
+        beta = std::min(beta, VALUE_MATE - ply - 1);
+
+        if (alpha >= beta)
+            return alpha;
+
         // Compile-time constant flags to optimize branch elimination
         constexpr bool IsPV = (NT != NON_PV);
         constexpr bool IsRoot = (NT == ROOT);
@@ -149,7 +155,7 @@ namespace Search
         bool in_check = pos.in_check();
 
         // Check Extension: Force evasion resolution in main loop before dropping into Q-search
-        if (in_check)
+        if (in_check && ply < MAX_PLY - 1)
         {
             depth++;
         }
@@ -163,7 +169,6 @@ namespace Search
         ctx.info.nodes++;
 
         // Compile-time check: Stripped out completely for PV and ROOT nodes.
-        // If giving up a turn still results in a score >= beta, prune the subtree.
         if constexpr (!IsPV)
         {
             // Only try NMP if permitted, depth is sufficient, and king is safe.
@@ -216,6 +221,7 @@ namespace Search
                     needs_full_search = false;
                 }
             }
+
             if (needs_full_search)
             {
                 if constexpr (IsPV)
@@ -265,7 +271,7 @@ namespace Search
                     // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
-                        // Store Killer Move heuristic for non-captures to improve move ordering in future searches
+                        // Store Killer Move heuristic for non-captures
                         if (!move.is_capture() && ply < MAX_PLY)
                         {
                             ctx.killer_moves[ply][1] = ctx.killer_moves[ply][0];
