@@ -1,5 +1,6 @@
 #include "search.h"
 #include "evaluate.h"
+#include "move_ordering.h"
 #include "movegen.h"
 #include "position.h"
 #include "transposition.h"
@@ -162,17 +163,24 @@ namespace Search
                 }
             }
         }
+
         TTEntry tt_entry;
+        Move tt_move = Move::none();
         bool tt_hit = TT.probe(pos.key, ply, tt_entry);
 
-        if (tt_hit && tt_entry.depth >= depth && !IsRoot)
+        if (tt_hit)
         {
-            if (tt_entry.flag == TT_EXACT)
-                return tt_entry.score;
-            if (tt_entry.flag == TT_LOWERBOUND && tt_entry.score >= beta)
-                return tt_entry.score;
-            if (tt_entry.flag == TT_UPPERBOUND && tt_entry.score <= alpha)
-                return tt_entry.score;
+            tt_move = tt_entry.best_move;
+
+            if (tt_entry.depth >= depth && !IsRoot)
+            {
+                if (tt_entry.flag == TT_EXACT)
+                    return tt_entry.score;
+                if (tt_entry.flag == TT_LOWERBOUND && tt_entry.score >= beta)
+                    return tt_entry.score;
+                if (tt_entry.flag == TT_UPPERBOUND && tt_entry.score <= alpha)
+                    return tt_entry.score;
+            }
         }
 
         // Generate legal moves for the current position
@@ -186,14 +194,20 @@ namespace Search
             return in_check ? (-VALUE_MATE + ply) : VALUE_ZERO;
         }
 
+        // Instantiate MovePicker with TT best move hint for move ordering
+        MoveOrdering::MovePicker picker(moves, pos, tt_move, ply);
+
         Value best_score = -VALUE_INFINITE;
         Move best_move = Move::none();
         int moves_searched = 0;
 
-        // Move iteration loop
-        for (int i = 0; i < moves.count; ++i)
+        // Move iteration loop driven by MovePicker
+        while (true)
         {
-            const Move move = moves.moves[i];
+            const Move move = picker.next_move();
+            if (!move.is_ok())
+                break;
+
             pos.make_move(move);
             Value score = -VALUE_INFINITE;
 
@@ -275,6 +289,7 @@ namespace Search
                 }
             }
         }
+
         if (!Signals_stop.load(std::memory_order_relaxed))
         {
             TTFlag flag = (best_score >= beta) ? TT_LOWERBOUND : (best_score > alpha_orig) ? TT_EXACT : TT_UPPERBOUND;
