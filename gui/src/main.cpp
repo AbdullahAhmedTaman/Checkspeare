@@ -13,8 +13,8 @@ int main()
         Zobrist::init();
 
         Assets::TextureLibrary textures;
-        textures.loadAllPieceTextures("gui/textures/pieces/");
-        textures.loadAllSquareTextures("gui/textures/squares/");
+        textures.loadAllPieceTextures("gui/assets/textures/pieces/");
+        textures.loadAllSquareTextures("gui/assets/textures/squares/");
 
         Config conf;
         Application app(conf, textures);
