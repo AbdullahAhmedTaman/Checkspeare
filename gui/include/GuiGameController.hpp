@@ -106,6 +106,8 @@ namespace Gui
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
+        void playMoveOrStartPromotion(Square from, Square to);
+
         ChessGame& game_;
         DragState drag_;
         PendingPromotion promo_;
