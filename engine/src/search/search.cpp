@@ -4,7 +4,9 @@
 #include "position.h"
 #include "transposition.h"
 #include "types.h"
+#include <cmath>
 #include <iostream>
+
 
 bool is_repetition(const Position& pos);
 
@@ -45,6 +47,31 @@ namespace Search
         return false;
     }
 
+    int LMRTable[MAX_PLY][MAX_MOVES];
+
+    /**
+     * @brief Precomputes the baseline Late Move Reduction values using a logarithmic curve.
+     *        Called once during engine startup.
+     */
+    void init_lmr_table()
+    {
+        for (int depth = 0; depth < MAX_PLY; ++depth)
+        {
+            for (int moves = 0; moves < MAX_MOVES; ++moves)
+            {
+                // Standard LMR logarithmic scaling formula
+                if (depth > 0 && moves > 0)
+                {
+                    LMRTable[depth][moves] = static_cast<int>(0.75 + std::log(depth) * std::log(moves) / 2.25);
+                }
+                else
+                {
+                    LMRTable[depth][moves] = 0;
+                }
+            }
+        }
+    }
+
     std::atomic<bool> Signals_stop{false};
 
     void init()
@@ -70,6 +97,35 @@ namespace Search
             alpha = stand_pat;
 
         return alpha;
+    }
+
+    /**
+     * @brief Calculates the depth reduction for Late Move Reductions (LMR).
+     *        Returns 0 if LMR should be skipped (hard filters).
+     */
+    inline int calculate_lmr_reduction(bool is_pv, int depth, int moves_searched, bool in_check, const Move& move,
+                                       const Move* killers)
+    {
+        // Do not reduce if depth is low, it's an early move, in check, or tactical
+        if (depth < 3 || moves_searched < 3 || in_check || move.is_capture() || move.is_promotion())
+        {
+            return 0; // 0 means do not reduce
+        }
+
+        int R = LMRTable[depth][moves_searched];
+
+        if (is_pv)
+        {
+            R -= 1; // Search PV nodes slightly deeper
+        }
+
+        if (move == killers[0] || move == killers[1])
+        {
+            R -= 1;
+        }
+
+        // Clamp the reduction to remain within safe bounds
+        return std::clamp(R, 1, depth - 1);
     }
 
     template <NodeType NT>
@@ -143,29 +199,44 @@ namespace Search
             pos.make_move(move);
             Value score = -VALUE_INFINITE;
 
-            if constexpr (IsPV)
-            {
-                if (moves_searched == 0)
-                {
-                    // Full PV window search for the primary candidate move
-                    score = -negamax<PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
-                }
-                else
-                {
-                    // Zero-window search (Null Window Search) for late moves to prove inferiority
-                    score = -negamax<NON_PV>(pos, depth - 1, ply + 1, -alpha - 1, -alpha, ctx, true);
+            bool needs_full_search = true;
 
-                    // Re-search with full window if zero-window search fails high
-                    if (score > alpha && score < beta)
+            int R = calculate_lmr_reduction(IsPV, depth, moves_searched, in_check, move, ctx.killer_moves[ply]);
+
+            // If R > 0, the helper function approved the reduction
+            if (R > 0)
+            {
+                // Execute Shallow Zero-Window Search
+                Value reduced_score = -negamax<NON_PV>(pos, depth - 1 - R, ply + 1, -alpha - 1, -alpha, ctx, true);
+
+                // If it fails low, the move is truly bad. Skip the full search.
+                if (reduced_score <= alpha)
+                {
+                    score = reduced_score;
+                    needs_full_search = false;
+                }
+            }
+            if (needs_full_search)
+            {
+                if constexpr (IsPV)
+                {
+                    if (moves_searched == 0)
                     {
                         score = -negamax<PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
                     }
+                    else
+                    {
+                        score = -negamax<NON_PV>(pos, depth - 1, ply + 1, -alpha - 1, -alpha, ctx, true);
+                        if (score > alpha && score < beta)
+                        {
+                            score = -negamax<PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
+                        }
+                    }
                 }
-            }
-            else
-            {
-                // Non-PV nodes always propagate NON_PV template with standard bounds
-                score = -negamax<NON_PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
+                else
+                {
+                    score = -negamax<NON_PV>(pos, depth - 1, ply + 1, -beta, -alpha, ctx, true);
+                }
             }
 
             pos.unmake_move(move);
