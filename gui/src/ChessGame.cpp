@@ -28,24 +28,24 @@ void ChessGame::reset()
 
 std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
 {
-    // 1. Find the move WITHOUT mutating anything. If it's illegal, we must
-    //    not destroy the redo tail.
+    // Find the move WITHOUT mutating anything. If it's illegal, we must
+    // not destroy the redo tail.
     const auto m = findLegalMove(from, to, promo);
     if (!m)
         return std::nullopt;
 
-    // 2. Only now is it safe to discard the redo tail.
+    // Only now is it safe to discard the redo tail.
     if (cursor_ < moves_.size())
         moves_.resize(cursor_);
 
-    // 3. SAN needs the position before the move; copy the board first.
+    // SAN needs the position before the move; copy the board first.
     Board before = board_;
 
-    // 4. Apply.
+    // Apply.
     board_.applyMove(*m);
     ++cursor_;
 
-    // 5. Build and append the record.
+    // Build and append the record.
     MoveRecord rec;
     rec.move = *m;
     rec.san = toSan(before, *m);
@@ -101,8 +101,8 @@ std::vector<MoveRecord> ChessGame::historyToCursor() const
 
 GameResult ChessGame::result() const
 {
-    // 1. Checkmate / stalemate. Board caches the legal move list, so these
-    //    are cheap.
+    // Checkmate / stalemate. Board caches the legal move list, so these
+    // are cheap.
     if (board_.isCheckmate())
     {
         const Color loser = board_.sideToMove();
@@ -112,13 +112,13 @@ GameResult ChessGame::result() const
     if (board_.isStalemate())
         return {GameResultKind::Stalemate};
 
-    // 2. Fifty-move rule. The engine's halfmove field counts plies since
-    //    the last capture or pawn move. 100 plies = 50 full moves.
+    // Fifty-move rule. The engine's halfmove field counts plies since
+    // the last capture or pawn move. 100 plies = 50 full moves.
     if (board_.position().halfmoveClock >= 100)
         return {GameResultKind::FiftyMove};
 
-    // 3. Threefold repetition. Walk the history up to the cursor and
-    //    count how many times the current position's key appeared.
+    // Threefold repetition. Walk the history up to the cursor and
+    // count how many times the current position's key appeared.
     const Key currentKey = board_.position().key;
     int occurrences = 0;
     for (std::size_t i = 0; i < cursor_; ++i)
@@ -131,7 +131,7 @@ GameResult ChessGame::result() const
         }
     }
 
-    // 4. Insufficient material.
+    // Insufficient material.
     if (isInsufficientMaterial())
         return {GameResultKind::InsufficientMaterial};
 

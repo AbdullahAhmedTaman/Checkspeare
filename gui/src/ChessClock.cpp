@@ -1,7 +1,7 @@
 #include "ChessClock.hpp"
 
-#include <algorithm> // std::clamp
-#include <cmath>     // std::floor
+#include <algorithm>
+#include <cmath>
 
 namespace
 {
