@@ -118,7 +118,8 @@ void Application::update(float dtSeconds)
 void Application::render()
 {
     window_.clear(sf::Color::White);
-    Gui::renderBoard(window_, geo_, theme_, game_.board(), assets_, controller_.drag(), controller_.pendingPromotion());
+    Gui::renderBoard(window_, geo_, theme_, game_.board(), assets_, controller_.drag(), controller_.pendingPromotion(),
+                     controller_.annotations());
     ImGui::SFML::Render(window_);
     window_.display();
 }

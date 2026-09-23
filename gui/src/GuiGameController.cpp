@@ -1,4 +1,5 @@
 #include "GuiGameController.hpp"
+#include <algorithm>
 
 namespace Gui
 {
@@ -33,6 +34,8 @@ namespace Gui
         {
             drag_ = {};
             result_ = {ActionResult::Kind::MoveCancelled};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
         }
     }
 
@@ -40,9 +43,29 @@ namespace Gui
     {
         if (button != MouseButton::Left)
             return;
-        if (drag_.active)
-            return;
         if (promo_.active)
+        {
+            const auto sqOpt = geo.squareAt(position);
+
+            if (!sqOpt)
+            {
+                cancelPromotion();
+                return;
+            }
+
+            for (int i = 0; i < 4; ++i)
+            {
+                if (promo_.choiceSquares[i] == *sqOpt)
+                {
+                    completePromotion(kPromotionOrder[i]);
+                    return;
+                }
+            }
+
+            cancelPromotion();
+            return;
+        }
+        if (drag_.active)
             return;
 
         const auto sqOpt = geo.squareAt(position);
@@ -50,28 +73,39 @@ namespace Gui
             return;
 
         const Square sq = *sqOpt;
-        const Piece pc = game_.pieceAt(sq);
-        if (promo_.active)
+        if (annotations_.selected.has_value())
         {
-            for (int i = 0; i < 4; ++i)
+            const auto& targets = annotations_.legalTargets;
+
+            if (std::find(targets.begin(), targets.end(), sq) != targets.end())
             {
-                if (promo_.choiceSquares[i] == sq)
-                {
-                    completePromotion(kPromotionOrder[i]);
-                    return;
-                }
+                const Square from = *annotations_.selected;
+                playMoveOrStartPromotion(from, sq);
+                return;
             }
-            cancelPromotion();
+        }
+
+        // ---- Selection / drag start ----
+        const Piece pc = game_.pieceAt(sq);
+
+        if (pc == PIECE_NONE)
+        {
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
-        if (pc == PIECE_NONE)
-            return;
 
         if (color_of(pc) != game_.sideToMove())
         {
             result_ = {ActionResult::Kind::NotYourTurn};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
+
+        annotations_.selected = sq;
+        annotations_.legalTargets = game_.board().legalDestinations(sq);
+        annotations_.refreshFrom(game_);
 
         drag_.active = true;
         drag_.from = sq;
@@ -93,6 +127,8 @@ namespace Gui
         {
             result_ = {ActionResult::Kind::DroppedOutsideBoard};
             drag_ = {};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
 
@@ -101,13 +137,20 @@ namespace Gui
 
         if (from == to)
         {
-            result_ = {ActionResult::Kind::MoveCancelled};
             drag_ = {};
+            result_ = {ActionResult::Kind::MoveCancelled};
             return;
         }
 
+        playMoveOrStartPromotion(from, to);
+        drag_ = {};
+    }
+
+    void GuiGameController::playMoveOrStartPromotion(Square from, Square to)
+    {
         const Piece moving = game_.pieceAt(from);
         bool isPromotion = false;
+
         if (moving != PIECE_NONE)
         {
             for (const Move& m : game_.board().legalMovesFrom(from))
@@ -124,7 +167,6 @@ namespace Gui
         {
             const int file = static_cast<int>(to) % 8;
             const int rank = static_cast<int>(to) / 8;
-
             const bool drawUpward = (rank <= 3);
 
             promo_.active = true;
@@ -136,14 +178,12 @@ namespace Gui
             {
                 const int deltaRank = drawUpward ? (i + 1) : -(i + 1);
                 const int r = rank + deltaRank;
-                if (r < 0 || r > 7)
-                    promo_.choiceSquares[i] = SQ_NONE;
-                else
-                    promo_.choiceSquares[i] = static_cast<Square>(r * 8 + file);
+                promo_.choiceSquares[i] = (r < 0 || r > 7) ? SQ_NONE : static_cast<Square>(r * 8 + file);
             }
 
             result_ = {ActionResult::Kind::PromotionPending, from, to, moving};
-            drag_ = {};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
             return;
         }
 
@@ -152,7 +192,8 @@ namespace Gui
         else
             result_ = {ActionResult::Kind::IllegalMove, from, to};
 
-        drag_ = {};
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::completePromotion(PieceType type)
@@ -169,6 +210,9 @@ namespace Gui
             result_ = {ActionResult::Kind::MovePlayed, from, to};
         else
             result_ = {ActionResult::Kind::IllegalMove, from, to};
+
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::cancelPromotion()
@@ -181,6 +225,9 @@ namespace Gui
 
         promo_ = {};
         result_ = {ActionResult::Kind::MoveCancelled, from, to};
+
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::applyQueuedActions()
@@ -190,6 +237,8 @@ namespace Gui
             const std::size_t ply = *queuedGotoPly_;
             queuedGotoPly_.reset();
             game_.gotoPly(ply);
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
         }
     }
 

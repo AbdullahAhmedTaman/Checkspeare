@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BoardAnnotations.hpp"
 #include "BoardGeometry.hpp"
 #include "ChessGame.hpp"
 #include "InputEvent.hpp"
@@ -95,14 +96,24 @@ namespace Gui
 
         void applyQueuedActions();
 
+        const BoardAnnotations& annotations() const
+        {
+            return annotations_;
+        }
+
+        void updateAnnotations(const BoardGeometry& geo);
+
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
+        void playMoveOrStartPromotion(Square from, Square to);
+
         ChessGame& game_;
         DragState drag_;
         PendingPromotion promo_;
         ActionResult result_{};
         mutable std::optional<std::size_t> queuedGotoPly_;
+        BoardAnnotations annotations_;
     };
 
 } // namespace Gui
