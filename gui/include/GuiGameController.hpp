@@ -4,6 +4,9 @@
 #include "ChessGame.hpp"
 #include "InputEvent.hpp"
 #include "types.h"
+#include <array>
+#include <cstddef>
+#include <optional>
 
 #include <SFML/System/Vector2.hpp>
 
@@ -26,6 +29,7 @@ namespace Gui
         Square from = SQ_NONE;
         Square to = SQ_NONE;
         Color side = WHITE;
+        std::array<Square, 4> choiceSquares{SQ_NONE, SQ_NONE, SQ_NONE, SQ_NONE};
     };
 
     /// Structured outcome of the most recent controller action. The controller
@@ -80,24 +84,25 @@ namespace Gui
             return promo_;
         }
 
-        /// Plays the pending promotion with the chosen piece type.
-        /// No-op if no promotion is pending.
-        /// @note Not yet implemented.
         void completePromotion(PieceType type);
 
-        /// Clears a pending promotion without playing a move.
-        /// No-op if no promotion is pending.
-        /// @note Not yet implemented.
         void cancelPromotion();
+
+        void queueGotoPly(std::size_t ply) const
+        {
+            queuedGotoPly_ = ply;
+        }
+
+        void applyQueuedActions();
 
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
-
         ChessGame& game_;
         DragState drag_;
         PendingPromotion promo_;
         ActionResult result_{};
+        mutable std::optional<std::size_t> queuedGotoPly_;
     };
 
 } // namespace Gui

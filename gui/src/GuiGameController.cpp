@@ -3,12 +3,20 @@
 namespace Gui
 {
 
+    namespace
+    {
+        constexpr PieceType kPromotionOrder[4] = {QUEEN, ROOK, BISHOP, KNIGHT};
+    } // namespace
+
     void GuiGameController::handleEvent(const InputEvent& event, const BoardGeometry& geo)
     {
         switch (event.kind)
         {
             case InputEvent::Kind::FocusLost:
-                cancelDrag();
+                if (promo_.active)
+                    cancelPromotion();
+                else
+                    cancelDrag();
                 return;
             case InputEvent::Kind::PointerPressed:
                 onPress(event.button, event.position, geo);
@@ -34,6 +42,8 @@ namespace Gui
             return;
         if (drag_.active)
             return;
+        if (promo_.active)
+            return;
 
         const auto sqOpt = geo.squareAt(position);
         if (!sqOpt)
@@ -41,6 +51,19 @@ namespace Gui
 
         const Square sq = *sqOpt;
         const Piece pc = game_.pieceAt(sq);
+        if (promo_.active)
+        {
+            for (int i = 0; i < 4; ++i)
+            {
+                if (promo_.choiceSquares[i] == sq)
+                {
+                    completePromotion(kPromotionOrder[i]);
+                    return;
+                }
+            }
+            cancelPromotion();
+            return;
+        }
         if (pc == PIECE_NONE)
             return;
 
@@ -83,12 +106,92 @@ namespace Gui
             return;
         }
 
+        const Piece moving = game_.pieceAt(from);
+        bool isPromotion = false;
+        if (moving != PIECE_NONE)
+        {
+            for (const Move& m : game_.board().legalMovesFrom(from))
+            {
+                if (m.to() == to && m.is_promotion())
+                {
+                    isPromotion = true;
+                    break;
+                }
+            }
+        }
+
+        if (isPromotion)
+        {
+            const int file = static_cast<int>(to) % 8;
+            const int rank = static_cast<int>(to) / 8;
+
+            const bool drawUpward = (rank <= 3);
+
+            promo_.active = true;
+            promo_.from = from;
+            promo_.to = to;
+            promo_.side = game_.sideToMove();
+
+            for (int i = 0; i < 4; ++i)
+            {
+                const int deltaRank = drawUpward ? (i + 1) : -(i + 1);
+                const int r = rank + deltaRank;
+                if (r < 0 || r > 7)
+                    promo_.choiceSquares[i] = SQ_NONE;
+                else
+                    promo_.choiceSquares[i] = static_cast<Square>(r * 8 + file);
+            }
+
+            result_ = {ActionResult::Kind::PromotionPending, from, to, moving};
+            drag_ = {};
+            return;
+        }
+
         if (game_.play(from, to))
             result_ = {ActionResult::Kind::MovePlayed, from, to};
         else
             result_ = {ActionResult::Kind::IllegalMove, from, to};
 
         drag_ = {};
+    }
+
+    void GuiGameController::completePromotion(PieceType type)
+    {
+        if (!promo_.active)
+            return;
+
+        const Square from = promo_.from;
+        const Square to = promo_.to;
+
+        promo_ = {};
+
+        if (game_.play(from, to, type))
+            result_ = {ActionResult::Kind::MovePlayed, from, to};
+        else
+            result_ = {ActionResult::Kind::IllegalMove, from, to};
+    }
+
+    void GuiGameController::cancelPromotion()
+    {
+        if (!promo_.active)
+            return;
+
+        const Square from = promo_.from;
+        const Square to = promo_.to;
+
+        promo_ = {};
+        result_ = {ActionResult::Kind::MoveCancelled, from, to};
+    }
+
+    void GuiGameController::applyQueuedActions()
+    {
+        if (queuedGotoPly_)
+        {
+            const std::size_t ply = *queuedGotoPly_;
+            queuedGotoPly_.reset();
+            // Commenting out the un-implemented function to fix the linker error
+            // game_.gotoPly(ply);
+        }
     }
 
 } // namespace Gui

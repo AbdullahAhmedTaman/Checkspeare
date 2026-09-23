@@ -67,8 +67,9 @@ void Application::processEvents()
         const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
         const bool endsDrag = event->is<sf::Event::MouseButtonReleased>() && controller_.drag().active;
         const bool focusLost = event->is<sf::Event::FocusLost>();
+        const bool pickerOpen = controller_.pendingPromotion().active;
 
-        if (!imguiCaptures || endsDrag || focusLost)
+        if (!imguiCaptures || endsDrag || focusLost || pickerOpen)
         {
             if (const auto inputEvent = Gui::toInputEvent(*event))
                 controller_.handleEvent(*inputEvent, geo_);
@@ -106,12 +107,13 @@ void Application::update(float dtSeconds)
     clock_.update(dtSeconds);
 
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_);
+    controller_.applyQueuedActions();
 }
 
 void Application::render()
 {
     window_.clear(sf::Color::White);
-    Gui::renderBoard(window_, geo_, theme_, game_.board(), assets_, controller_.drag());
+    Gui::renderBoard(window_, geo_, theme_, game_.board(), assets_, controller_.drag(), controller_.pendingPromotion());
     ImGui::SFML::Render(window_);
     window_.display();
 }

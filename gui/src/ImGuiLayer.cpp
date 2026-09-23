@@ -42,7 +42,7 @@ namespace Gui
                     oss << "Illegal move " << result.from << "-" << result.to;
                     return oss.str();
                 case ActionResult::Kind::PromotionPending:
-                    return "Promotion pending";
+                    return "Choose promotion piece on board";
             }
             return {};
         }
