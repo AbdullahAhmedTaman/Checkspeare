@@ -46,17 +46,24 @@ namespace MoveOrdering
          */
         int remaining() const
         {
-            return count - current_index;
+            return count;
         }
 
     private:
-        Move moves[MAX_MOVES];
-        int scores[MAX_MOVES];
+        struct ScoredMove
+        {
+            Move move;
+            int score;
+        };
+
+        ScoredMove moves[MAX_MOVES];
         int count;
-        int current_index;
         int ply = 0;
 
         /** @brief Assigns ordering scores to the copied move list. */
         void score_moves(const Position& pos, Move tt_move);
+
+        /** @brief Compares scored moves for max-heap ordering. */
+        static bool lower_priority(const ScoredMove& left, const ScoredMove& right);
     };
 } // namespace MoveOrdering
