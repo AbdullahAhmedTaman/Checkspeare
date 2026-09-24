@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "attacks.h"
-#include "bitboard.h"
-#include "movegen.h"
-#include "position.h"
-#include "types.h"
+#include "../include/attacks.h"
+#include "../include/bitboard.h"
+#include "../include/movegen.h"
+#include "../include/position.h"
+#include "../include/types.h"
 
 #include <sstream>
 #include <string>

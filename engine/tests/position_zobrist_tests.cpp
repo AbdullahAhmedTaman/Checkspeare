@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "attacks.h"
-#include "bitboard.h"
-#include "position.h"
-#include "types.h"
-#include "zobrist.h"
+#include "../../include/attacks.h"
+#include "../../include/bitboard.h"
+#include "../../include/position.h"
+#include "../../include/types.h"
+#include "../../include/zobrist.h"
 
 #include <cctype>
 #include <set>
@@ -185,11 +185,10 @@ namespace TestUtil
             if (a.board[sq] != b.board[sq])
                 return false;
 
-        return a.sideToMove == b.sideToMove && a.castlingRights == b.castlingRights &&
-               a.enPassantSquare == b.enPassantSquare && a.halfmoveClock == b.halfmoveClock && a.key == b.key &&
-               a.mg_score[WHITE] == b.mg_score[WHITE] && a.mg_score[BLACK] == b.mg_score[BLACK] &&
-               a.eg_score[WHITE] == b.eg_score[WHITE] && a.eg_score[BLACK] == b.eg_score[BLACK] &&
-               a.game_phase == b.game_phase && a.ply == b.ply;
+        return a.sideToMove == b.sideToMove && a.castlingRights == b.castlingRights && a.enPassantSquare == b.enPassantSquare &&
+               a.halfmoveClock == b.halfmoveClock && a.key == b.key && a.mg_score[WHITE] == b.mg_score[WHITE] &&
+               a.mg_score[BLACK] == b.mg_score[BLACK] && a.eg_score[WHITE] == b.eg_score[WHITE] &&
+               a.eg_score[BLACK] == b.eg_score[BLACK] && a.game_phase == b.game_phase && a.ply == b.ply;
     }
 
     const std::string START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
