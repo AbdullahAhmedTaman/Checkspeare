@@ -95,4 +95,10 @@ private:
     /// Visual slide of the most recently committed ply. Started by
     /// stepSimulation when the cursor advances exactly one ply.
     Gui::MoveAnimation animation_;
+
+    /// Cursor position of the ply committed by the most recent drag
+    /// release. Suppresses the slide for that ply only, so an engine
+    /// response arriving on a later frame is unaffected.
+    /// max() means "no suppression".
+    std::size_t suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
 };

@@ -92,7 +92,17 @@ void Application::processEvents()
         if (forwarded.kind != Gui::InputEvent::Kind::FocusLost)
             forwarded.position = boardPanel_.toBoardSpace(forwarded.position);
 
+        const bool wasDragging = controller_.drag().active;
+        const std::size_t cursorBefore = game_.cursor();
+
         controller_.handleEvent(forwarded, geo_);
+
+        if (wasDragging && forwarded.kind == Gui::InputEvent::Kind::PointerReleased)
+        {
+            const std::size_t cursorAfter = game_.cursor();
+            if (cursorAfter > cursorBefore)
+                suppressAnimationAtPly_ = cursorAfter;
+        }
     }
 }
 
@@ -132,18 +142,30 @@ void Application::stepSimulation(float dtSeconds)
 
     const std::size_t curr = game_.cursor();
 
-    if (curr == lastCursor_ + 1 && !controller_.lastMoveWasDrag())
+    if (curr == lastCursor_ + 1)
     {
-        // Only click-click and engine moves animate; a drag already
-        // visually ended at the destination.
-        const MoveRecord& rec = game_.history()[curr - 1];
-        animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
+        if (curr != suppressAnimationAtPly_)
+        {
+            const MoveRecord& rec = game_.history()[curr - 1];
+            animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
+        }
+    }
+    else if (curr + 1 == lastCursor_ && curr < game_.history().size())
+    {
+        // Undo. history()[curr] is the move that was just un-applied: its
+        // from/to are swapped so the piece slides back to its origin, and
+        // the piece drawn is whatever sits on that origin now -- a pawn if
+        // the un-done move was a promotion.
+        const MoveRecord& rec = game_.history()[curr];
+        animation_.start(rec.move.to(), rec.move.from(), game_.pieceAt(rec.move.from()));
     }
     else if (curr != lastCursor_)
     {
-        // Undo, gotoPly, loadFEN: kill any in-flight animation.
+        // gotoPly, gotoEnd, loadFEN: multi-ply jumps snap.
         animation_.active = false;
     }
+
+    suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
 
     animation_.tick(dtSeconds);
 
