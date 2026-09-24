@@ -4,6 +4,8 @@
 #include "position.h"
 #include "search.h"
 #include "types.h"
+#include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -27,6 +29,37 @@ namespace UCI
             }
         }
         return Move::none();
+    }
+
+    void send_search_info(const Search::SearchInfo& info) // NOTE: call it inside search loop!
+    {
+        uint64_t nps = (info.time_ms > 0) ? (info.nodes * 1000) / info.time_ms : 0;
+        // clang-format off
+        std::cout << "info depth " << info.depth 
+                  << " seldepth " << info.seldepth 
+                  << " nodes " << info.nodes 
+                  << " nps " << nps
+                  << " time " << info.time_ms 
+                  << " score ";
+        // clang-format on
+        if (std::abs(info.score) > VALUE_MATE - MAX_PLY)
+        {
+            int moves_to_mate = (VALUE_MATE - std::abs(info.score) + 1) / 2;
+            moves_to_mate = (info.score > 0) ? moves_to_mate : -moves_to_mate;
+            std::cout << "mate " << moves_to_mate;
+        }
+        else
+        {
+            std::cout << "cp " << info.score;
+        }
+
+        std::cout << " pv";
+        for (const Move& m : info.pv)
+        {
+            std::cout << " " << m;
+        }
+
+        std::cout << std::endl;
     }
 
     void loop()
