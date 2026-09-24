@@ -458,7 +458,7 @@ TEST_CASE("history is capped at MAX_HISTORY_SCORE", "[heuristics]")
 // =============================================================================
 TEST_CASE("LMRTable is zero at depth 0 or move 0", "[lmr]")
 {
-    for (int d = 0; d < Search::MAX_PLY; ++d)
+    for (int d = 0; d < MAX_PLY; ++d)
         REQUIRE(Search::LMRTable[d][0] == 0);
     for (int m = 0; m < MAX_MOVES; ++m)
         REQUIRE(Search::LMRTable[0][m] == 0);
@@ -466,7 +466,7 @@ TEST_CASE("LMRTable is zero at depth 0 or move 0", "[lmr]")
 
 TEST_CASE("LMRTable is monotonic non-decreasing in depth and move count", "[lmr]")
 {
-    for (int d = 1; d < Search::MAX_PLY; ++d)
+    for (int d = 1; d < MAX_PLY; ++d)
         for (int m = 1; m < MAX_MOVES; ++m)
         {
             REQUIRE(Search::LMRTable[d][m] >= Search::LMRTable[d - 1][m]);

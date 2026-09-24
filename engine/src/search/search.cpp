@@ -13,6 +13,8 @@ bool is_repetition(const Position& pos);
 
 namespace Search
 {
+    Move killer_moves[MAX_PLY][2];
+    int history_table[MAX_PIECES][MAX_SQUARES];
 
     inline bool try_null_move_pruning(Position& pos, int depth, int ply, Value beta, SearchContext& ctx, Value& out_score)
     {
