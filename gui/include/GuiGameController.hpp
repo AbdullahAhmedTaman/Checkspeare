@@ -5,6 +5,7 @@
 #include "ChessGame.hpp"
 #include "InputEvent.hpp"
 #include "types.h"
+
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -80,8 +81,20 @@ namespace Gui
             return promo_;
         }
 
-        void completePromotion(PieceType type);
+        const BoardAnnotations& annotations() const
+        {
+            return annotations_;
+        }
 
+        /// True if the most recent move commit originated from a drag
+        /// release rather than a click-click. Cleared by navigation
+        /// (undo, redo, gotoPly). Consumed by the animation driver.
+        bool lastMoveWasDrag() const
+        {
+            return lastMoveWasDrag_;
+        }
+
+        void completePromotion(PieceType type);
         void cancelPromotion();
 
         void requestUndo();
@@ -89,17 +102,12 @@ namespace Gui
         void requestGotoPly(std::size_t ply);
         void applyQueuedActions();
 
-        const BoardAnnotations& annotations() const
-        {
-            return annotations_;
-        }
-
         void updateAnnotations();
 
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
-        void playMoveOrStartPromotion(Square from, Square to);
+        void playMoveOrStartPromotion(Square from, Square to, bool fromDrag);
 
         ChessGame& game_;
         DragState drag_;
@@ -109,6 +117,7 @@ namespace Gui
         BoardAnnotations annotations_;
         mutable bool queuedUndo_ = false;
         mutable bool queuedRedo_ = false;
+        bool lastMoveWasDrag_ = false;
     };
 
 } // namespace Gui

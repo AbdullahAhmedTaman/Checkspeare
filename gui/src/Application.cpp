@@ -4,6 +4,7 @@
 #include "EngineThinkingPanel.hpp"
 #include "ImGuiLayer.hpp"
 #include "ImGuiTheme.hpp"
+#include "InputEvent.hpp"
 #include "MoveListPanel.hpp"
 #include "SfmlInputAdapter.hpp"
 
@@ -22,7 +23,6 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
 {
     window_.setFramerateLimit(60);
 
-    // Default time control.
     ChessClock::TimeControl tc;
     tc.initialMs = 60 * 1000;
     tc.incrementMs = 3 * 1000;
@@ -85,101 +85,65 @@ void Application::processEvents()
         }
 
         const auto inputEvent = Gui::toInputEvent(*event);
-        if (!inputEvent)
+        if (!inputEvent || !shouldForwardInput(*inputEvent))
             continue;
 
-        // Allow board input and drag termination despite ImGui mouse capture.
-        const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
-        const bool endsDrag = inputEvent->kind == Gui::InputEvent::Kind::PointerReleased && controller_.drag().active;
-        const bool focusLost = inputEvent->kind == Gui::InputEvent::Kind::FocusLost;
-        const bool engineToMove = enginePlayer_.isSideControlled(game_.sideToMove());
-
-        const bool overBoard = !focusLost && boardPanel_.contains(inputEvent->position);
-
-        const bool shouldForward = focusLost || endsDrag || (!engineToMove && (overBoard || !imguiCaptures));
-
-        if (!shouldForward)
-            continue;
-
-        // Application must not know about board-space coordinates; the
-        // panel translates them.
         Gui::InputEvent forwarded = *inputEvent;
-        if (!focusLost)
+        if (forwarded.kind != Gui::InputEvent::Kind::FocusLost)
             forwarded.position = boardPanel_.toBoardSpace(forwarded.position);
 
-        // Observe the drag state before the controller consumes the event:
-        // on release it resets drag_, so afterwards we can no longer tell
-        // a drag-ended release from any other click.
-        const bool wasDragging = controller_.drag().active;
-
         controller_.handleEvent(forwarded, geo_);
-
-        if (wasDragging && forwarded.kind == Gui::InputEvent::Kind::PointerReleased)
-            justEndedDrag_ = true;
     }
+}
+
+bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
+{
+    // FocusLost and drag-ending releases always forward: the drag state
+    // machine must see them regardless of who owns the mouse.
+    if (ev.kind == Gui::InputEvent::Kind::FocusLost)
+        return true;
+
+    const bool endsDrag = ev.kind == Gui::InputEvent::Kind::PointerReleased && controller_.drag().active;
+    if (endsDrag)
+        return true;
+
+    // Never let the human play for an engine-controlled side.
+    if (enginePlayer_.isSideControlled(game_.sideToMove()))
+        return false;
+
+    // Board controls bypass ImGui capture when the pointer is over the panel.
+    if (boardPanel_.contains(ev.position))
+        return true;
+
+    return !ImGui::GetIO().WantCaptureMouse;
 }
 
 void Application::update(float dtSeconds)
 {
+    stepSimulation(dtSeconds);
+    stepUi(dtSeconds);
+}
+
+void Application::stepSimulation(float dtSeconds)
+{
     controller_.applyQueuedActions();
     enginePlayer_.tick(game_, clock_);
     controller_.updateAnnotations();
-    Gui::EngineThinkingSnapshot snap;
-    snap.thinking = enginePlayer_.thinking();
-    snap.activeSide = (game_.sideToMove() == WHITE) ? "White" : "Black";
 
-    if (const auto& info = enginePlayer_.lastInfo())
-    {
-        snap.depth = info->depth;
-        snap.seldepth = info->seldepth;
-        snap.nodes = info->nodes;
-        snap.nps = info->nps;
-
-        // Normalize the score to White's perspective.
-        const bool fromBlack = (enginePlayer_.lastInfoSide() == BLACK);
-
-        if (info->scoreCp)
-            snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
-        if (info->scoreMate)
-            snap.scoreMate = fromBlack ? -(*info->scoreMate) : *info->scoreMate;
-    }
-
-    if (snap.scoreMate)
-        evalBar_.setTarget(0, *snap.scoreMate);
-    else if (snap.scoreCp)
-        evalBar_.setTarget(*snap.scoreCp, 0);
-    evalBar_.update(dtSeconds);
-
-    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
-
-    Gui::beginMainDockspace();
-    boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
-                       controller_.annotations(), animation_);
-    Gui::renderEngineThinkingPanel(snap, evalBar_);
-    Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
-    Gui::renderMoveListPanel(game_, controller_);
-
-    // Advance the clock for each newly committed ply.
     const std::size_t curr = game_.cursor();
 
-    if (curr == lastCursor_ + 1)
+    if (curr == lastCursor_ + 1 && !controller_.lastMoveWasDrag())
     {
-        // A drag-committed move is already visually at the destination;
-        // animating it would snap the piece back and slide it again. Only
-        // click-click and engine moves get the slide treatment.
-        if (!justEndedDrag_)
-        {
-            const MoveRecord& rec = game_.history()[curr - 1];
-            animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
-        }
+        // Only click-click and engine moves animate; a drag already
+        // visually ended at the destination.
+        const MoveRecord& rec = game_.history()[curr - 1];
+        animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
     }
     else if (curr != lastCursor_)
     {
+        // Undo, gotoPly, loadFEN: kill any in-flight animation.
         animation_.active = false;
     }
-
-    // Single-frame flag; only relevant to the release that set it.
-    justEndedDrag_ = false;
 
     animation_.tick(dtSeconds);
 
@@ -191,7 +155,53 @@ void Application::update(float dtSeconds)
     }
     if (curr < lastCursor_)
         lastCursor_ = curr;
+
     clock_.update(dtSeconds);
+}
+
+void Application::stepUi(float dtSeconds)
+{
+    const Gui::EngineThinkingSnapshot snap = buildThinkingSnapshot();
+
+    if (snap.scoreMate)
+        evalBar_.setTarget(0, *snap.scoreMate);
+    else if (snap.scoreCp)
+        evalBar_.setTarget(*snap.scoreCp, 0);
+    evalBar_.update(dtSeconds);
+
+    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
+    Gui::beginMainDockspace();
+
+    boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
+                       controller_.annotations(), animation_);
+
+    Gui::renderEngineThinkingPanel(snap, evalBar_);
+    Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
+    Gui::renderMoveListPanel(game_, controller_);
+}
+
+Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
+{
+    Gui::EngineThinkingSnapshot snap;
+    snap.thinking = enginePlayer_.thinking();
+    snap.activeSide = (game_.sideToMove() == WHITE) ? "White" : "Black";
+
+    if (const auto& info = enginePlayer_.lastInfo())
+    {
+        snap.depth = info->depth;
+        snap.seldepth = info->seldepth;
+        snap.nodes = info->nodes;
+        snap.nps = info->nps;
+
+        // Normalize to White's perspective for display.
+        const bool fromBlack = (enginePlayer_.lastInfoSide() == BLACK);
+        if (info->scoreCp)
+            snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
+        if (info->scoreMate)
+            snap.scoreMate = fromBlack ? -(*info->scoreMate) : *info->scoreMate;
+    }
+
+    return snap;
 }
 
 void Application::render()

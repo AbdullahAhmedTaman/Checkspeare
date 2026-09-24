@@ -80,7 +80,7 @@ namespace Gui
             if (std::find(targets.begin(), targets.end(), sq) != targets.end())
             {
                 const Square from = *annotations_.selected;
-                playMoveOrStartPromotion(from, sq);
+                playMoveOrStartPromotion(from, sq, /*fromDrag=*/false);
                 return;
             }
         }
@@ -141,11 +141,11 @@ namespace Gui
             return;
         }
 
-        playMoveOrStartPromotion(from, to);
+        playMoveOrStartPromotion(from, to, /*fromDrag=*/true);
         drag_ = {};
     }
 
-    void GuiGameController::playMoveOrStartPromotion(Square from, Square to)
+    void GuiGameController::playMoveOrStartPromotion(Square from, Square to, bool fromDrag)
     {
         const Piece moving = game_.pieceAt(from);
         bool isPromotion = false;
@@ -164,6 +164,9 @@ namespace Gui
 
         if (isPromotion)
         {
+            // Remembered so completePromotion can report the same origin.
+            lastMoveWasDrag_ = fromDrag;
+
             const int file = static_cast<int>(to) % 8;
             const int rank = static_cast<int>(to) / 8;
             const bool drawUpward = (rank <= 3);
@@ -187,9 +190,14 @@ namespace Gui
         }
 
         if (game_.play(from, to))
+        {
+            lastMoveWasDrag_ = fromDrag;
             result_ = {ActionResult::Kind::MovePlayed, from, to};
+        }
         else
+        {
             result_ = {ActionResult::Kind::IllegalMove, from, to};
+        }
 
         annotations_.clearSelection();
         annotations_.refreshFrom(game_);
@@ -235,6 +243,10 @@ namespace Gui
 
         if (!hadQueued)
             return;
+
+        // Navigation is not a drag commit. Clear the flag so the next
+        // cursor advance animates normally.
+        lastMoveWasDrag_ = false;
 
         if (queuedGotoPly_)
         {
