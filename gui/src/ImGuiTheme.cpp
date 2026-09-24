@@ -39,21 +39,21 @@ namespace Gui
         // Palette
         // Deep slate background, warm off-white text, amber accent.
         // Deliberately low-saturation so the board's colors dominate.
-        const ImVec4 bgDeep = ImVec4(0.08f, 0.09f, 0.11f, 1.00f);
-        const ImVec4 bgBase = ImVec4(0.12f, 0.13f, 0.16f, 1.00f);
-        const ImVec4 bgRaised = ImVec4(0.17f, 0.18f, 0.22f, 1.00f);
-        const ImVec4 bgHover = ImVec4(0.22f, 0.24f, 0.29f, 1.00f);
-        const ImVec4 accent = ImVec4(0.94f, 0.72f, 0.30f, 1.00f);
-        const ImVec4 accentDim = ImVec4(0.94f, 0.72f, 0.30f, 0.55f);
-        const ImVec4 text = ImVec4(0.92f, 0.92f, 0.94f, 1.00f);
-        const ImVec4 textDim = ImVec4(0.60f, 0.62f, 0.68f, 1.00f);
+        const ImVec4 bgDeep = ImVec4(0.100f, 0.098f, 0.096f, 1.00f);
+        const ImVec4 bgBase = ImVec4(0.140f, 0.138f, 0.136f, 1.00f);
+        const ImVec4 bgRaised = ImVec4(0.190f, 0.188f, 0.186f, 1.00f);
+        const ImVec4 bgHover = ImVec4(0.250f, 0.248f, 0.246f, 1.00f);
+        const ImVec4 accent = ImVec4(0.91f, 0.78f, 0.48f, 1.00f);
+        const ImVec4 accentDim = ImVec4(0.91f, 0.78f, 0.48f, 0.55f);
+        const ImVec4 text = ImVec4(0.930f, 0.928f, 0.926f, 1.00f);
+        const ImVec4 textDim = ImVec4(0.640f, 0.638f, 0.636f, 1.00f);
 
         colors[ImGuiCol_Text] = text;
         colors[ImGuiCol_TextDisabled] = textDim;
         colors[ImGuiCol_WindowBg] = bgBase;
         colors[ImGuiCol_ChildBg] = bgDeep;
         colors[ImGuiCol_PopupBg] = bgRaised;
-        colors[ImGuiCol_Border] = ImVec4(0.22f, 0.24f, 0.30f, 0.80f);
+        colors[ImGuiCol_Border] = ImVec4(0.290f, 0.288f, 0.286f, 0.80f);
         colors[ImGuiCol_BorderShadow] = ImVec4(0, 0, 0, 0);
 
         colors[ImGuiCol_FrameBg] = bgRaised;
@@ -82,7 +82,7 @@ namespace Gui
         colors[ImGuiCol_HeaderHovered] = bgHover;
         colors[ImGuiCol_HeaderActive] = accentDim;
 
-        colors[ImGuiCol_Separator] = ImVec4(0.22f, 0.24f, 0.30f, 0.70f);
+        colors[ImGuiCol_Separator] = ImVec4(0.290f, 0.288f, 0.286f, 0.70f);
         colors[ImGuiCol_SeparatorHovered] = accentDim;
         colors[ImGuiCol_SeparatorActive] = accent;
 
@@ -94,8 +94,8 @@ namespace Gui
         colors[ImGuiCol_DockingEmptyBg] = bgDeep;
 
         colors[ImGuiCol_TableHeaderBg] = bgRaised;
-        colors[ImGuiCol_TableBorderStrong] = ImVec4(0.22f, 0.24f, 0.30f, 1.00f);
-        colors[ImGuiCol_TableBorderLight] = ImVec4(0.18f, 0.20f, 0.25f, 1.00f);
+        colors[ImGuiCol_TableBorderStrong] = ImVec4(0.290f, 0.288f, 0.286f, 1.00f);
+        colors[ImGuiCol_TableBorderLight] = ImVec4(0.220f, 0.218f, 0.216f, 1.00f);
         colors[ImGuiCol_TableRowBg] = ImVec4(0, 0, 0, 0);
         colors[ImGuiCol_TableRowBgAlt] = ImVec4(1, 1, 1, 0.02f);
 

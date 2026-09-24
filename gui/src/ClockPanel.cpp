@@ -44,32 +44,32 @@ namespace Gui
             if (flagged)
             {
                 // Red palette: the flag fell.
-                c.bg = IM_COL32(58, 22, 22, 255);
-                c.border = IM_COL32(210, 70, 70, 255);
-                c.accent = IM_COL32(230, 90, 90, 255);
-                c.text = IM_COL32(245, 205, 205, 255);
-                c.barBg = IM_COL32(38, 14, 14, 255);
-                c.barFill = IM_COL32(190, 65, 65, 255);
+                c.bg = IM_COL32(56, 26, 24, 255);
+                c.border = IM_COL32(198, 96, 78, 255);
+                c.accent = IM_COL32(214, 112, 90, 255);
+                c.text = IM_COL32(242, 218, 208, 255);
+                c.barBg = IM_COL32(36, 16, 14, 255);
+                c.barFill = IM_COL32(176, 82, 66, 255);
             }
             else if (active)
             {
                 // Amber palette: this side is to move.
-                c.bg = IM_COL32(38, 42, 52, 255);
-                c.border = IM_COL32(240, 184, 76, 255);
-                c.accent = IM_COL32(240, 184, 76, 255);
-                c.text = IM_COL32(252, 247, 236, 255);
-                c.barBg = IM_COL32(28, 32, 40, 255);
-                c.barFill = IM_COL32(240, 184, 76, 255);
+                c.bg = IM_COL32(46, 42, 38, 255);
+                c.border = IM_COL32(232, 200, 122, 255);
+                c.accent = IM_COL32(232, 200, 122, 255);
+                c.text = IM_COL32(242, 235, 221, 255);
+                c.barBg = IM_COL32(30, 27, 24, 255);
+                c.barFill = IM_COL32(232, 200, 122, 255);
             }
             else
             {
                 // Neutral palette: waiting.
-                c.bg = IM_COL32(28, 32, 40, 255);
-                c.border = IM_COL32(58, 64, 78, 255);
-                c.accent = IM_COL32(120, 130, 150, 255);
-                c.text = IM_COL32(178, 184, 198, 255);
-                c.barBg = IM_COL32(22, 26, 34, 255);
-                c.barFill = IM_COL32(100, 110, 130, 255);
+                c.bg = IM_COL32(36, 35, 34, 255);
+                c.border = IM_COL32(74, 73, 72, 255);
+                c.accent = IM_COL32(140, 139, 138, 255);
+                c.text = IM_COL32(184, 183, 182, 255);
+                c.barBg = IM_COL32(26, 25, 25, 255);
+                c.barFill = IM_COL32(122, 121, 120, 255);
             }
 
             return c;

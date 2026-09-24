@@ -78,8 +78,8 @@ namespace Gui
 
         // A small colored dot next to the label: white for White, dark for
         // Black. Uses a border so Black is visible against the panel bg.
-        const ImU32 dotColor = whiteToMove ? IM_COL32(245, 245, 245, 255) : IM_COL32(30, 30, 34, 255);
-        const ImU32 ringColor = whiteToMove ? IM_COL32(180, 180, 190, 255) : IM_COL32(120, 124, 135, 255);
+        const ImU32 dotColor = whiteToMove ? IM_COL32(242, 241, 240, 255) : IM_COL32(30, 29, 28, 255);
+        const ImU32 ringColor = whiteToMove ? IM_COL32(184, 183, 182, 255) : IM_COL32(128, 127, 126, 255);
 
         {
             ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -100,7 +100,7 @@ namespace Gui
         ImGui::TextDisabled("STATUS");
         ImGui::SameLine();
         const std::string status = formatActionResult(controller.result());
-        ImGui::TextColored(ImVec4(0.94f, 0.72f, 0.30f, 1.0f), "%s", status.c_str());
+        ImGui::TextColored(ImVec4(0.91f, 0.78f, 0.48f, 1.00f), "%s", status.c_str());
 
         // Result banner (only when game is over)
         const GameResult result = game.result();
@@ -115,14 +115,14 @@ namespace Gui
             const ImVec2 textSize = ImGui::CalcTextSize(resultText.c_str());
             const float cardH = textSize.y + 22.0f;
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.34f, 0.14f, 0.14f, 1.0f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.86f, 0.42f, 0.34f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.24f, 0.12f, 0.10f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.78f, 0.44f, 0.34f, 1.00f));
             ImGui::BeginChild("##result", ImVec2(0, cardH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
 
             const float availW = ImGui::GetContentRegionAvail().x;
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - textSize.x) * 0.5f);
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 8.0f);
-            ImGui::TextColored(ImVec4(1.0f, 0.86f, 0.58f, 1.0f), "%s", resultText.c_str());
+            ImGui::TextColored(ImVec4(0.98f, 0.90f, 0.72f, 1.00f), "%s", resultText.c_str());
 
             ImGui::EndChild();
             ImGui::PopStyleColor(2);

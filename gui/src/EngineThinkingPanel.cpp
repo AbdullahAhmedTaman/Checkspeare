@@ -65,7 +65,7 @@ namespace Gui
         ImGui::Text("Side: %s", snapshot.activeSide.c_str());
 
         if (snapshot.thinking)
-            ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.2f, 1.0f), "Thinking...");
+            ImGui::TextColored(ImVec4(0.91f, 0.78f, 0.48f, 1.00f), "Thinking...");
         else
             ImGui::TextDisabled("Idle");
 
@@ -103,19 +103,19 @@ namespace Gui
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
         // Black background (whole bar).
-        dl->AddRectFilled(barP0, barP1, IM_COL32(30, 30, 30, 255), 4.0f);
+        dl->AddRectFilled(barP0, barP1, IM_COL32(30, 29, 28, 255), 4.0f);
 
         // White fill from the bottom.
         const float whiteH = barHeight * evalBar.whitePct;
         ImVec2 wp0 = ImVec2(barP0.x, barP1.y - whiteH);
-        dl->AddRectFilled(wp0, barP1, IM_COL32(240, 240, 240, 255), 4.0f);
+        dl->AddRectFilled(wp0, barP1, IM_COL32(242, 241, 240, 255), 4.0f);
 
         // Center line so the "even" position is visible.
         const float midY = barP0.y + barHeight * 0.5f;
-        dl->AddLine(ImVec2(barP0.x, midY), ImVec2(barP1.x, midY), IM_COL32(180, 180, 180, 120), 1.0f);
+        dl->AddLine(ImVec2(barP0.x, midY), ImVec2(barP1.x, midY), IM_COL32(168, 167, 166, 120), 1.0f);
 
         // Border.
-        dl->AddRect(barP0, barP1, IM_COL32(200, 200, 200, 200), 4.0f, 0, lineWidth);
+        dl->AddRect(barP0, barP1, IM_COL32(232, 200, 122, 200), 4.0f, 0, lineWidth);
 
         // Score text, vertically centered against the bar.
         dl->AddText(scorePos, ImGui::GetColorU32(ImGuiCol_Text), scoreText.c_str());
