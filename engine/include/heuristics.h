@@ -66,10 +66,7 @@ namespace Search
 
         int& score = history_table[piece][move.to()];
         int bonus = depth > 128 ? MAX_HISTORY_SCORE : depth * depth;
-        score += bonus;
-
-        if (score > MAX_HISTORY_SCORE)
-            score = MAX_HISTORY_SCORE;
+        score += bonus - ((score * bonus) / MAX_HISTORY_SCORE);
     }
 
     /**
@@ -85,6 +82,10 @@ namespace Search
 
         int& score = history_table[piece][move.to()];
         const int penalty = depth > 128 ? MAX_HISTORY_SCORE : depth * depth;
-        score = score > penalty ? score - penalty : 0;
+        score -= penalty + ((score * penalty) / MAX_HISTORY_SCORE);
+
+        // Clamp to 0 to maintain your current strictly-positive bounds.
+        if (score < 0)
+            score = 0;
     }
 } // namespace Search

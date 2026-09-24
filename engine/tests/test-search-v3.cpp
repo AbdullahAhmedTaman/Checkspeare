@@ -109,7 +109,8 @@ TEST_CASE("Search: 3-fold repetition correctly aborts search with VALUE_ZERO", "
 // =============================================================================
 // 2. Move Ordering (Exhaustive Priorities)
 // =============================================================================
-TEST_CASE("Search: MovePicker strictly follows priority: TT -> Good Capture -> Promo -> Killer -> History -> Quiet",
+TEST_CASE("Search: MovePicker strictly follows priority: TT -> Queen Promo -> Good Capture -> Killer -> Knight Promo -> Quiet -> "
+          "Minor Promos",
           "[search][ordering]")
 {
     reset_search_state();
@@ -118,6 +119,7 @@ TEST_CASE("Search: MovePicker strictly follows priority: TT -> Good Capture -> P
     // - Rh1xh7 is a legal capture (h-file is clear).
     // - a7a8 promotes to four distinct pieces (all non-capture promotions).
     Position pos = Position::from_fen("4k3/P6r/8/8/8/8/8/4K2R w K - 0 1");
+
     MoveList list;
     MoveGen::generate_legal_moves(pos, list);
 
@@ -125,8 +127,8 @@ TEST_CASE("Search: MovePicker strictly follows priority: TT -> Good Capture -> P
     const Move promo_r(A7, A8, ROOK_PROMO);
     const Move promo_b(A7, A8, BISHOP_PROMO);
     const Move promo_n(A7, A8, KNIGHT_PROMO);
-    const Move capture(H1, H7, CAPTURE);  // RxR
-    const Move quiet(E1, F1, QUIET_MOVE); // history-boosted quiet
+    const Move capture(H1, H7, CAPTURE);  // RxR (Good Capture)
+    const Move quiet(E1, F1, QUIET_MOVE); // Will be history-boosted
     const Move killer(E1, D2, QUIET_MOVE);
     const Move tt_move(E1, E2, QUIET_MOVE);
 
@@ -148,27 +150,44 @@ TEST_CASE("Search: MovePicker strictly follows priority: TT -> Good Capture -> P
 
     // Setup heuristics
     Search::killer_moves[0][0] = killer;
-    Search::update_history(quiet, 5, pos.board[quiet.from()]); // 5 * 5 = 25
+    Search::update_history(quiet, 5, pos.board[quiet.from()]);
 
     MoveOrdering::MovePicker picker(list, pos, tt_move, 0);
 
-    // 1. TT move
+    // 1. TT move (Score: 10,000,000)
     REQUIRE(picker.next_move() == tt_move);
 
-    // 2. Capture (MVV-LVA)
+    // 2. Queen Promotion (Score: 9,000,000)
+    REQUIRE(picker.next_move() == promo_q);
+
+    // 3. Good Capture (Score: 8,000,000 + MVV_LVA)
     REQUIRE(picker.next_move() == capture);
 
-    // 3. All four promotions, ranked by piece value: Q > R > B > N
-    REQUIRE(picker.next_move() == promo_q);
-    REQUIRE(picker.next_move() == promo_r);
-    REQUIRE(picker.next_move() == promo_b);
-    REQUIRE(picker.next_move() == promo_n);
-
-    // 4. Killer
+    // 4. Killer Slot 1 (Score: 7,000,000)
     REQUIRE(picker.next_move() == killer);
 
-    // 5. History-boosted quiet
+    // 5. Knight Promotion (Score: 5,000,000)
+    REQUIRE(picker.next_move() == promo_n);
+
+    // 6. History-boosted quiet (Score: ~25. All other quiets have 0)
     REQUIRE(picker.next_move() == quiet);
+
+    // 7. Drain the rest of the moves to verify Minor Promotions are dead last
+    std::vector<Move> remaining_moves;
+    while (picker.remaining() > 0)
+    {
+        remaining_moves.push_back(picker.next_move());
+    }
+
+    // Un-boosted quiets evaluate to 0. Minor promotions evaluate to -5,000,000.
+    // Therefore, the minor promotions must be the final two moves extracted.
+    REQUIRE(remaining_moves.size() >= 2);
+    Move last_1 = remaining_moves[remaining_moves.size() - 1];
+    Move last_2 = remaining_moves[remaining_moves.size() - 2];
+
+    bool minors_last = (last_1 == promo_r && last_2 == promo_b) || (last_1 == promo_b && last_2 == promo_r);
+
+    REQUIRE(minors_last);
 }
 
 // =============================================================================

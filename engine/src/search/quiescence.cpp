@@ -58,7 +58,18 @@ namespace Search
 
         MoveList list;
         MoveGen::generate_pseudo_legal_moves(pos, list);
-
+        if (!in_check)
+        {
+            int tactical_count = 0;
+            for (int i = 0; i < list.count; ++i)
+            {
+                if (list.moves[i].is_capture() || list.moves[i].is_promotion())
+                {
+                    list.moves[tactical_count++] = list.moves[i];
+                }
+            }
+            list.count = tactical_count;
+        }
         MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
         int legal_moves = 0;
 
@@ -67,9 +78,6 @@ namespace Search
             const Move move = picker.next_move();
             if (!move.is_ok())
                 break;
-
-            if (!is_tactical(move, in_check))
-                continue;
 
             pos.make_move(move);
 
