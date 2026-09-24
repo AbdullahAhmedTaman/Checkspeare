@@ -1,11 +1,8 @@
 #include "EnginePlayer.hpp"
 
-// EnginePlayer.cpp
-
 namespace
 {
     /// Decodes a UCI square like "e2" into an engine Square.
-    /// Rejects anything not in [a..h][1..8]; case-sensitive per UCI spec.
     std::optional<Square> parseSquare(std::string_view fileRank)
     {
         if (fileRank.size() != 2)
@@ -25,8 +22,6 @@ namespace
         return static_cast<Square>(rank * 8 + file);
     }
 
-    /// Decodes a promotion suffix ('q', 'r', 'b', 'n').
-    /// Any other character returns nullopt.
     std::optional<PieceType> parsePromotionChar(char c)
     {
         switch (c)
@@ -44,8 +39,6 @@ namespace
         }
     }
 
-    /// Extracts the moves already played (up to cursor) as a plain vector.
-    /// Feeds UciEngine::setPosition's `moves` argument.
     std::vector<Move> playedMoves(const ChessGame& game)
     {
         std::vector<Move> moves;
@@ -58,9 +51,6 @@ namespace
         return moves;
     }
 
-    /// Builds `go` limits from the current clock state.
-    /// If the clock is unconfigured (both sides at 0), falls back to a fixed
-    /// movetime so the engine cannot search forever.
     UciSearchLimits limitsFrom(const ChessClock& clock)
     {
         UciSearchLimits limits;
@@ -72,7 +62,6 @@ namespace
         {
             limits.wtimeMs = w;
             limits.btimeMs = b;
-            // Increments are not yet exposed by ChessClock; omitted for now.
         }
         else
         {
@@ -101,7 +90,6 @@ std::optional<Move> parseUciMove(const Board& board, std::string_view text)
 
         if (m.is_promotion())
         {
-            // A promotion move must carry an explicit piece letter.
             if (text.size() != 5)
                 continue;
 
@@ -112,7 +100,6 @@ std::optional<Move> parseUciMove(const Board& board, std::string_view text)
             return m;
         }
 
-        // A non-promotion move must not carry a suffix.
         if (text.size() == 5)
             continue;
 
@@ -124,32 +111,39 @@ std::optional<Move> parseUciMove(const Board& board, std::string_view text)
 
 EnginePlayerAction decideEngineAction(const EnginePlayerInputs& in)
 {
-    if (!in.thinking)
+    // Already thinking. Priority order:
+    //   1. Game over      -> abort any in-flight search.
+    //   2. Game moved on  -> abort; result is stale.
+    //   3. bestmove ready -> finish and play it.
+    //   4. Engine died    -> abort; there will be no bestmove.
+    //   5. Otherwise idle.
+    if (in.thinking)
     {
-        // Only start a search when the side to move is engine-controlled
-        // and the engine is alive and past its uci/isready handshake.
-        if (!in.sideControlled)
-            return EnginePlayerAction::Idle;
-        if (!in.engineAlive || !in.engineReady)
-            return EnginePlayerAction::Idle;
-        return EnginePlayerAction::StartSearch;
+        if (in.gameOver)
+            return EnginePlayerAction::AbortSearch;
+
+        if (in.gameCursor != in.thinkStartPly)
+            return EnginePlayerAction::AbortSearch;
+
+        if (in.bestMoveArrived)
+            return EnginePlayerAction::FinishSearch;
+
+        if (!in.engineAlive)
+            return EnginePlayerAction::AbortSearch;
+
+        return EnginePlayerAction::Idle;
     }
 
-    // Already thinking. Priority order matters:
-    //   1. The game moved on -> the in-flight result is stale; abort.
-    //   2. A bestmove is available -> use it, unless (1) already won.
-    //   3. The engine died -> abort; there will be no bestmove.
-    //   4. Otherwise keep waiting.
-    if (in.gameCursor != in.thinkStartPly)
-        return EnginePlayerAction::AbortSearch;
+    // Not thinking. Do not start a search if the game is over.
+    if (in.gameOver)
+        return EnginePlayerAction::Idle;
 
-    if (in.bestMoveArrived)
-        return EnginePlayerAction::FinishSearch;
+    if (!in.sideControlled)
+        return EnginePlayerAction::Idle;
+    if (!in.engineAlive || !in.engineReady)
+        return EnginePlayerAction::Idle;
 
-    if (!in.engineAlive)
-        return EnginePlayerAction::AbortSearch;
-
-    return EnginePlayerAction::Idle;
+    return EnginePlayerAction::StartSearch;
 }
 
 EnginePlayer::EnginePlayer(UciEngine& engine)
@@ -178,8 +172,6 @@ void EnginePlayer::abort()
 
 std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
 {
-    // poll() must run every frame, not just while thinking. It advances the
-    // UCI handshake (uciok -> isready -> readyok) and drains the output queue.
     UciPollResult poll = engine_.poll();
     if (!poll.infos.empty())
         lastInfo_ = poll.infos.back();
@@ -190,6 +182,12 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
     in.gameCursor = game.cursor();
     in.sideToMove = game.sideToMove();
     in.sideControlled = controlled_[static_cast<int>(game.sideToMove())];
+
+    // gameOver includes both terminal positions (mate, stalemate, draws)
+    // and clock flag fall. Game and clock are separate sources of truth;
+    // this is the one place that combines them.
+    in.gameOver = (game.result().kind != GameResultKind::Ongoing) || clock.flagFallen(WHITE) || clock.flagFallen(BLACK);
+
     in.engineReady = engine_.isReady();
     in.engineAlive = engine_.isRunning();
     in.bestMoveArrived = poll.bestMove.has_value();
@@ -201,9 +199,6 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
 
         case EnginePlayerAction::StartSearch:
             {
-                // Empty FEN -> UciEngine emits "position startpos moves ...",
-                // which is correct because ChessGame always starts from the
-                // standard initial position.
                 engine_.setPosition("", playedMoves(game));
                 engine_.go(limitsFrom(clock));
 
@@ -218,6 +213,7 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
             engine_.stopSearch();
             thinking_ = false;
             return std::nullopt;
+
         case EnginePlayerAction::FinishSearch:
             {
                 thinking_ = false;

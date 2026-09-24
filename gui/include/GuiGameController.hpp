@@ -55,6 +55,10 @@ namespace Gui
     };
 
     /// Translates input events into moves on a ChessGame.
+    ///
+    /// The controller is guarded against mutating a finished game: every
+    /// entry point that could reach ChessGame::play, undo, or redo checks
+    /// game_.result() first and refuses to act if the game is terminal.
     class GuiGameController
     {
     public:
@@ -87,8 +91,7 @@ namespace Gui
         }
 
         /// True if the most recent move commit originated from a drag
-        /// release rather than a click-click. Cleared by navigation
-        /// (undo, redo, gotoPly). Consumed by the animation driver.
+        /// release rather than a click-click. Cleared by navigation.
         bool lastMoveWasDrag() const
         {
             return lastMoveWasDrag_;
@@ -102,13 +105,33 @@ namespace Gui
         void requestGotoPly(std::size_t ply);
         void applyQueuedActions();
 
-        /// Sets the "new game" flag. Application drains it once per frame
-        /// via consumeNewGameRequest(). Called by the game-over banner's
-        /// New Game button.
-        void requestNewGame();
+        /// Clears selection hints (selected square + legal target dots).
+        /// Called by Application when the game ends so no stale hints
+        /// remain on the board.
+        void clearHints();
 
-        /// Returns true at most once per requestNewGame(). Clears the flag.
+        /// Sets the "new game" flag. Application drains it once per frame
+        /// via consumeNewGameRequest().
+        void requestNewGame();
         bool consumeNewGameRequest();
+
+        /// Modal dismissal tracking. When the game-over modal is closed,
+        /// the flag becomes true so the modal does not immediately reopen.
+        /// Application reopens it on each new game-over transition.
+        bool gameOverModalDismissed() const
+        {
+            return gameOverModalDismissed_;
+        }
+
+        void dismissGameOverModal()
+        {
+            gameOverModalDismissed_ = true;
+        }
+
+        void reopenGameOverModal()
+        {
+            gameOverModalDismissed_ = false;
+        }
 
         void updateAnnotations();
 
@@ -126,9 +149,8 @@ namespace Gui
         mutable bool queuedUndo_ = false;
         mutable bool queuedRedo_ = false;
         bool lastMoveWasDrag_ = false;
-
-        /// Set by requestNewGame(), cleared by consumeNewGameRequest().
         bool newGameRequested_ = false;
+        bool gameOverModalDismissed_ = false;
     };
 
 } // namespace Gui

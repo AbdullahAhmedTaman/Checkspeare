@@ -9,6 +9,17 @@ namespace Gui
     namespace
     {
         constexpr PieceType kPromotionOrder[4] = {QUEEN, ROOK, BISHOP, KNIGHT};
+
+        /// True when the game is terminal and the controller must freeze.
+        /// Currently this only checks the game's own result. Flag-fall is
+        /// decided by Application, which sees the clock; when flag-fall is
+        /// treated as terminal, Application stops forwarding events to the
+        /// controller entirely (see Application::shouldForwardInput), so
+        /// the controller does not need to know about the clock.
+        bool isFrozen(const ChessGame& game)
+        {
+            return game.result().kind != GameResultKind::Ongoing;
+        }
     } // namespace
 
     void GuiGameController::handleEvent(const InputEvent& event, const BoardGeometry& geo)
@@ -46,10 +57,8 @@ namespace Gui
         if (button != MouseButton::Left)
             return;
 
-        // Terminal position: the board is frozen. Any ImGui widgets
-        // (the New Game button, the move list) still work because they
-        // are drawn and handled by ImGui, not by this controller.
-        if (game_.result().kind != GameResultKind::Ongoing)
+        // Terminal position: the board is frozen.
+        if (isFrozen(game_))
             return;
 
         if (promo_.active)
@@ -130,6 +139,16 @@ namespace Gui
         if (button != MouseButton::Left || !drag_.active)
             return;
 
+        // A drag that started before game over may finish after. Drop it
+        // without touching the game.
+        if (isFrozen(game_))
+        {
+            drag_ = {};
+            annotations_.clearSelection();
+            annotations_.refreshFrom(game_);
+            return;
+        }
+
         const auto targetOpt = geo.squareAt(position);
 
         if (!targetOpt)
@@ -157,6 +176,12 @@ namespace Gui
 
     void GuiGameController::playMoveOrStartPromotion(Square from, Square to, bool fromDrag)
     {
+        // Defensive: this is reachable from onPress (click-click) and
+        // onRelease (drag-release). Both guard against frozen games, but
+        // the check is repeated here so no future caller can bypass it.
+        if (isFrozen(game_))
+            return;
+
         const Piece moving = game_.pieceAt(from);
         bool isPromotion = false;
 
@@ -174,7 +199,6 @@ namespace Gui
 
         if (isPromotion)
         {
-            // Remembered so completePromotion can report the same origin.
             lastMoveWasDrag_ = fromDrag;
 
             const int file = static_cast<int>(to) % 8;
@@ -218,6 +242,12 @@ namespace Gui
         if (!promo_.active)
             return;
 
+        if (isFrozen(game_))
+        {
+            promo_ = {};
+            return;
+        }
+
         const Square from = promo_.from;
         const Square to = promo_.to;
 
@@ -254,8 +284,15 @@ namespace Gui
         if (!hadQueued)
             return;
 
-        // Navigation is not a drag commit. Clear the flag so the next
-        // cursor advance animates normally.
+        // Drop navigation requests against a frozen game.
+        if (isFrozen(game_))
+        {
+            queuedGotoPly_.reset();
+            queuedUndo_ = false;
+            queuedRedo_ = false;
+            return;
+        }
+
         lastMoveWasDrag_ = false;
 
         if (queuedGotoPly_)
@@ -277,6 +314,12 @@ namespace Gui
 
         drag_ = {};
         promo_ = {};
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
+    }
+
+    void GuiGameController::clearHints()
+    {
         annotations_.clearSelection();
         annotations_.refreshFrom(game_);
     }

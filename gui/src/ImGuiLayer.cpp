@@ -1,6 +1,7 @@
 #include "ImGuiLayer.hpp"
 
 #include "ClockPanel.hpp"
+#include "GameOverModal.hpp"
 #include "StatusPanel.hpp"
 
 #include <imgui-SFML.h>
@@ -18,9 +19,9 @@ namespace Gui
         if (conf.showDemoWindow)
             ImGui::ShowDemoWindow(&conf.showDemoWindow);
 
-        // `window` and `geo` are unused here now that the status panel no
-        // longer draws the flip/demo toggles or the window-size footer.
-        // Kept in the signature so Application doesn't need to change.
+        // Draw the game-over modal last so it renders on top of every panel.
+        renderGameOverModal(controller, game, clock);
+
         (void) window;
         (void) geo;
     }

@@ -2,14 +2,13 @@
 
 #include "Dockspace.hpp"
 #include "EngineThinkingPanel.hpp"
+#include "GameOverTransition.hpp"
 #include "GameResult.hpp"
 #include "ImGuiLayer.hpp"
 #include "ImGuiTheme.hpp"
 #include "InputEvent.hpp"
 #include "MoveListPanel.hpp"
 #include "SfmlInputAdapter.hpp"
-
-#include "GameOverTransition.hpp"
 
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
@@ -36,8 +35,6 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
 
-    // Layout is rebuilt by DockBuilder every launch; disable persistence
-    // so the on-disk state can't drift from the code's intent.
     ImGui::GetIO().IniFilename = nullptr;
 
     ImGuiIO& io = ImGui::GetIO();
@@ -59,8 +56,8 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
-    engine_.start(conf_.enginePath);
-    enginePlayer_.setSideControlled(BLACK, true);
+    // engine_.start(conf_.enginePath);
+    // enginePlayer_.setSideControlled(BLACK, true);
 }
 
 Application::~Application()
@@ -117,7 +114,8 @@ void Application::processEvents()
 bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
 {
     // FocusLost and drag-ending releases always forward: the drag state
-    // machine must see them regardless of who owns the mouse.
+    // machine must see them regardless of who owns the mouse, and even
+    // after game over we want to cancel any in-flight drag.
     if (ev.kind == Gui::InputEvent::Kind::FocusLost)
         return true;
 
@@ -125,15 +123,25 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     if (endsDrag)
         return true;
 
+    // Freeze all other events once the game is over. The controller has
+    // its own guards, but skipping the whole forwarding path removes any
+    // doubt about races between a game-ending move and the next event.
+    if (isGameOver())
+        return false;
+
     // Never let the human play for an engine-controlled side.
     if (enginePlayer_.isSideControlled(game_.sideToMove()))
         return false;
 
-    // Board controls bypass ImGui capture when the pointer is over the panel.
     if (boardPanel_.contains(ev.position))
         return true;
 
     return !ImGui::GetIO().WantCaptureMouse;
+}
+
+bool Application::isGameOver() const
+{
+    return (game_.result().kind != GameResultKind::Ongoing) || clock_.flagFallen(WHITE) || clock_.flagFallen(BLACK);
 }
 
 void Application::update(float dtSeconds)
@@ -144,13 +152,19 @@ void Application::update(float dtSeconds)
 
 void Application::stepSimulation(float dtSeconds)
 {
-    // Drain a "New Game" request from the game-over banner before doing
-    // anything else this frame, so the reset is visible immediately.
     if (controller_.consumeNewGameRequest())
         newGame();
 
     controller_.applyQueuedActions();
+
+    // Combine the game's own result with the clock flag into one truth.
+    const bool gameOver = isGameOver();
+
+    // The engine must keep polling so its output queue drains, but must
+    // not start a new search once the game is over. EnginePlayer::tick
+    // internally checks in.gameOver for that.
     enginePlayer_.tick(game_, clock_);
+
     controller_.updateAnnotations();
 
     const std::size_t curr = game_.cursor();
@@ -165,16 +179,11 @@ void Application::stepSimulation(float dtSeconds)
     }
     else if (curr + 1 == lastCursor_ && curr < game_.history().size())
     {
-        // Undo. history()[curr] is the move that was just un-applied: its
-        // from/to are swapped so the piece slides back to its origin, and
-        // the piece drawn is whatever sits on that origin now -- a pawn if
-        // the un-done move was a promotion.
         const MoveRecord& rec = game_.history()[curr];
         animation_.start(rec.move.to(), rec.move.from(), game_.pieceAt(rec.move.from()));
     }
     else if (curr != lastCursor_)
     {
-        // gotoPly, gotoEnd, loadFEN: multi-ply jumps snap.
         animation_.active = false;
     }
 
@@ -191,15 +200,16 @@ void Application::stepSimulation(float dtSeconds)
     if (curr < lastCursor_)
         lastCursor_ = curr;
 
-    // Once the game is terminal, stop advancing the clock, and abort any
-    // in-flight engine search exactly once on the transition. The next
-    // frame's result() will report the same state until newGame() resets
-    // the game, so this fires on the edge, not every frame.
-    // minor adding
-    const bool gameOver = (game_.result().kind != GameResultKind::Ongoing);
-
+    // On the transition into game over:
+    //   - abort any in-flight engine search,
+    //   - clear stale board hints,
+    //   - reopen the modal so it presents fresh.
     if (justEnteredGameOver(gameOver, gameOverWas_))
+    {
         enginePlayer_.abort();
+        controller_.clearHints();
+        controller_.reopenGameOverModal();
+    }
 
     if (!gameOver)
         clock_.update(dtSeconds);
@@ -239,7 +249,6 @@ Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
         snap.nodes = info->nodes;
         snap.nps = info->nps;
 
-        // Normalize to White's perspective for display.
         const bool fromBlack = (enginePlayer_.lastInfoSide() == BLACK);
         if (info->scoreCp)
             snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
@@ -267,4 +276,5 @@ void Application::newGame()
     animation_.active = false;
     enginePlayer_.abort();
     controller_.updateAnnotations();
+    controller_.reopenGameOverModal();
 }

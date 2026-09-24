@@ -36,12 +36,16 @@ target_link_libraries(EnginePlayerSelfGameTest
 )
 
 # ---- GameOverTest ----
-# ---- GameOverTest ----
 add_executable(GameOverTest
     GameOverTest.cpp
     ${GUI_SRC_DIR}/ChessGame.cpp
     ${GUI_SRC_DIR}/Board.cpp
     ${GUI_SRC_DIR}/San.cpp
+    ${GUI_SRC_DIR}/ChessClock.cpp
+    ${GUI_SRC_DIR}/EnginePlayer.cpp
+    ${GUI_SRC_DIR}/UciEngine.cpp
+    ${GUI_SRC_DIR}/Process_windows.cpp
+    ${GUI_SRC_DIR}/Process_posix.cpp
     ${GUI_SRC_DIR}/GuiGameController.cpp
     ${GUI_SRC_DIR}/BoardAnnotations.cpp
 )

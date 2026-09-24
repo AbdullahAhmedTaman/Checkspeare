@@ -62,6 +62,10 @@ private:
     /// board-panel containment and ImGui mouse capture.
     bool shouldForwardInput(const Gui::InputEvent& ev) const;
 
+    /// True when the game is over for any reason: game.result() is
+    /// terminal, or either side's clock has flagged.
+    bool isGameOver() const;
+
     /// Resets game and clock for a fresh game. Called when the game-over
     /// banner's New Game button fires a request.
     void newGame();

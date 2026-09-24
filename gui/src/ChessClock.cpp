@@ -71,8 +71,9 @@ std::optional<Color> ChessClock::update(double dtSeconds)
 
 void ChessClock::onMovePlayed(Color mover)
 {
-    // Add increment to the mover.
-    if (tc_.incrementMs > 0)
+    // The increment is not granted to a side whose clock has already
+    // fallen. Once flagged, that side's time is locked at 0 until reset.
+    if (!flagged_[mover] && tc_.incrementMs > 0)
         remaining_[mover] += tc_.incrementMs;
 
     // Flip the active side.
@@ -88,17 +89,3 @@ bool ChessClock::flagFallen(Color side) const
 {
     return flagged_[side];
 }
-
-/// So we're clear on scope:
-
-/// It doesn't auto-declare a loss on flag fall. It returns which side flagged;
-// the caller decides what to do. Wiring flag-fall into ChessGame::result()
-// is a separate design decision (does the game model a time loss? a draw? a special GameResultKind?).
-// I'd defer that to a later block — for the MVP, showing "White's flag fell" in the UI is enough.
-
-/// It doesn't pause on undo/redo. If you undo two moves, the clock keeps its current time.
-// This is technically wrong (a real clock would restore the time from before those moves),
-// but it's the standard MVP compromise: "undo doesn't rewind the clock.
-// " A later iteration could store the time in MoveRecord.
-
-/// It doesn't handle multiple time controls (Fischer, Bronstein, byo-yomi). Just standard increment.
