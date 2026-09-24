@@ -52,9 +52,9 @@ namespace Gui
                 case GameResultKind::Ongoing:
                     return "";
                 case GameResultKind::Checkmate:
-                    return (r.winner == WHITE) ? "Checkmate — White wins" : "Checkmate — Black wins";
+                    return (r.winner == WHITE) ? "Checkmate - White wins" : "Checkmate - Black wins";
                 case GameResultKind::Stalemate:
-                    return "Stalemate — Draw";
+                    return "Stalemate - Draw";
                 case GameResultKind::FiftyMove:
                     return "Draw by fifty-move rule";
                 case GameResultKind::Threefold:
@@ -66,7 +66,7 @@ namespace Gui
         }
     } // namespace
 
-    void renderStatusPanel(const GuiGameController& controller, const ChessGame& game)
+    void renderStatusPanel(GuiGameController& controller, const ChessGame& game)
     {
         ImGui::Begin("Game");
 
@@ -111,18 +111,30 @@ namespace Gui
             ImGui::Separator();
             ImGui::Spacing();
 
-            // Center the text inside a highlighted card.
             const ImVec2 textSize = ImGui::CalcTextSize(resultText.c_str());
-            const float cardH = textSize.y + 22.0f;
+
+            // The card holds a centered title line and a centered New Game
+            // button below it.
+            const float buttonH = ImGui::GetFrameHeight();
+            const float cardH = textSize.y + buttonH + 34.0f;
 
             ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.24f, 0.12f, 0.10f, 1.00f));
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.78f, 0.44f, 0.34f, 1.00f));
             ImGui::BeginChild("##result", ImVec2(0, cardH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
 
             const float availW = ImGui::GetContentRegionAvail().x;
+
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - textSize.x) * 0.5f);
             ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 8.0f);
             ImGui::TextColored(ImVec4(0.98f, 0.90f, 0.72f, 1.00f), "%s", resultText.c_str());
+
+            // New Game button, centered under the title.
+            constexpr float buttonW = 140.0f;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - buttonW) * 0.5f);
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6.0f);
+
+            if (ImGui::Button("New Game", ImVec2(buttonW, 0.0f)))
+                controller.requestNewGame();
 
             ImGui::EndChild();
             ImGui::PopStyleColor(2);

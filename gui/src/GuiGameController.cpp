@@ -1,4 +1,6 @@
 #include "GuiGameController.hpp"
+#include "GameResult.hpp"
+
 #include <algorithm>
 
 namespace Gui
@@ -43,6 +45,13 @@ namespace Gui
     {
         if (button != MouseButton::Left)
             return;
+
+        // Terminal position: the board is frozen. Any ImGui widgets
+        // (the New Game button, the move list) still work because they
+        // are drawn and handled by ImGui, not by this controller.
+        if (game_.result().kind != GameResultKind::Ongoing)
+            return;
+
         if (promo_.active)
         {
             const auto sqOpt = geo.squareAt(position);
@@ -65,6 +74,7 @@ namespace Gui
             cancelPromotion();
             return;
         }
+
         if (drag_.active)
             return;
 
@@ -289,6 +299,18 @@ namespace Gui
     void GuiGameController::requestGotoPly(std::size_t ply)
     {
         queuedGotoPly_ = ply;
+    }
+
+    void GuiGameController::requestNewGame()
+    {
+        newGameRequested_ = true;
+    }
+
+    bool GuiGameController::consumeNewGameRequest()
+    {
+        const bool requested = newGameRequested_;
+        newGameRequested_ = false;
+        return requested;
     }
 
 } // namespace Gui

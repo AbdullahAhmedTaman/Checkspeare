@@ -9,7 +9,7 @@
 namespace Gui
 {
 
-    void renderImGui(sf::RenderWindow& window, Config& conf, BoardGeometry& geo, const GuiGameController& controller,
+    void renderImGui(sf::RenderWindow& window, Config& conf, BoardGeometry& geo, GuiGameController& controller,
                      const ChessGame& game, const ChessClock& clock, ImFont* clockFont)
     {
         renderStatusPanel(controller, game);
