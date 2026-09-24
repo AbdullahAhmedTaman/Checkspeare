@@ -1,11 +1,13 @@
 #pragma once
 
 #include "Board.hpp"
+#include "ClockSnapshot.hpp"
 #include "GameResult.hpp"
 #include "MoveRecord.hpp"
 #include "types.h"
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -18,9 +20,20 @@
 /// Invariant:
 ///     cursor_ == 0  -> board_ equals the start position
 ///     cursor_ == n  -> board_ equals start position + moves_[0..n-1]
+///
+/// The game also carries a clock snapshot per ply so that undo/redo can
+/// restore the clock exactly. The game never owns the clock; Application
+/// installs a ClockSync callback and pushes snapshots in. Every cursor
+/// change invokes the callback with the snapshot that applies to the
+/// new cursor position.
 class ChessGame
 {
 public:
+    /// Callback invoked with the clock snapshot that applies to the
+    /// current cursor after any navigation. Application installs a lambda
+    /// that forwards to ChessClock::restore.
+    using ClockSync = std::function<void(const ClockSnapshot&)>;
+
     ChessGame();
 
     /// Replaces the current game with `fen` and clears history.
@@ -29,15 +42,24 @@ public:
     /// Resets to the standard initial position and clears history.
     void reset();
 
+    /// Installs the callback that receives clock snapshots on every cursor
+    /// change. Passing an empty function disables sync.
+    void setClockSync(ClockSync sync);
+
+    /// Records the clock snapshot that applies to the start position.
+    /// Called by Application after configuring the clock.
+    void setInitialClockSnapshot(const ClockSnapshot& s);
+
+    /// Records the clock snapshot that applies to the move at `ply`.
+    /// Called by Application the frame a move is committed.
+    void setClockSnapshotAt(std::size_t ply, const ClockSnapshot& s);
+
     /// Plays from -> to. If the cursor is behind the end of the list (user
     /// navigated back and then played), the redo tail is discarded first.
     /// Returns the applied Move on success.
     std::optional<Move> play(Square from, Square to, PieceType promo = QUEEN);
 
-    /// Steps the cursor one ply back. False if already at ply 0.
     bool undo();
-
-    /// Steps the cursor one ply forward. False if already at the end.
     bool redo();
 
     /// Moves the cursor to `ply` (0 = start position), clamped to
@@ -57,13 +79,11 @@ public:
         return cursor_;
     }
 
-    /// Full history, including entries past the cursor (the redo tail).
     const std::vector<MoveRecord>& history() const
     {
         return moves_;
     }
 
-    /// Entries [0, cursor_). What the move-list panel should render.
     std::vector<MoveRecord> historyToCursor() const;
 
     /// Classifies the current position. Never mutates.
@@ -90,22 +110,20 @@ public:
     }
 
 private:
-    /// Applies moves_[cursor_] and advances. Precondition: cursor_ < size.
     void stepForward();
-
-    /// Unapplies moves_[cursor_-1] and retreats. Precondition: cursor_ > 0.
     void stepBackward();
 
-    /// Finds the matching legal move in the current position without
-    /// mutating anything. Returns nullopt if from -> to is not legal.
-    std::optional<Move> findLegalMove(Square from, Square to, PieceType promo) const;
+    /// Pushes the snapshot for the current cursor to the sync callback.
+    /// Called by every public navigation method.
+    void syncClockToCursor();
 
-    /// True if the position has no pawns, rooks, or queens, and at most
-    /// one minor piece, or two bishops on the same color. Not exhaustive
-    /// for every FIDE-insufficient-material case, but covers the common ones.
+    std::optional<Move> findLegalMove(Square from, Square to, PieceType promo) const;
     bool isInsufficientMaterial() const;
 
     Board board_;
     std::vector<MoveRecord> moves_;
     std::size_t cursor_ = 0;
+
+    ClockSnapshot initialClock_;
+    ClockSync clockSync_;
 };

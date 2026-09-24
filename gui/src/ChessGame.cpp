@@ -17,6 +17,7 @@ void ChessGame::loadFEN(const std::string& fen)
     board_.loadFEN(fen);
     moves_.clear();
     cursor_ = 0;
+    syncClockToCursor();
 }
 
 void ChessGame::reset()
@@ -24,32 +25,52 @@ void ChessGame::reset()
     board_.reset();
     moves_.clear();
     cursor_ = 0;
+    syncClockToCursor();
+}
+
+void ChessGame::setClockSync(ClockSync sync)
+{
+    clockSync_ = std::move(sync);
+}
+
+void ChessGame::setInitialClockSnapshot(const ClockSnapshot& s)
+{
+    initialClock_ = s;
+    if (cursor_ == 0)
+        syncClockToCursor();
+}
+
+void ChessGame::setClockSnapshotAt(std::size_t ply, const ClockSnapshot& s)
+{
+    if (ply >= moves_.size())
+        return;
+
+    moves_[ply].clockAfter = s;
+
+    // If the cursor is exactly on this ply, push the new snapshot through
+    // as well, so the clock reflects it immediately.
+    if (cursor_ == ply + 1)
+        syncClockToCursor();
 }
 
 std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
 {
-    // Find the move WITHOUT mutating anything. If it's illegal, we must
-    // not destroy the redo tail.
     const auto m = findLegalMove(from, to, promo);
     if (!m)
         return std::nullopt;
 
-    // Only now is it safe to discard the redo tail.
     if (cursor_ < moves_.size())
         moves_.resize(cursor_);
 
-    // SAN needs the position before the move; copy the board first.
     Board before = board_;
-
-    // Apply.
     board_.applyMove(*m);
     ++cursor_;
 
-    // Build and append the record.
     MoveRecord rec;
     rec.move = *m;
     rec.san = toSan(before, *m);
     rec.positionKeyAfter = board_.position().key;
+    // rec.clockAfter is set later by Application via setClockSnapshotAt.
     moves_.push_back(std::move(rec));
 
     return m;
@@ -60,6 +81,7 @@ bool ChessGame::undo()
     if (cursor_ == 0)
         return false;
     stepBackward();
+    syncClockToCursor();
     return true;
 }
 
@@ -68,6 +90,7 @@ bool ChessGame::redo()
     if (cursor_ == moves_.size())
         return false;
     stepForward();
+    syncClockToCursor();
     return true;
 }
 
@@ -76,22 +99,43 @@ void ChessGame::gotoPly(std::size_t ply)
     if (ply > moves_.size())
         ply = moves_.size();
 
+    bool changed = false;
     while (cursor_ > ply)
+    {
         stepBackward();
+        changed = true;
+    }
     while (cursor_ < ply)
+    {
         stepForward();
+        changed = true;
+    }
+    if (changed)
+        syncClockToCursor();
 }
 
 void ChessGame::gotoEnd()
 {
+    bool changed = false;
     while (cursor_ < moves_.size())
+    {
         stepForward();
+        changed = true;
+    }
+    if (changed)
+        syncClockToCursor();
 }
 
 void ChessGame::gotoStart()
 {
+    bool changed = false;
     while (cursor_ > 0)
+    {
         stepBackward();
+        changed = true;
+    }
+    if (changed)
+        syncClockToCursor();
 }
 
 std::vector<MoveRecord> ChessGame::historyToCursor() const
@@ -101,8 +145,6 @@ std::vector<MoveRecord> ChessGame::historyToCursor() const
 
 GameResult ChessGame::result() const
 {
-    // Checkmate / stalemate. Board caches the legal move list, so these
-    // are cheap.
     if (board_.isCheckmate())
     {
         const Color loser = board_.sideToMove();
@@ -112,13 +154,9 @@ GameResult ChessGame::result() const
     if (board_.isStalemate())
         return {GameResultKind::Stalemate};
 
-    // Fifty-move rule. The engine's halfmove field counts plies since
-    // the last capture or pawn move. 100 plies = 50 full moves.
     if (board_.position().halfmoveClock >= 100)
         return {GameResultKind::FiftyMove};
 
-    // Threefold repetition. Walk the history up to the cursor and
-    // count how many times the current position's key appeared.
     const Key currentKey = board_.position().key;
     int occurrences = 0;
     for (std::size_t i = 0; i < cursor_; ++i)
@@ -131,7 +169,6 @@ GameResult ChessGame::result() const
         }
     }
 
-    // Insufficient material.
     if (isInsufficientMaterial())
         return {GameResultKind::InsufficientMaterial};
 
@@ -140,21 +177,27 @@ GameResult ChessGame::result() const
 
 void ChessGame::stepForward()
 {
-    // Precondition: cursor_ < moves_.size()
     board_.applyMove(moves_[cursor_].move);
     ++cursor_;
 }
 
 void ChessGame::stepBackward()
 {
-    // Precondition: cursor_ > 0
     --cursor_;
     board_.unmakeMove(moves_[cursor_].move);
 }
 
-/// it uses board_.legalMovesFrom(from) rather than board_.allLegalMoves(),
-// which is slightly faster (only scans moves from that
-/// square). Both work.
+void ChessGame::syncClockToCursor()
+{
+    if (!clockSync_)
+        return;
+
+    if (cursor_ == 0)
+        clockSync_(initialClock_);
+    else
+        clockSync_(moves_[cursor_ - 1].clockAfter);
+}
+
 std::optional<Move> ChessGame::findLegalMove(Square from, Square to, PieceType promo) const
 {
     if (!is_valid(from) || !is_valid(to))
@@ -189,7 +232,6 @@ bool ChessGame::isInsufficientMaterial() const
 
         const PieceType t = type_of(pc);
 
-        // Any of these means material is sufficient.
         if (t == PAWN || t == ROOK || t == QUEEN)
             return false;
 
@@ -220,11 +262,11 @@ bool ChessGame::isInsufficientMaterial() const
     }
 
     if (minorCount == 0)
-        return true; // K vs K
+        return true;
     if (minorCount == 1)
-        return true; // K+minor vs K
+        return true;
     if (minorCount == 2 && bishopSeen && !knightSeen && !oppositeColorBishops)
-        return true; // K+B vs K+B, same color
+        return true;
 
     return false;
 }

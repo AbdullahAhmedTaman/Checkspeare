@@ -22,7 +22,6 @@ namespace Gui
         sf::Vector2f offset{0.0f, 0.0f};
     };
 
-    /// State for a pending promotion choice.
     struct PendingPromotion
     {
         bool active = false;
@@ -32,7 +31,6 @@ namespace Gui
         std::array<Square, 4> choiceSquares{SQ_NONE, SQ_NONE, SQ_NONE, SQ_NONE};
     };
 
-    /// Result of the most recent controller action.
     struct ActionResult
     {
         enum class Kind
@@ -48,17 +46,11 @@ namespace Gui
         };
 
         Kind kind = Kind::Ready;
-
         Square from = SQ_NONE;
         Square to = SQ_NONE;
         Piece piece = PIECE_NONE;
     };
 
-    /// Translates input events into moves on a ChessGame.
-    ///
-    /// The controller is guarded against mutating a finished game: every
-    /// entry point that could reach ChessGame::play, undo, or redo checks
-    /// game_.result() first and refuses to act if the game is terminal.
     class GuiGameController
     {
     public:
@@ -90,8 +82,6 @@ namespace Gui
             return annotations_;
         }
 
-        /// True if the most recent move commit originated from a drag
-        /// release rather than a click-click. Cleared by navigation.
         bool lastMoveWasDrag() const
         {
             return lastMoveWasDrag_;
@@ -105,19 +95,11 @@ namespace Gui
         void requestGotoPly(std::size_t ply);
         void applyQueuedActions();
 
-        /// Clears selection hints (selected square + legal target dots).
-        /// Called by Application when the game ends so no stale hints
-        /// remain on the board.
         void clearHints();
 
-        /// Sets the "new game" flag. Application drains it once per frame
-        /// via consumeNewGameRequest().
         void requestNewGame();
         bool consumeNewGameRequest();
 
-        /// Modal dismissal tracking. When the game-over modal is closed,
-        /// the flag becomes true so the modal does not immediately reopen.
-        /// Application reopens it on each new game-over transition.
         bool gameOverModalDismissed() const
         {
             return gameOverModalDismissed_;
@@ -132,6 +114,11 @@ namespace Gui
         {
             gameOverModalDismissed_ = false;
         }
+
+        /// Sets the "quit application" flag. Application drains it once per
+        /// frame and closes the window.
+        void requestQuit();
+        bool consumeQuitRequest();
 
         void updateAnnotations();
 
@@ -151,6 +138,7 @@ namespace Gui
         bool lastMoveWasDrag_ = false;
         bool newGameRequested_ = false;
         bool gameOverModalDismissed_ = false;
+        bool quitRequested_ = false;
     };
 
 } // namespace Gui

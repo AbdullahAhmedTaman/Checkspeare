@@ -10,12 +10,6 @@ namespace Gui
     {
         constexpr PieceType kPromotionOrder[4] = {QUEEN, ROOK, BISHOP, KNIGHT};
 
-        /// True when the game is terminal and the controller must freeze.
-        /// Currently this only checks the game's own result. Flag-fall is
-        /// decided by Application, which sees the clock; when flag-fall is
-        /// treated as terminal, Application stops forwarding events to the
-        /// controller entirely (see Application::shouldForwardInput), so
-        /// the controller does not need to know about the clock.
         bool isFrozen(const ChessGame& game)
         {
             return game.result().kind != GameResultKind::Ongoing;
@@ -57,14 +51,12 @@ namespace Gui
         if (button != MouseButton::Left)
             return;
 
-        // Terminal position: the board is frozen.
         if (isFrozen(game_))
             return;
 
         if (promo_.active)
         {
             const auto sqOpt = geo.squareAt(position);
-
             if (!sqOpt)
             {
                 cancelPromotion();
@@ -95,7 +87,6 @@ namespace Gui
         if (annotations_.selected.has_value())
         {
             const auto& targets = annotations_.legalTargets;
-
             if (std::find(targets.begin(), targets.end(), sq) != targets.end())
             {
                 const Square from = *annotations_.selected;
@@ -139,8 +130,6 @@ namespace Gui
         if (button != MouseButton::Left || !drag_.active)
             return;
 
-        // A drag that started before game over may finish after. Drop it
-        // without touching the game.
         if (isFrozen(game_))
         {
             drag_ = {};
@@ -176,9 +165,6 @@ namespace Gui
 
     void GuiGameController::playMoveOrStartPromotion(Square from, Square to, bool fromDrag)
     {
-        // Defensive: this is reachable from onPress (click-click) and
-        // onRelease (drag-release). Both guard against frozen games, but
-        // the check is repeated here so no future caller can bypass it.
         if (isFrozen(game_))
             return;
 
@@ -284,7 +270,6 @@ namespace Gui
         if (!hadQueued)
             return;
 
-        // Drop navigation requests against a frozen game.
         if (isFrozen(game_))
         {
             queuedGotoPly_.reset();
@@ -353,6 +338,18 @@ namespace Gui
     {
         const bool requested = newGameRequested_;
         newGameRequested_ = false;
+        return requested;
+    }
+
+    void GuiGameController::requestQuit()
+    {
+        quitRequested_ = true;
+    }
+
+    bool GuiGameController::consumeQuitRequest()
+    {
+        const bool requested = quitRequested_;
+        quitRequested_ = false;
         return requested;
     }
 

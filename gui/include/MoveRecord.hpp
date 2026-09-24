@@ -1,22 +1,23 @@
 #pragma once
 
+#include "ClockSnapshot.hpp"
 #include "types.h"
 
 #include <string>
 
 /// One entry in the move history. Produced once at commit time and never
-/// mutated afterwards.
+/// mutated except for the clock snapshot, which is filled in by Application
+/// on the same frame the move was committed.
 ///
-/// Stores the raw Move plus data that would otherwise require replaying the
-/// game per consumer:
+/// Stores:
+///   - the raw Move
 ///   - SAN text (move list, PGN export, engine PV rendering)
-///   - Zobrist key of the position *after* the move (threefold detection)
-///
-/// No FEN strings: the live position is reproduced from the move list via
-/// Position::make_move / unmake_move, so a per-move FEN would be redundant.
+///   - Zobrist key of the position after the move (threefold detection)
+///   - the clock's state after the move was played
 struct MoveRecord
 {
     Move move = Move::none();
     std::string san;
     Key positionKeyAfter = 0;
+    ClockSnapshot clockAfter;
 };

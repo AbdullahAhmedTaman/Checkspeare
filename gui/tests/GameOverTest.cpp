@@ -373,5 +373,92 @@ int main()
         test::expectTrue(toString(r) == "Stalemate - Draw", "Stalemate");
     }
 
+    // ------------------------------------------------------------------
+    std::cout << "\n[clock snapshot round-trip]\n";
+    {
+        ChessClock c;
+        ChessClock::TimeControl tc;
+        tc.initialMs = 30'000;
+        tc.incrementMs = 2'000;
+        c.configure(tc);
+        c.start();
+
+        c.update(1.0); // white: 30000 -> 29000
+        const auto snapA = c.snapshot();
+
+        c.onMovePlayed(WHITE); // white +2000, active = BLACK
+        c.update(2.0);         // black: 30000 -> 28000
+        const auto snapB = c.snapshot();
+
+        // Restore to snapA: white should be 29000, active WHITE.
+        c.restore(snapA);
+        test::expectEq(static_cast<std::size_t>(c.remainingMs(WHITE)), std::size_t{29'000}, "restore A: white 29000");
+        test::expectEq(static_cast<std::size_t>(c.remainingMs(BLACK)), std::size_t{30'000}, "restore A: black 30000");
+
+        // Restore to snapB: white should be 31000 (29000 + 2000), black 28000.
+        c.restore(snapB);
+        test::expectEq(static_cast<std::size_t>(c.remainingMs(WHITE)), std::size_t{31'000}, "restore B: white 31000");
+        test::expectEq(static_cast<std::size_t>(c.remainingMs(BLACK)), std::size_t{28'000}, "restore B: black 28000");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[chess game restores clock on undo]\n";
+    {
+        ChessClock clock;
+        ChessClock::TimeControl tc;
+        tc.initialMs = 30'000;
+        tc.incrementMs = 0;
+        clock.configure(tc);
+        clock.start();
+
+        ChessGame g;
+        g.setClockSync(
+            [&clock](const ClockSnapshot& s)
+            {
+                clock.restore(s);
+            });
+        g.setInitialClockSnapshot(clock.snapshot());
+
+        // Play e2e4 with the clock at 30000/30000.
+        play(g, "e2e4");
+        clock.onMovePlayed(WHITE);
+        g.setClockSnapshotAt(g.cursor() - 1, clock.snapshot());
+
+        // Now white is 30000, black is 30000, active BLACK.
+        const std::int64_t whiteAfter1 = clock.remainingMs(WHITE);
+        const std::int64_t blackAfter1 = clock.remainingMs(BLACK);
+
+        // Undo. Clock should snap back to the initial snapshot:
+        // active WHITE, both sides 30000.
+        g.undo();
+        test::expectEq(static_cast<std::size_t>(clock.remainingMs(WHITE)), std::size_t{30'000}, "undo: white back to initial");
+        test::expectEq(static_cast<std::size_t>(clock.remainingMs(BLACK)), std::size_t{30'000}, "undo: black back to initial");
+
+        // Redo. Clock should snap forward to after-1 snapshot.
+        g.redo();
+        test::expectEq(static_cast<std::size_t>(clock.remainingMs(WHITE)), static_cast<std::size_t>(whiteAfter1),
+                       "redo: white forward");
+        test::expectEq(static_cast<std::size_t>(clock.remainingMs(BLACK)), static_cast<std::size_t>(blackAfter1),
+                       "redo: black forward");
+    }
+
+    // ------------------------------------------------------------------
+    std::cout << "\n[quit request flag]\n";
+    {
+        ChessGame g;
+        Gui::GuiGameController c(g);
+
+        test::expectTrue(!c.consumeQuitRequest(), "fresh: no quit request");
+
+        c.requestQuit();
+        test::expectTrue(c.consumeQuitRequest(), "first consume true");
+        test::expectTrue(!c.consumeQuitRequest(), "second consume false");
+
+        c.requestQuit();
+        c.requestQuit();
+        test::expectTrue(c.consumeQuitRequest(), "multiple collapse to one");
+        test::expectTrue(!c.consumeQuitRequest(), "no second consume");
+    }
+
     return test::summary();
 }

@@ -5,9 +5,6 @@
 
 namespace
 {
-    // milliseconds are stored as int64. dtSeconds comes in as a float/double,
-    // so we convert once per call. Using llround to avoid accumulating
-    // truncation error over many frames.
     std::int64_t toMs(double seconds)
     {
         return static_cast<std::int64_t>(std::llround(seconds * 1000.0));
@@ -52,7 +49,6 @@ std::optional<Color> ChessClock::update(double dtSeconds)
     if (dtSeconds <= 0.0)
         return std::nullopt;
 
-    // If the active side already flagged, do nothing.
     if (flagged_[active_])
         return std::nullopt;
 
@@ -64,19 +60,16 @@ std::optional<Color> ChessClock::update(double dtSeconds)
     {
         remaining_[active_] = 0;
         flagged_[active_] = true;
-        return active_; // this side's flag just fell
+        return active_;
     }
     return std::nullopt;
 }
 
 void ChessClock::onMovePlayed(Color mover)
 {
-    // The increment is not granted to a side whose clock has already
-    // fallen. Once flagged, that side's time is locked at 0 until reset.
     if (!flagged_[mover] && tc_.incrementMs > 0)
         remaining_[mover] += tc_.incrementMs;
 
-    // Flip the active side.
     active_ = (mover == WHITE) ? BLACK : WHITE;
 }
 
@@ -88,4 +81,26 @@ std::int64_t ChessClock::remainingMs(Color side) const
 bool ChessClock::flagFallen(Color side) const
 {
     return flagged_[side];
+}
+
+ClockSnapshot ChessClock::snapshot() const
+{
+    ClockSnapshot s;
+    s.remainingWhiteMs = remaining_[WHITE];
+    s.remainingBlackMs = remaining_[BLACK];
+    s.active = active_;
+    s.flaggedWhite = flagged_[WHITE];
+    s.flaggedBlack = flagged_[BLACK];
+    return s;
+}
+
+void ChessClock::restore(const ClockSnapshot& s)
+{
+    remaining_[WHITE] = s.remainingWhiteMs;
+    remaining_[BLACK] = s.remainingBlackMs;
+    active_ = s.active;
+    flagged_[WHITE] = s.flaggedWhite;
+    flagged_[BLACK] = s.flaggedBlack;
+    // running_ is left alone: it reflects whether the game is live, not
+    // the specific ply. Undo/redo does not pause or resume the clock.
 }

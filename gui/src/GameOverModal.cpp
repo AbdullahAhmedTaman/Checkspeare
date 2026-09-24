@@ -12,9 +12,6 @@ namespace Gui
 
     namespace
     {
-        /// Combined result text: a clock flag-fall takes priority over the
-        /// game's own result, because it's what actually ended the game
-        /// (the position might still be Ongoing).
         std::string combinedResultText(const GameResult& r, const ChessClock& clock)
         {
             if (clock.flagFallen(WHITE))
@@ -75,9 +72,9 @@ namespace Gui
 
             ImGui::SameLine(0.0f, gap);
 
-            if (ImGui::Button("Close", ImVec2(buttonW, 0.0f)))
+            if (ImGui::Button("Quit", ImVec2(buttonW, 0.0f)))
             {
-                controller.dismissGameOverModal();
+                controller.requestQuit();
                 ImGui::CloseCurrentPopup();
             }
 

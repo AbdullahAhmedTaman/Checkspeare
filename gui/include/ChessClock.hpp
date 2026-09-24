@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ClockSnapshot.hpp"
 #include "types.h"
 
 #include <cstdint>
@@ -35,10 +36,19 @@ public:
     std::optional<Color> update(double dtSeconds);
 
     /// Adds the increment to `mover` and switches the active side.
+    /// The increment is not granted to a side whose flag has already fallen.
     void onMovePlayed(Color mover);
 
     std::int64_t remainingMs(Color side) const;
     bool flagFallen(Color side) const;
+
+    /// Value-type snapshot of the current state. Used by ChessGame to
+    /// remember the clock at each ply so undo/redo can restore exactly.
+    ClockSnapshot snapshot() const;
+
+    /// Restores the clock from a snapshot. Also restores the active side
+    /// and flag state.
+    void restore(const ClockSnapshot& s);
 
 private:
     TimeControl tc_{};

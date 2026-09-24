@@ -32,6 +32,26 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     clock_.configure(tc);
     clock_.start();
 
+    // Clock snapshot wiring.
+    //
+    // The game carries a ClockSnapshot per ply plus one for the start
+    // position. Whenever the cursor moves via navigation (undo, redo,
+    // gotoPly, etc.), it calls this callback with the snapshot that
+    // applies to the new cursor, and the clock restores it.
+    //
+    // Note: ChessGame::play does NOT fire this callback. A freshly-played
+    // move is handled by Application::stepSimulation instead, because the
+    // "after" snapshot for that ply only exists once the clock has been
+    // told about the move (increment added, side flipped).
+    game_.setClockSync(
+        [this](const ClockSnapshot& s)
+        {
+            clock_.restore(s);
+        });
+
+    // Snapshot the initial clock state for ply 0.
+    game_.setInitialClockSnapshot(clock_.snapshot());
+
     if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
 
@@ -56,6 +76,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
+    /// Where Engine integration comes in :
     // engine_.start(conf_.enginePath);
     // enginePlayer_.setSideControlled(BLACK, true);
 }
@@ -113,9 +134,6 @@ void Application::processEvents()
 
 bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
 {
-    // FocusLost and drag-ending releases always forward: the drag state
-    // machine must see them regardless of who owns the mouse, and even
-    // after game over we want to cancel any in-flight drag.
     if (ev.kind == Gui::InputEvent::Kind::FocusLost)
         return true;
 
@@ -123,13 +141,9 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     if (endsDrag)
         return true;
 
-    // Freeze all other events once the game is over. The controller has
-    // its own guards, but skipping the whole forwarding path removes any
-    // doubt about races between a game-ending move and the next event.
     if (isGameOver())
         return false;
 
-    // Never let the human play for an engine-controlled side.
     if (enginePlayer_.isSideControlled(game_.sideToMove()))
         return false;
 
@@ -152,23 +166,29 @@ void Application::update(float dtSeconds)
 
 void Application::stepSimulation(float dtSeconds)
 {
+    // Quit first: if the user clicked Quit in the modal, do it before
+    // anything else this frame.
+    if (controller_.consumeQuitRequest())
+    {
+        window_.close();
+        return;
+    }
+
     if (controller_.consumeNewGameRequest())
         newGame();
 
     controller_.applyQueuedActions();
 
-    // Combine the game's own result with the clock flag into one truth.
     const bool gameOver = isGameOver();
 
-    // The engine must keep polling so its output queue drains, but must
-    // not start a new search once the game is over. EnginePlayer::tick
-    // internally checks in.gameOver for that.
     enginePlayer_.tick(game_, clock_);
-
     controller_.updateAnnotations();
 
     const std::size_t curr = game_.cursor();
 
+    // ------------------------------------------------------------------
+    // Animation
+    // ------------------------------------------------------------------
     if (curr == lastCursor_ + 1)
     {
         if (curr != suppressAnimationAtPly_)
@@ -191,19 +211,45 @@ void Application::stepSimulation(float dtSeconds)
 
     animation_.tick(dtSeconds);
 
-    while (lastCursor_ < curr)
+    // ------------------------------------------------------------------
+    // Clock advancement
+    //
+    // Two distinct cases, handled separately:
+    //
+    //   1. Exactly one new ply was played (curr == lastCursor_ + 1).
+    //      This is a fresh move commit. Tell the clock about it (add
+    //      increment, flip active side) and *then* record the resulting
+    //      state as the "after" snapshot for that ply. The order matters:
+    //      the snapshot must reflect the clock as it is once the move has
+    //      been accounted for, so that undo/redo restores the correct
+    //      numbers AND the correct active side.
+    //
+    //   2. Any other cursor change (undo, redo, gotoPly, gotoEnd, a
+    //      history-row click). The clock was already restored to the
+    //      correct snapshot by ChessGame's sync callback when the cursor
+    //      moved, so nothing to do here except resync lastCursor_.
+    //
+    // The previous version used a `while (lastCursor_ < curr)` loop that
+    // treated both cases identically. That produced two bugs:
+    //   - snapshots were taken before onMovePlayed, so they held the
+    //     pre-move active side; undo flipped the clock to the wrong side.
+    //   - a multi-ply forward jump (gotoPly / gotoEnd) re-applied every
+    //     increment in the jumped range, corrupting the numbers.
+    // ------------------------------------------------------------------
+    if (curr == lastCursor_ + 1)
     {
         const Color mover = (lastCursor_ % 2 == 0) ? WHITE : BLACK;
         clock_.onMovePlayed(mover);
         ++lastCursor_;
-    }
-    if (curr < lastCursor_)
-        lastCursor_ = curr;
 
-    // On the transition into game over:
-    //   - abort any in-flight engine search,
-    //   - clear stale board hints,
-    //   - reopen the modal so it presents fresh.
+        // Post-increment snapshot for this ply.
+        game_.setClockSnapshotAt(curr - 1, clock_.snapshot());
+    }
+    else if (curr != lastCursor_)
+    {
+        lastCursor_ = curr;
+    }
+
     if (justEnteredGameOver(gameOver, gameOverWas_))
     {
         enginePlayer_.abort();
@@ -277,4 +323,7 @@ void Application::newGame()
     enginePlayer_.abort();
     controller_.updateAnnotations();
     controller_.reopenGameOverModal();
+
+    // Re-snapshot the initial clock state for the fresh game.
+    game_.setInitialClockSnapshot(clock_.snapshot());
 }
