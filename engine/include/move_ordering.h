@@ -7,8 +7,8 @@ namespace MoveOrdering
 {
     constexpr int TT_MOVE_SCORE = 1000000;
     constexpr int CAPTURE_BONUS = 100000;
-    constexpr int KILLER_SCORE = 90000;
     constexpr int PROMOTION_BONUS = 80000;
+    constexpr int KILLER_SCORE = 70000;
 
     // Values: Pawn=0, Knight=1, Bishop=2, Rook=3, Queen=4, King=5
     // clang-format off
@@ -62,5 +62,8 @@ namespace MoveOrdering
 
         /** @brief Assigns ordering scores to the copied move list. */
         void score_moves(const Position& pos, Move tt_move);
+
+        /** @brief Comparator for the std::make_heap / std::pop_heap ordering. */
+        static bool lower_priority(const ScoredMove& left, const ScoredMove& right);
     };
 } // namespace MoveOrdering

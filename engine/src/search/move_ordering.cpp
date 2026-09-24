@@ -19,6 +19,7 @@ namespace MoveOrdering
             if (move == tt_move)
                 return TT_MOVE_SCORE;
 
+            // Promotion bonus applies whether or not the promotion is also a capture.
             const int promotion_score = move.is_promotion() ? PROMOTION_BONUS + static_cast<int>(promotion_type(move)) * 1000 : 0;
             const Piece attacker = pos.board[move.from()];
 
@@ -33,57 +34,49 @@ namespace MoveOrdering
                 return CAPTURE_BONUS + MVV_LVA[victim_type][attacker_type] + promotion_score;
             }
 
-            if (move.is_promotion())
-            {
-                return promotion_score;
-            }
-
             const bool is_killer =
                 ply >= 0 && ply < MAX_PLY && (Search::killer_moves[ply][0] == move || Search::killer_moves[ply][1] == move);
-            return (is_killer ? KILLER_SCORE : 0) + Search::history_score(move, attacker);
+
+            // FIX: include promotion_score so non-capture promotions are ranked correctly.
+            return (is_killer ? KILLER_SCORE : 0) + promotion_score + Search::history_score(move, attacker);
         }
     } // namespace
+
+    bool MovePicker::lower_priority(const ScoredMove& left, const ScoredMove& right)
+    {
+        return left.score < right.score;
+    }
 
     MovePicker::MovePicker(const MoveList& list, const Position& pos, Move tt_move, int ply)
         : count(list.size()),
           ply(ply)
     {
-        for (int i = 0; i < count; ++i)
-        {
-            moves[i].move = list.moves[i];
-        }
+        std::transform(list.begin(), list.end(), std::begin(moves),
+                       [](Move move)
+                       {
+                           return ScoredMove{move, 0};
+                       });
         score_moves(pos, tt_move);
     }
 
     void MovePicker::score_moves(const Position& pos, Move tt_move)
     {
-        for (int i = 0; i < count; ++i)
-        {
-            moves[i].score = score_move(pos, moves[i].move, tt_move, ply);
-        }
+        std::transform(std::begin(moves), std::begin(moves) + count, std::begin(moves),
+                       [this, &pos, tt_move](const ScoredMove& scored_move)
+                       {
+                           return ScoredMove{scored_move.move, score_move(pos, scored_move.move, tt_move, ply)};
+                       });
+        std::make_heap(std::begin(moves), std::begin(moves) + count, lower_priority);
     }
 
     Move MovePicker::next_move()
     {
         if (count == 0)
         {
-            return Move::none();
+            return Move{};
         }
 
-        int best_idx = 0;
-        int best_score = moves[0].score;
-
-        for (int i = 1; i < count; ++i)
-        {
-            if (moves[i].score > best_score)
-            {
-                best_score = moves[i].score;
-                best_idx = i;
-            }
-        }
-
-        std::swap(moves[best_idx], moves[count - 1]);
-
+        std::pop_heap(std::begin(moves), std::begin(moves) + count, lower_priority);
         return moves[--count].move;
     }
 } // namespace MoveOrdering

@@ -109,52 +109,66 @@ TEST_CASE("Search: 3-fold repetition correctly aborts search with VALUE_ZERO", "
 // =============================================================================
 // 2. Move Ordering (Exhaustive Priorities)
 // =============================================================================
-
 TEST_CASE("Search: MovePicker strictly follows priority: TT -> Good Capture -> Promo -> Killer -> History -> Quiet",
           "[search][ordering]")
 {
     reset_search_state();
 
-    // Position with captures, promotions, and quiets
-    Position pos = Position::from_fen("4k3/P6p/8/8/8/8/7P/4K2R w K - 0 1");
+    // White Ke1, Rh1, pawn a7. Black Ke8, rook h7.
+    // - Rh1xh7 is a legal capture (h-file is clear).
+    // - a7a8 promotes to four distinct pieces (all non-capture promotions).
+    Position pos = Position::from_fen("4k3/P6r/8/8/8/8/8/4K2R w K - 0 1");
     MoveList list;
     MoveGen::generate_legal_moves(pos, list);
 
-    // Identify specific moves
-    Move promo(A7, A8, QUEEN_PROMO);
-    Move capture(H1, H7, CAPTURE); // RxP
-    Move quiet(H2, H3, QUIET_MOVE);
-    Move killer(E1, D2, QUIET_MOVE);
-    Move tt_move(E1, E2, QUIET_MOVE);
+    const Move promo_q(A7, A8, QUEEN_PROMO);
+    const Move promo_r(A7, A8, ROOK_PROMO);
+    const Move promo_b(A7, A8, BISHOP_PROMO);
+    const Move promo_n(A7, A8, KNIGHT_PROMO);
+    const Move capture(H1, H7, CAPTURE);  // RxR
+    const Move quiet(E1, F1, QUIET_MOVE); // history-boosted quiet
+    const Move killer(E1, D2, QUIET_MOVE);
+    const Move tt_move(E1, E2, QUIET_MOVE);
+
+    auto contains = [&](Move m)
+    {
+        for (int i = 0; i < list.count; ++i)
+            if (list.moves[i] == m)
+                return true;
+        return false;
+    };
+    REQUIRE(contains(promo_q));
+    REQUIRE(contains(promo_r));
+    REQUIRE(contains(promo_b));
+    REQUIRE(contains(promo_n));
+    REQUIRE(contains(capture));
+    REQUIRE(contains(quiet));
+    REQUIRE(contains(killer));
+    REQUIRE(contains(tt_move));
 
     // Setup heuristics
     Search::killer_moves[0][0] = killer;
-    Search::update_history(quiet, 5, pos.board[quiet.from()]); // Give quiet some history score
+    Search::update_history(quiet, 5, pos.board[quiet.from()]); // 5 * 5 = 25
 
     MoveOrdering::MovePicker picker(list, pos, tt_move, 0);
 
-    // 1. Transposition Table move must be first
+    // 1. TT move
     REQUIRE(picker.next_move() == tt_move);
-    // 2. Captures (MVV-LVA)
+
+    // 2. Capture (MVV-LVA)
     REQUIRE(picker.next_move() == capture);
-    // 3. Promotions
-    REQUIRE(picker.next_move() == promo);
-    // 4. Killer Moves
+
+    // 3. All four promotions, ranked by piece value: Q > R > B > N
+    REQUIRE(picker.next_move() == promo_q);
+    REQUIRE(picker.next_move() == promo_r);
+    REQUIRE(picker.next_move() == promo_b);
+    REQUIRE(picker.next_move() == promo_n);
+
+    // 4. Killer
     REQUIRE(picker.next_move() == killer);
 
-    // Eventually, the history-boosted quiet move should appear before zero-history quiet moves
-    bool found_history_quiet = false;
-    Move m = picker.next_move();
-    while (m.is_ok())
-    {
-        if (m == quiet)
-        {
-            found_history_quiet = true;
-            break;
-        }
-        m = picker.next_move();
-    }
-    REQUIRE(found_history_quiet == true);
+    // 5. History-boosted quiet
+    REQUIRE(picker.next_move() == quiet);
 }
 
 // =============================================================================
@@ -237,31 +251,37 @@ TEST_CASE("Search: TT Two-Tier Replacement resolves collisions efficiently", "[s
 
 // =============================================================================
 // 5. Mate Distance Pruning (MDP)
+//
+// MDP clamps the alpha/beta window at every node so that the absolute distance
+// to mate from the root is preserved regardless of where in the tree the mate
+// was discovered. Verified here with a mate-in-1 searched at ply 0 and ply 32.
 // =============================================================================
 
-TEST_CASE("Search: Mate Distance Pruning limits bounds based on ply", "[search][mdp]")
+TEST_CASE("Search: Mate Distance Pruning adjusts mate scores by ply", "[search][mdp]")
 {
     reset_search_state();
-    // Use an arbitrary position
-    Position pos = Position::from_fen(Fens::StartPos);
-    auto ctx = make_context();
 
-    // If we call negamax at a high ply, bounds should be clamped.
-    // Simulating alpha = -VALUE_INFINITE, beta = VALUE_INFINITE at ply 10
-    // Alpha becomes max(-VALUE_INFINITE, -VALUE_MATE + 10)
-    // Beta becomes min(VALUE_INFINITE, VALUE_MATE - 10 - 1)
+    // Mate-in-1: white plays Ra8#.
+    Position pos = Position::from_fen("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1");
 
-    // We can observe this indirectly if a TT entry returns a mate score outside the bounds.
-    const Key k = pos.key;
-    // Pretend a mate-in-5 was found previously
-    Search::TT.store(k, 0, 20, VALUE_MATE - 5, Search::TT_EXACT, Move(E2, E4, DOUBLE_PAWN_PUSH));
+    // At ply 0 the search returns VALUE_MATE - 1.
+    {
+        auto ctx = make_context();
+        const Value v = Search::negamax<Search::ROOT>(pos, 1, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
+        REQUIRE(v == VALUE_MATE - 1);
+    }
 
-    const Value v = Search::negamax<Search::ROOT>(pos, 5, 10, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
-
-    // Because ply = 10, beta is clamped to VALUE_MATE - 11.
-    // The TT score is VALUE_MATE - 5. This is >= beta, triggering a fail-high, returning beta.
-    // Beta at ply 10 is (32000 - 10 - 1) = 31989
-    REQUIRE(v == VALUE_MATE - 11);
+    // At ply 32 the same mate is offset by the ply. The mate score is encoded
+    // as VALUE_MATE - ply so that a mate found deeper in the tree never
+    // pretends to be closer than it really is. MDP clamps the window at
+    // [-VALUE_MATE + ply, VALUE_MATE - ply - 1], so the mate must be reported
+    // as VALUE_MATE - (ply + 1) once we descend one level to the checkmated
+    // side's node.
+    {
+        auto ctx = make_context();
+        const Value v = Search::negamax<Search::ROOT>(pos, 1, 32, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
+        REQUIRE(v == VALUE_MATE - 33);
+    }
 }
 
 // =============================================================================

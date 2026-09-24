@@ -85,6 +85,12 @@ namespace
 
     // -------------------------------------------------------------------------
     // FEN constants.
+    //
+    // QuietKingsRooks: no captures, no promotions, no castling rights.
+    //   White: Ra1, Ke1, Rh1
+    //   Black: Ke8
+    // Used by the killer-ordering tests so the killer is guaranteed to be the
+    // highest-scoring move (captures would otherwise outrank it).
     // -------------------------------------------------------------------------
     namespace Fens
     {
@@ -96,6 +102,8 @@ namespace
         constexpr const char* ItalianGame = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4";
         // White pawn c4 and knight f4 both attack the black queen on d5.
         constexpr const char* PxQNxQ = "7k/8/8/3q4/2P2N2/8/8/7K w - - 0 1";
+        // Quiet position: no captures, no promotions, no castling rights.
+        constexpr const char* QuietKingsRooks = "4k3/8/8/8/8/8/8/R3K2R w - - 0 1";
     } // namespace Fens
 } // namespace
 
@@ -353,21 +361,25 @@ TEST_CASE("MovePicker ranks MVV-LVA captures before quieter captures", "[orderin
     REQUIRE(picker.next_move() == pxq); // pawn-takes-queen wins on MVV-LVA
 }
 
+// -----------------------------------------------------------------------------
+// Killer ordering test — uses a quiet position so no capture can outrank the
+// killer. In Fens::ItalianGame, Bxf7+ and Nxe5 would score >KILLER_SCORE and
+// make the picker return a capture first, regardless of the killer.
+// -----------------------------------------------------------------------------
 TEST_CASE("MovePicker rates killer moves above other quiets", "[ordering][heuristics]")
 {
     reset_search_state();
-    Position pos = Position::from_fen(Fens::ItalianGame);
+
+    Position pos = Position::from_fen(Fens::QuietKingsRooks);
     MoveList list;
     MoveGen::generate_legal_moves(pos, list);
+    REQUIRE(list.count > 0);
 
-    Move killer = Move::none();
-    for (int i = 0; i < list.count; ++i)
-        if (!list.moves[i].is_capture() && !list.moves[i].is_promotion())
-        {
-            killer = list.moves[i];
-            break;
-        }
+    // Every move here is quiet — pick any.
+    const Move killer = list.moves[0];
     REQUIRE(killer.is_ok());
+    REQUIRE_FALSE(killer.is_capture());
+    REQUIRE_FALSE(killer.is_promotion());
 
     Search::killer_moves[0][0] = killer;
 
@@ -796,30 +808,32 @@ TEST_CASE("Moving a rook clears only that rook's castling right", "[position][ca
 }
 
 // =============================================================================
-// Suite 16 — Killer-move regression (formerly the mismatch diagnostic)
+// Suite 16 — Killer-move regression
 //
-// This test verifies that the search and the MovePicker share the same killer
-// storage. It would fail under the old architecture where search.cpp wrote to
+// Verifies that the search and the MovePicker share the same killer storage.
+// Would fail under the old architecture where search.cpp wrote to
 // SearchContext::killer_moves while move_ordering.cpp read from the global
 // Search::killer_moves.
+//
+// Uses Fens::QuietKingsRooks (no captures, no promotions, no castling) so
+// the killer is guaranteed to be the highest-scoring move. In Italian Game,
+// Bxf7+ and Nxe5 would outrank the killer and the assertion would fail even
+// though the killer subsystem is correct.
 // =============================================================================
 TEST_CASE("Killers stored by the search are visible to the MovePicker", "[ordering][heuristics][killer-mismatch]")
 {
     reset_search_state();
-    Position pos = Position::from_fen(Fens::ItalianGame);
+
+    Position pos = Position::from_fen(Fens::QuietKingsRooks);
     MoveList list;
     MoveGen::generate_legal_moves(pos, list);
     REQUIRE(list.count > 0);
 
-    // Pick a quiet move and store it as a killer via the search helper.
-    Move candidate = Move::none();
-    for (int i = 0; i < list.count; ++i)
-        if (!list.moves[i].is_capture() && !list.moves[i].is_promotion())
-        {
-            candidate = list.moves[i];
-            break;
-        }
+    // Every move here is quiet — pick any.
+    const Move candidate = list.moves[0];
     REQUIRE(candidate.is_ok());
+    REQUIRE_FALSE(candidate.is_capture());
+    REQUIRE_FALSE(candidate.is_promotion());
 
     // Store through the same path the search uses at a cutoff.
     Search::update_killers(candidate, /*ply=*/0);
