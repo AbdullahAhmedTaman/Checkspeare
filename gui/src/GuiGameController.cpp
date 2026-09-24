@@ -232,19 +232,52 @@ namespace Gui
 
     void GuiGameController::applyQueuedActions()
     {
+        const bool hadQueued = queuedGotoPly_.has_value() || queuedUndo_ || queuedRedo_;
+
+        if (!hadQueued)
+            return;
+
         if (queuedGotoPly_)
         {
-            const std::size_t ply = *queuedGotoPly_;
+            game_.gotoPly(*queuedGotoPly_);
             queuedGotoPly_.reset();
-            game_.gotoPly(ply);
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
         }
+        else if (queuedUndo_)
+        {
+            game_.undo();
+        }
+        else if (queuedRedo_)
+        {
+            game_.redo();
+        }
+
+        queuedUndo_ = false;
+        queuedRedo_ = false;
+
+        drag_ = {};
+        promo_ = {};
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::updateAnnotations()
     {
         annotations_.refreshFrom(game_);
+    }
+
+    void GuiGameController::requestUndo()
+    {
+        queuedUndo_ = true;
+    }
+
+    void GuiGameController::requestRedo()
+    {
+        queuedRedo_ = true;
+    }
+
+    void GuiGameController::requestGotoPly(std::size_t ply)
+    {
+        queuedGotoPly_ = ply;
     }
 
 } // namespace Gui

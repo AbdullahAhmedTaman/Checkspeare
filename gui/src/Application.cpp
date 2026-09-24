@@ -4,10 +4,10 @@
 #include "ImGuiLayer.hpp"
 #include "SfmlInputAdapter.hpp"
 
+#include "MoveListPanel.hpp"
+#include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
-
-#include <SFML/Window/Event.hpp>
 
 #include <stdexcept>
 
@@ -83,9 +83,10 @@ void Application::processEvents()
 
 void Application::update(float dtSeconds)
 {
+    controller_.applyQueuedActions();
     enginePlayer_.tick(game_, clock_);
-    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
     controller_.updateAnnotations();
+    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
 
     // Detect cursor advancement since the last frame. Each new ply means a
     // move was committed: notify the clock so it can add the mover's
@@ -109,11 +110,10 @@ void Application::update(float dtSeconds)
     // is gone — that's the standard MVP compromise.
     if (curr < lastCursor_)
         lastCursor_ = curr;
-
     clock_.update(dtSeconds);
 
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_);
-    controller_.applyQueuedActions();
+    renderMoveListPanel(game_, controller_, geo_);
 }
 
 void Application::render()
