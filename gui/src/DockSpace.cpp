@@ -26,11 +26,13 @@ namespace Gui
         ImGui::PopStyleVar(3);
 
         const ImGuiID dockspaceId = ImGui::GetID("MainDockspace");
-        ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
 
-        // Build a default layout once per session, and only when the
-        // dockspace is still a single leaf node (i.e. nothing was restored
-        // from the .ini).
+        constexpr ImGuiDockNodeFlags dockFlags = ImGuiDockNodeFlags_NoDockingSplit | ImGuiDockNodeFlags_NoDockingOverMe |
+                                                 ImGuiDockNodeFlags_NoResize | ImGuiDockNodeFlags_NoUndocking |
+                                                 ImGuiDockNodeFlags_AutoHideTabBar;
+
+        ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), dockFlags);
+
         static bool layoutInitialized = false;
         if (!layoutInitialized)
         {
@@ -39,16 +41,23 @@ namespace Gui
             ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspaceId);
             if (node != nullptr && node->IsLeafNode())
             {
-                ImGuiID center = dockspaceId;
-                ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.28f, nullptr, &center);
-                ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.22f, nullptr, &center);
-                ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.55f, nullptr, &right);
+                ImGuiID root = dockspaceId;
 
-                ImGui::DockBuilderDockWindow("Board", center);
-                ImGui::DockBuilderDockWindow("Clock", bottom);
-                ImGui::DockBuilderDockWindow("Game", bottom);
-                ImGui::DockBuilderDockWindow("Engine", right);
-                ImGui::DockBuilderDockWindow("Moves", rightBottom);
+                ImGuiID rightColumn = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.18f, nullptr, &root);
+                ImGuiID movesCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.50f, nullptr, &rightColumn);
+
+                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.18f, nullptr, &root);
+
+                ImGuiID engineCol = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.13f, nullptr, &root);
+
+                ImGuiID emptyCorner = ImGui::DockBuilderSplitNode(bottomStrip, ImGuiDir_Right, 0.22f, nullptr, &bottomStrip);
+
+                ImGui::DockBuilderDockWindow("Engine", engineCol);
+                ImGui::DockBuilderDockWindow("Board", root);
+                ImGui::DockBuilderDockWindow("Clock", bottomStrip);
+                ImGui::DockBuilderDockWindow("Game", rightColumn);
+                ImGui::DockBuilderDockWindow("Moves", movesCell);
+
                 ImGui::DockBuilderFinish(dockspaceId);
             }
         }

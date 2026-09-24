@@ -54,6 +54,14 @@ namespace Gui
     {
         ImGui::Begin("Engine");
 
+        const float barWidth = 40.0f;
+        const float barHeight = 480.0f;
+        const float lineWidth = 3.0f;
+        const float gap = 10.0f;
+
+        const std::string scoreText = formatScore(snapshot);
+
+        // Info block
         ImGui::Text("Side: %s", snapshot.activeSide.c_str());
 
         if (snapshot.thinking)
@@ -63,45 +71,59 @@ namespace Gui
 
         ImGui::Separator();
 
-        const std::string score = formatScore(snapshot);
-
-        ImGui::Text("Score: %s", score.c_str());
         ImGui::Text("Depth: %d / %d", snapshot.depth, snapshot.seldepth);
         ImGui::Text("Nodes: %s", formatCount(snapshot.nodes).c_str());
         ImGui::Text("NPS:   %s", formatCount(snapshot.nps).c_str());
 
-        // PV intentionally omitted for MVP. Rendering it requires replaying
-        // each UCI move against a copy of the current Board to produce SAN.
-        const float barWidth = 30.0f;
-        const float barHeight = 240.0f;
-        const float lineWidth = 3.0f;
+        ImGui::Spacing();
 
-        ImVec2 p0 = ImGui::GetCursorScreenPos();
-        ImVec2 p1 = ImVec2(p0.x + barWidth, p0.y + barHeight);
+        // Score + eval bar, right-aligned, below the info block
+        //
+        // Everything on this row is drawn via the draw list rather than
+        // through ImGui::Text, because the score must sit at the bar's
+        // vertical center rather than at the top of the row. Cursor
+        // positioning can only offset from the baseline, not center text
+        // against an arbitrary rectangle.
+        const float scoreWidth = ImGui::CalcTextSize(scoreText.c_str()).x;
+        const float groupWidth = scoreWidth + gap + barWidth;
+        const float availWidth = ImGui::GetContentRegionAvail().x;
+        const float groupLeftOffset = availWidth - groupWidth;
+
+        const ImVec2 rowOrigin = ImGui::GetCursorScreenPos();
+        const float groupLeft = rowOrigin.x + (groupLeftOffset > 0.0f ? groupLeftOffset : 0.0f);
+
+        const ImVec2 barP0(groupLeft + scoreWidth + gap, rowOrigin.y);
+        const ImVec2 barP1(barP0.x + barWidth, barP0.y + barHeight);
+
+        // Vertical center of the bar, minus half a text line, gives the
+        // top-left where AddText expects the glyph block.
+        const float textLineH = ImGui::GetTextLineHeight();
+        const ImVec2 scorePos(groupLeft, barP0.y + (barHeight - textLineH) * 0.5f);
 
         ImDrawList* dl = ImGui::GetWindowDrawList();
 
         // Black background (whole bar).
-        dl->AddRectFilled(p0, p1, IM_COL32(30, 30, 30, 255), 4.0f);
+        dl->AddRectFilled(barP0, barP1, IM_COL32(30, 30, 30, 255), 4.0f);
 
         // White fill from the bottom.
         const float whiteH = barHeight * evalBar.whitePct;
-        ImVec2 wp0 = ImVec2(p0.x, p1.y - whiteH);
-        dl->AddRectFilled(wp0, p1, IM_COL32(240, 240, 240, 255), 4.0f);
+        ImVec2 wp0 = ImVec2(barP0.x, barP1.y - whiteH);
+        dl->AddRectFilled(wp0, barP1, IM_COL32(240, 240, 240, 255), 4.0f);
 
         // Center line so the "even" position is visible.
-        const float midY = p0.y + barHeight * 0.5f;
-        dl->AddLine(ImVec2(p0.x, midY), ImVec2(p1.x, midY), IM_COL32(180, 180, 180, 120), 1.0f);
+        const float midY = barP0.y + barHeight * 0.5f;
+        dl->AddLine(ImVec2(barP0.x, midY), ImVec2(barP1.x, midY), IM_COL32(180, 180, 180, 120), 1.0f);
 
         // Border.
-        dl->AddRect(p0, p1, IM_COL32(200, 200, 200, 200), 4.0f, 0, lineWidth);
+        dl->AddRect(barP0, barP1, IM_COL32(200, 200, 200, 200), 4.0f, 0, lineWidth);
 
-        // Reserve layout space so ImGui doesn't overlap the next widget.
-        ImGui::Dummy(ImVec2(barWidth, barHeight));
+        // Score text, vertically centered against the bar.
+        dl->AddText(scorePos, ImGui::GetColorU32(ImGuiCol_Text), scoreText.c_str());
 
-        // Score text next to the bar.
-        ImGui::SameLine();
-        ImGui::Text("%s", formatScore(snapshot).c_str());
+        // Reserve the row's vertical space so the next widget starts below
+        // the bar. Width is the full content width to keep any future
+        // horizontal scrolling from treating this row as narrow.
+        ImGui::Dummy(ImVec2(availWidth, barHeight));
 
         ImGui::End();
     }

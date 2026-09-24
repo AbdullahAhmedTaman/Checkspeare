@@ -17,7 +17,7 @@
 Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     : conf_(conf),
       assets_(assets),
-      window_(sf::VideoMode({1280, 800}), "Chess GUI - SFML + ImGui"),
+      window_(sf::VideoMode({1280, 800}), "Chess GUI"),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets))
 {
@@ -31,6 +31,10 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
 
     if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
+
+    // Layout is rebuilt by DockBuilder every launch; disable persistence
+    // so the on-disk state can't drift from the code's intent.
+    ImGui::GetIO().IniFilename = nullptr;
 
     ImGuiIO& io = ImGui::GetIO();
 

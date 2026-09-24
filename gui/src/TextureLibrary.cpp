@@ -13,43 +13,46 @@ namespace Assets
 
     namespace
     {
-        const char* colorKey(Color c)
+        /// Filename color code: 'w' or 'b'.
+        char colorCode(Color c)
         {
-            return (c == WHITE) ? Key::White : Key::Black;
+            return (c == WHITE) ? 'w' : 'b';
         }
 
-        const char* pieceTypeKey(PieceType t)
+        /// Filename piece code. 'N' for knight, per standard chess notation,
+        /// to avoid colliding with 'K' for king.
+        char pieceCode(PieceType t)
         {
             switch (t)
             {
                 case PAWN:
-                    return Key::Pawn;
+                    return 'p';
                 case KNIGHT:
-                    return Key::Knight;
+                    return 'n';
                 case BISHOP:
-                    return Key::Bishop;
+                    return 'b';
                 case ROOK:
-                    return Key::Rook;
+                    return 'r';
                 case QUEEN:
-                    return Key::Queen;
+                    return 'q';
                 case KING:
-                    return Key::King;
+                    return 'k';
                 default:
-                    return Key::Pawn;
+                    return 'p';
             }
         }
     } // namespace
 
     void TextureLibrary::loadAllPieceTextures(const std::string& basePath)
     {
-        const char* colors[] = {Key::White, Key::Black};
-        const char* types[] = {Key::Pawn, Key::Knight, Key::Bishop, Key::Rook, Key::Queen, Key::King};
+        constexpr Color colors[] = {WHITE, BLACK};
+        constexpr PieceType types[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
 
-        for (const char* color : colors)
+        for (Color color : colors)
         {
-            for (const char* type : types)
+            for (PieceType type : types)
             {
-                const std::string key = std::string(color) + "_" + type;
+                const std::string key = std::string(1, colorCode(color)) + pieceCode(type);
                 const std::string fullPath = basePath + key + ".png";
 
                 sf::Texture texture;
@@ -89,7 +92,7 @@ namespace Assets
     std::string TextureLibrary::getPieceKey(Piece pc)
     {
         assert(pc != PIECE_NONE && "getPieceKey called with PIECE_NONE");
-        return std::string(colorKey(color_of(pc))) + "_" + pieceTypeKey(type_of(pc));
+        return std::string(1, colorCode(color_of(pc))) + pieceCode(type_of(pc));
     }
 
 } // namespace Assets
