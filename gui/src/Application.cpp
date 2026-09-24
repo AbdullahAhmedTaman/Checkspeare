@@ -5,10 +5,10 @@
 #include "ImGuiLayer.hpp"
 #include "SfmlInputAdapter.hpp"
 
+#include "MoveListPanel.hpp"
+#include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
-
-#include <SFML/Window/Event.hpp>
 
 #include <stdexcept>
 
@@ -84,6 +84,7 @@ void Application::processEvents()
 
 void Application::update(float dtSeconds)
 {
+    controller_.applyQueuedActions();
     enginePlayer_.tick(game_, clock_);
     controller_.updateAnnotations();
     Gui::EngineThinkingSnapshot snap;
@@ -138,11 +139,10 @@ void Application::update(float dtSeconds)
     // is gone — that's the standard MVP compromise.
     if (curr < lastCursor_)
         lastCursor_ = curr;
-
     clock_.update(dtSeconds);
 
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_);
-    controller_.applyQueuedActions();
+    renderMoveListPanel(game_, controller_, geo_);
 }
 
 void Application::render()
