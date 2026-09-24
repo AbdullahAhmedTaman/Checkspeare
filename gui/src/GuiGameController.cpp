@@ -85,7 +85,6 @@ namespace Gui
             }
         }
 
-        // ---- Selection / drag start ----
         const Piece pc = game_.pieceAt(sq);
 
         if (pc == PIECE_NONE)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BoardGeometry.hpp"
+#include "BoardPanel.hpp"
 #include "ChessClock.hpp"
 #include "ChessGame.hpp"
 #include "Config.hpp"
@@ -11,10 +12,13 @@
 #include "Theme.hpp"
 #include "UciEngine.hpp"
 
+#include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Clock.hpp>
 
 #include <cstddef>
+
+struct ImFont;
 
 /// Owns the window, the game loop, and the top-level game state.
 /// Non-copyable: it holds a reference to Config and the TextureLibrary,
@@ -49,7 +53,10 @@ private:
     Gui::BoardGeometry geo_;
     Gui::BoardTheme theme_;
     Gui::EvalBar evalBar_;
+    Gui::BoardPanel boardPanel_;
     /// Tracks the game cursor across frames so Application can detect when
     /// a move was committed and notify the clock (increment + side flip).
     std::size_t lastCursor_ = 0;
+    ImFont* clockFont_ = nullptr;
+    sf::Font coordinateFont_;
 };

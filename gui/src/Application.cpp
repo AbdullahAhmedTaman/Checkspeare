@@ -1,11 +1,12 @@
 #include "Application.hpp"
 
-#include "BoardRenderer.hpp"
+#include "Dockspace.hpp"
 #include "EngineThinkingPanel.hpp"
 #include "ImGuiLayer.hpp"
+#include "ImGuiTheme.hpp"
+#include "MoveListPanel.hpp"
 #include "SfmlInputAdapter.hpp"
 
-#include "MoveListPanel.hpp"
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
@@ -15,22 +16,40 @@
 Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     : conf_(conf),
       assets_(assets),
-      window_(sf::VideoMode({1000, 700}), "Chess GUI - SFML + ImGui"),
+      window_(sf::VideoMode({1280, 800}), "Chess GUI - SFML + ImGui"),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets))
 {
     window_.setFramerateLimit(60);
 
-    // Default time control: 5 minutes + 3 seconds increment per move.
-    // Adjust here or, later, read from Config.
+    // Default time control.
     ChessClock::TimeControl tc;
     tc.initialMs = 60 * 1000;
     tc.incrementMs = 3 * 1000;
     clock_.configure(tc);
     clock_.start();
 
-    if (!ImGui::SFML::Init(window_))
+    if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Regular.ttf", 18.0f);
+    IM_ASSERT(uiFont != nullptr && "[Fonts] Failed to load UI font!");
+
+    clockFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 36.0f);
+
+    if (clockFont_ == nullptr)
+        throw std::runtime_error("[Fonts] Failed to load clock font!");
+
+    ImGui::SFML::UpdateFontTexture();
+
+    Gui::applyChessTheme();
+
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
+        throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
     engine_.start(conf_.enginePath);
     enginePlayer_.setSideControlled(BLACK, true);
@@ -65,20 +84,28 @@ void Application::processEvents()
             continue;
         }
 
-        // Do not forward to the controller while ImGui owns the mouse, except
-        // for a release that ends an in-progress drag, otherwise the drag
-        // state can get stuck when the user releases over an ImGui panel.
-        const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
-        const bool endsDrag = event->is<sf::Event::MouseButtonReleased>() && controller_.drag().active;
-        const bool focusLost = event->is<sf::Event::FocusLost>();
-        const bool engineToMove = enginePlayer_.isSideControlled(game_.sideToMove());
-        const bool shouldForward = focusLost || endsDrag || (!imguiCaptures && !engineToMove);
+        const auto inputEvent = Gui::toInputEvent(*event);
+        if (!inputEvent)
+            continue;
 
-        if (shouldForward)
-        {
-            if (const auto inputEvent = Gui::toInputEvent(*event))
-                controller_.handleEvent(*inputEvent, geo_);
-        }
+        // Allow board input and drag termination despite ImGui mouse capture.
+        const bool imguiCaptures = ImGui::GetIO().WantCaptureMouse;
+        const bool endsDrag = inputEvent->kind == Gui::InputEvent::Kind::PointerReleased && controller_.drag().active;
+        const bool focusLost = inputEvent->kind == Gui::InputEvent::Kind::FocusLost;
+        const bool engineToMove = enginePlayer_.isSideControlled(game_.sideToMove());
+
+        const bool overBoard = !focusLost && boardPanel_.contains(inputEvent->position);
+
+        const bool shouldForward = focusLost || endsDrag || (!engineToMove && (overBoard || !imguiCaptures));
+
+        if (!shouldForward)
+            continue;
+
+        Gui::InputEvent forwarded = *inputEvent;
+        if (!focusLost)
+            forwarded.position = boardPanel_.toBoardSpace(forwarded.position);
+
+        controller_.handleEvent(forwarded, geo_);
     }
 }
 
@@ -98,8 +125,7 @@ void Application::update(float dtSeconds)
         snap.nodes = info->nodes;
         snap.nps = info->nps;
 
-        // The info was recorded for the side that was searching. UCI reports
-        // from that side's POV. Normalize to White POV for display.
+        // Normalize the score to White's perspective.
         const bool fromBlack = (enginePlayer_.lastInfoSide() == BLACK);
 
         if (info->scoreCp)
@@ -112,20 +138,18 @@ void Application::update(float dtSeconds)
         evalBar_.setTarget(0, *snap.scoreMate);
     else if (snap.scoreCp)
         evalBar_.setTarget(*snap.scoreCp, 0);
-    // else: no info yet — leave target unchanged
     evalBar_.update(dtSeconds);
-    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
-    Gui::renderEngineThinkingPanel(snap, evalBar_);
 
-    // Detect cursor advancement since the last frame. Each new ply means a
-    // move was committed: notify the clock so it can add the mover's
-    // increment and flip to the other side.
-    //
-    // The mover of ply `i` (0-based) is White when i is even, Black when
-    // odd. That holds for any game that starts from the standard position
-    // with White to move. A FEN-loaded game where Black is to move would
-    // require resetting lastCursor_ and reconfiguring the clock; that
-    // feature isn't wired yet.
+    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
+
+    Gui::beginMainDockspace();
+    boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
+                       controller_.annotations());
+    Gui::renderEngineThinkingPanel(snap, evalBar_);
+    Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
+    Gui::renderMoveListPanel(game_, controller_);
+
+    // Advance the clock for each newly committed ply.
     const std::size_t curr = game_.cursor();
     while (lastCursor_ < curr)
     {
@@ -134,22 +158,15 @@ void Application::update(float dtSeconds)
         ++lastCursor_;
     }
 
-    // If the cursor moved backwards (undo, or a jump in the history),
-    // resync lastCursor_ but do NOT rewind the clock. Time already spent
-    // is gone — that's the standard MVP compromise.
+    // Undo and history navigation do not rewind elapsed time.
     if (curr < lastCursor_)
         lastCursor_ = curr;
     clock_.update(dtSeconds);
-
-    Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_);
-    renderMoveListPanel(game_, controller_, geo_);
 }
 
 void Application::render()
 {
     window_.clear(sf::Color::White);
-    Gui::renderBoard(window_, geo_, theme_, game_.board(), assets_, controller_.drag(), controller_.pendingPromotion(),
-                     controller_.annotations());
     ImGui::SFML::Render(window_);
     window_.display();
 }

@@ -7,8 +7,9 @@
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
 
-
-#include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/Font.hpp>
+#include <SFML/Graphics/RenderTarget.hpp>
+#include <SFML/System/Vector2.hpp>
 
 namespace Gui
 {
@@ -22,8 +23,15 @@ namespace Gui
 
     /// Draws squares, static pieces, and (if a drag is active) the dragged
     /// piece on top.
-    void renderBoard(sf::RenderWindow& window, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
-                     const Assets::TextureLibrary& assets, const DragState& drag, const PendingPromotion& promo,
-                     const BoardAnnotations& annotations);
+    ///
+    /// `target` is any SFML render target (window or RenderTexture). When
+    /// the board is drawn offscreen for an ImGui panel, pass the pointer
+    /// position in the target's coordinate space as `dragPixelPos` so the
+    /// dragged piece follows the mouse.
+    /// `coordinateFont` is used for the a1–h8 / 1–8 edge labels. The
+    /// caller owns it; the reference must remain valid for the call.
+    void renderBoard(sf::RenderTarget& target, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
+                     const Assets::TextureLibrary& assets, const sf::Font& coordinateFont, const DragState& drag,
+                     sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations);
 
 } // namespace Gui

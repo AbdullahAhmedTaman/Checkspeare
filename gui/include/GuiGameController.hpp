@@ -21,9 +21,7 @@ namespace Gui
         sf::Vector2f offset{0.0f, 0.0f};
     };
 
-    /// Set while a promotion is pending: the drop has been accepted, but the
-    /// piece type is not known yet. While `active`, input is ignored until
-    /// completePromotion() or cancelPromotion() is called.
+    /// State for a pending promotion choice.
     struct PendingPromotion
     {
         bool active = false;
@@ -33,8 +31,7 @@ namespace Gui
         std::array<Square, 4> choiceSquares{SQ_NONE, SQ_NONE, SQ_NONE, SQ_NONE};
     };
 
-    /// Structured outcome of the most recent controller action. The controller
-    /// never builds display strings; consumers interpret this themselves.
+    /// Result of the most recent controller action.
     struct ActionResult
     {
         enum class Kind
@@ -56,9 +53,7 @@ namespace Gui
         Piece piece = PIECE_NONE;
     };
 
-    /// Translates backend-agnostic input events into moves on a ChessGame.
-    /// Owns no resources and knows nothing about SFML; see SfmlInputAdapter.hpp
-    /// for the boundary that produces the InputEvent vocabulary.
+    /// Translates input events into moves on a ChessGame.
     class GuiGameController
     {
     public:
