@@ -34,3 +34,23 @@ target_link_libraries(EnginePlayerSelfGameTest
     PRIVATE
         ChessEngine
 )
+
+# ---- GameOverTest ----
+# ---- GameOverTest ----
+add_executable(GameOverTest
+    GameOverTest.cpp
+    ${GUI_SRC_DIR}/ChessGame.cpp
+    ${GUI_SRC_DIR}/Board.cpp
+    ${GUI_SRC_DIR}/San.cpp
+    ${GUI_SRC_DIR}/GuiGameController.cpp
+    ${GUI_SRC_DIR}/BoardAnnotations.cpp
+)
+target_include_directories(GameOverTest PRIVATE
+    ${GUI_INC_DIR}
+    ${ENGINE_INC_DIR}
+)
+target_link_libraries(GameOverTest PRIVATE
+    ChessEngine
+    SFML::System
+)
+add_test(NAME GameOverTest COMMAND GameOverTest)

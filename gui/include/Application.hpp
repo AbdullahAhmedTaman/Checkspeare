@@ -18,6 +18,7 @@
 #include <SFML/System/Clock.hpp>
 
 #include <cstddef>
+#include <limits>
 
 struct ImFont;
 
@@ -61,6 +62,10 @@ private:
     /// board-panel containment and ImGui mouse capture.
     bool shouldForwardInput(const Gui::InputEvent& ev) const;
 
+    /// Resets game and clock for a fresh game. Called when the game-over
+    /// banner's New Game button fires a request.
+    void newGame();
+
     Config& conf_;
     const Assets::TextureLibrary& assets_;
 
@@ -85,6 +90,11 @@ private:
     /// Tracks the game cursor across frames so Application can detect when
     /// a move was committed and notify the clock (increment + side flip).
     std::size_t lastCursor_ = 0;
+
+    /// True on frames where game_.result() reports a terminal state.
+    /// Used to fire one-shot reactions (engine abort) on the transition
+    /// into game-over, and to keep the clock from ticking once there.
+    bool gameOverWas_ = false;
 
     /// Borrowed from ImGui's font atlas; valid while the ImGui context lives.
     ImFont* clockFont_ = nullptr;

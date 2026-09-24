@@ -102,6 +102,14 @@ namespace Gui
         void requestGotoPly(std::size_t ply);
         void applyQueuedActions();
 
+        /// Sets the "new game" flag. Application drains it once per frame
+        /// via consumeNewGameRequest(). Called by the game-over banner's
+        /// New Game button.
+        void requestNewGame();
+
+        /// Returns true at most once per requestNewGame(). Clears the flag.
+        bool consumeNewGameRequest();
+
         void updateAnnotations();
 
     private:
@@ -118,6 +126,9 @@ namespace Gui
         mutable bool queuedUndo_ = false;
         mutable bool queuedRedo_ = false;
         bool lastMoveWasDrag_ = false;
+
+        /// Set by requestNewGame(), cleared by consumeNewGameRequest().
+        bool newGameRequested_ = false;
     };
 
 } // namespace Gui

@@ -2,15 +2,19 @@
 
 #include "Dockspace.hpp"
 #include "EngineThinkingPanel.hpp"
+#include "GameResult.hpp"
 #include "ImGuiLayer.hpp"
 #include "ImGuiTheme.hpp"
 #include "InputEvent.hpp"
 #include "MoveListPanel.hpp"
 #include "SfmlInputAdapter.hpp"
 
+#include "GameOverTransition.hpp"
+
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include <stdexcept>
 
@@ -140,6 +144,11 @@ void Application::update(float dtSeconds)
 
 void Application::stepSimulation(float dtSeconds)
 {
+    // Drain a "New Game" request from the game-over banner before doing
+    // anything else this frame, so the reset is visible immediately.
+    if (controller_.consumeNewGameRequest())
+        newGame();
+
     controller_.applyQueuedActions();
     enginePlayer_.tick(game_, clock_);
     controller_.updateAnnotations();
@@ -182,7 +191,18 @@ void Application::stepSimulation(float dtSeconds)
     if (curr < lastCursor_)
         lastCursor_ = curr;
 
-    clock_.update(dtSeconds);
+    // Once the game is terminal, stop advancing the clock, and abort any
+    // in-flight engine search exactly once on the transition. The next
+    // frame's result() will report the same state until newGame() resets
+    // the game, so this fires on the edge, not every frame.
+    // minor adding
+    const bool gameOver = (game_.result().kind != GameResultKind::Ongoing);
+
+    if (justEnteredGameOver(gameOver, gameOverWas_))
+        enginePlayer_.abort();
+
+    if (!gameOver)
+        clock_.update(dtSeconds);
 }
 
 void Application::stepUi(float dtSeconds)
@@ -235,4 +255,16 @@ void Application::render()
     window_.clear(sf::Color::White);
     ImGui::SFML::Render(window_);
     window_.display();
+}
+
+void Application::newGame()
+{
+    game_.reset();
+    clock_.reset();
+    clock_.start();
+    lastCursor_ = 0;
+    gameOverWas_ = false;
+    animation_.active = false;
+    enginePlayer_.abort();
+    controller_.updateAnnotations();
 }

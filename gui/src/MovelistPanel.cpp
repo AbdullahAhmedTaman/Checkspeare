@@ -1,6 +1,7 @@
 // MovelistPanel.cpp
 #include "MoveListPanel.hpp"
 #include "ChessGame.hpp"
+#include "GameResult.hpp"
 #include "GuiGameController.hpp"
 
 #include <imgui.h>
@@ -21,6 +22,10 @@ namespace Gui
     void renderMoveListPanel(const ChessGame& game, GuiGameController& controller)
     {
         ImGui::Begin("Moves");
+
+        // Terminal position: navigation would let the user "unfinish" a
+        // finished game. Disable the buttons and the clickable rows.
+        const bool gameOver = (game.result().kind != GameResultKind::Ongoing);
 
         const float footerHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
         const ImVec2 avail = ImGui::GetContentRegionAvail();
@@ -81,10 +86,13 @@ namespace Gui
                         ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(163, 162, 161, 255));
 
                     ImGui::PushID(static_cast<int>(ply));
-                    if (ImGui::Selectable(records[ply].san.c_str(), isCurrent, ImGuiSelectableFlags_AllowOverlap))
-                    {
+
+                    const bool clicked =
+                        ImGui::Selectable(records[ply].san.c_str(), isCurrent, ImGuiSelectableFlags_AllowOverlap);
+
+                    if (clicked && !gameOver)
                         controller.requestGotoPly(ply + 1);
-                    }
+
                     ImGui::PopID();
 
                     if (isCurrent || isPastCursor)
@@ -102,8 +110,8 @@ namespace Gui
 
         ImGui::EndChild();
 
-        const bool canUndo = game.cursor() > 0;
-        const bool canRedo = game.cursor() < game.totalMoves();
+        const bool canUndo = !gameOver && game.cursor() > 0;
+        const bool canRedo = !gameOver && game.cursor() < game.totalMoves();
 
         ImGui::BeginDisabled(!canUndo);
         if (ImGui::Button("Undo"))
