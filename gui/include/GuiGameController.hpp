@@ -89,11 +89,9 @@ namespace Gui
 
         void cancelPromotion();
 
-        void queueGotoPly(std::size_t ply) const
-        {
-            queuedGotoPly_ = ply;
-        }
-
+        void requestUndo();
+        void requestRedo();
+        void requestGotoPly(std::size_t ply);
         void applyQueuedActions();
 
         const BoardAnnotations& annotations() const
@@ -114,6 +112,8 @@ namespace Gui
         ActionResult result_{};
         mutable std::optional<std::size_t> queuedGotoPly_;
         BoardAnnotations annotations_;
+        mutable bool queuedUndo_ = false;
+        mutable bool queuedRedo_ = false;
     };
 
 } // namespace Gui
