@@ -1,6 +1,9 @@
 #pragma once
 
+#include "EvalBar.hpp"
+
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,13 +20,11 @@ namespace Gui
         int seldepth = 0;
         std::int64_t nodes = 0;
         std::int64_t nps = 0;
-        int scoreCp = 0;
-        int scoreMate = 0;
+        std::optional<int> scoreCp;
+        std::optional<int> scoreMate;
         std::vector<std::string> pvSan;
         std::string activeSide;
     };
 
-    /// @note Not yet implemented.
-    void renderEngineThinkingPanel(const EngineThinkingSnapshot& snapshot);
-
+    void renderEngineThinkingPanel(const EngineThinkingSnapshot& snapshot, const EvalBar& evalBar);
 } // namespace Gui

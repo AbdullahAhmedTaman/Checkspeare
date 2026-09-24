@@ -5,6 +5,7 @@
 #include "ChessGame.hpp"
 #include "Config.hpp"
 #include "EnginePlayer.hpp"
+#include "EvalBar.hpp"
 #include "GuiGameController.hpp"
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
@@ -47,6 +48,7 @@ private:
     Gui::GuiGameController controller_;
     Gui::BoardGeometry geo_;
     Gui::BoardTheme theme_;
+    Gui::EvalBar evalBar_;
     /// Tracks the game cursor across frames so Application can detect when
     /// a move was committed and notify the clock (increment + side flip).
     std::size_t lastCursor_ = 0;

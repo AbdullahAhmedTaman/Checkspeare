@@ -181,6 +181,8 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
     // poll() must run every frame, not just while thinking. It advances the
     // UCI handshake (uciok -> isready -> readyok) and drains the output queue.
     UciPollResult poll = engine_.poll();
+    if (!poll.infos.empty())
+        lastInfo_ = poll.infos.back();
 
     EnginePlayerInputs in;
     in.thinking = thinking_;
@@ -207,6 +209,8 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
 
                 thinking_ = true;
                 thinkStartPly_ = game.cursor();
+                lastInfo_.reset();
+                lastInfoSide_ = game.sideToMove();
                 return std::nullopt;
             }
 

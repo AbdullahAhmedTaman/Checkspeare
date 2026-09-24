@@ -1,6 +1,7 @@
 #include "Application.hpp"
 
 #include "BoardRenderer.hpp"
+#include "EngineThinkingPanel.hpp"
 #include "ImGuiLayer.hpp"
 #include "SfmlInputAdapter.hpp"
 
@@ -84,8 +85,36 @@ void Application::processEvents()
 void Application::update(float dtSeconds)
 {
     enginePlayer_.tick(game_, clock_);
-    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
     controller_.updateAnnotations();
+    Gui::EngineThinkingSnapshot snap;
+    snap.thinking = enginePlayer_.thinking();
+    snap.activeSide = (game_.sideToMove() == WHITE) ? "White" : "Black";
+
+    if (const auto& info = enginePlayer_.lastInfo())
+    {
+        snap.depth = info->depth;
+        snap.seldepth = info->seldepth;
+        snap.nodes = info->nodes;
+        snap.nps = info->nps;
+
+        // The info was recorded for the side that was searching. UCI reports
+        // from that side's POV. Normalize to White POV for display.
+        const bool fromBlack = (enginePlayer_.lastInfoSide() == BLACK);
+
+        if (info->scoreCp)
+            snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
+        if (info->scoreMate)
+            snap.scoreMate = fromBlack ? -(*info->scoreMate) : *info->scoreMate;
+    }
+
+    if (snap.scoreMate)
+        evalBar_.setTarget(0, *snap.scoreMate);
+    else if (snap.scoreCp)
+        evalBar_.setTarget(*snap.scoreCp, 0);
+    // else: no info yet — leave target unchanged
+    evalBar_.update(dtSeconds);
+    ImGui::SFML::Update(window_, sf::seconds(dtSeconds));
+    Gui::renderEngineThinkingPanel(snap, evalBar_);
 
     // Detect cursor advancement since the last frame. Each new ply means a
     // move was committed: notify the clock so it can add the mover's

@@ -69,9 +69,26 @@ public:
     /// Abandons any in-flight search. Call after undo or loadFEN.
     void abort();
 
+    bool thinking() const
+    {
+        return thinking_;
+    }
+
+    const std::optional<UciInfo>& lastInfo() const
+    {
+        return lastInfo_;
+    }
+
+    Color lastInfoSide() const
+    {
+        return lastInfoSide_;
+    }
+
 private:
     UciEngine& engine_;
     bool controlled_[2] = {false, false};
     bool thinking_ = false;
     std::size_t thinkStartPly_ = 0;
+    std::optional<UciInfo> lastInfo_;
+    Color lastInfoSide_ = WHITE;
 };
