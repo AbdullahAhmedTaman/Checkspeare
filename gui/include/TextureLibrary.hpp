@@ -12,18 +12,18 @@ namespace Assets
 
     namespace Key
     {
-        inline constexpr const char* White = "White";
-        inline constexpr const char* Black = "Black";
+        inline constexpr const char* White = "w";
+        inline constexpr const char* Black = "b";
 
-        inline constexpr const char* Pawn = "Pawn";
-        inline constexpr const char* Knight = "Knight";
-        inline constexpr const char* Bishop = "Bishop";
-        inline constexpr const char* Rook = "Rook";
-        inline constexpr const char* Queen = "Queen";
-        inline constexpr const char* King = "King";
+        inline constexpr const char* Pawn = "p";
+        inline constexpr const char* Knight = "n";
+        inline constexpr const char* Bishop = "b";
+        inline constexpr const char* Rook = "r";
+        inline constexpr const char* Queen = "q";
+        inline constexpr const char* King = "k";
 
-        inline constexpr const char* SquareWhite = "Square_White";
-        inline constexpr const char* SquareBlack = "Square_Black";
+        inline constexpr const char* SquareWhite = "w";
+        inline constexpr const char* SquareBlack = "b";
     } // namespace Key
 
     /// Owns SFML textures and exposes stable references into them.
