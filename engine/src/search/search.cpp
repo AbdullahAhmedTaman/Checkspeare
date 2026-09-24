@@ -93,8 +93,9 @@ namespace Search
             return 0; // 0 means do not reduce
         }
 
-        int R = LMRTable[depth][moves_searched];
-
+        int safe_depth = std::min(depth, MAX_PLY - 1);
+        int safe_moves = std::min(moves_searched, MAX_MOVES - 1);
+        int R = LMRTable[safe_depth][safe_moves];
         if (is_pv)
         {
             R -= 1; // Search PV nodes slightly deeper
@@ -106,12 +107,15 @@ namespace Search
         }
 
         // Clamp the reduction to remain within safe bounds
-        return std::clamp(R, 1, depth - 1);
+        return std::clamp(R, 0, depth - 1);
     }
 
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
+        if (ply >= MAX_PLY - 1)
+            return Eval::evaluate(pos);
+
         // Mate Distance Pruning: clamp search bounds relative to distance from root
         alpha = std::max(alpha, -VALUE_MATE + ply);
         beta = std::min(beta, VALUE_MATE - ply - 1);
@@ -188,6 +192,8 @@ namespace Search
         MoveList moves;
         MoveGen::generate_pseudo_legal_moves(pos, moves);
 
+        static const Move empty_killers[2] = {Move::none(), Move::none()};
+        const Move* current_killers = (ply < MAX_PLY) ? Search::killer_moves[ply] : empty_killers;
         // Instantiate MovePicker with TT best move hint for move ordering
         MoveOrdering::MovePicker picker(moves, pos, tt_move, ply);
 
@@ -218,8 +224,7 @@ namespace Search
 
             bool needs_full_search = true;
 
-            int R = calculate_lmr_reduction(IsPV, depth, moves_searched, in_check, move, Search::killer_moves[ply]);
-
+            int R = calculate_lmr_reduction(IsPV, depth, moves_searched, in_check, move, current_killers);
             // If R > 0, the helper function approved the reduction
             if (R > 0)
             {
@@ -284,9 +289,11 @@ namespace Search
                     if (alpha >= beta)
                     {
                         // Store Killer Move heuristic for non-captures
-                        if (!move.is_capture() && ply < MAX_PLY)
+                        if (!move.is_capture() && !move.is_promotion())
                         {
-                            Search::update_killers(move, ply);
+                            if (ply < MAX_PLY)
+                                Search::update_killers(move, ply);
+                            Search::update_history(move, depth, pos.board[move.from()]);
                         }
                         break; // Cut off remaining move searches
                     }
@@ -319,6 +326,10 @@ namespace Search
         // Retain move from the last fully completed depth iteration
         Move safe_best_move = Move::none();
 
+        MoveList root_moves;
+        MoveGen::generate_legal_moves(pos, root_moves);
+        if (root_moves.count > 0)
+            safe_best_move = root_moves.moves[0];
         // Iterative Deepening Loop
         for (int current_depth = 1; current_depth <= limits.depth; ++current_depth)
         {

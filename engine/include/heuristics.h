@@ -4,7 +4,6 @@
 
 namespace Search
 {
-    constexpr int MAX_PLY = 256;
     constexpr int MAX_PIECES = 13;
     constexpr int MAX_SQUARES = 64;
     constexpr int MAX_HISTORY_SCORE = 16384;

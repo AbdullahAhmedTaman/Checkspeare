@@ -8,20 +8,6 @@ namespace Search
 {
     namespace
     {
-        /**
-         * @brief Checks a pseudo-legal move without changing the position.
-         *
-         * The move is made temporarily so the moving side's king can be
-         * tested for attacks, then the original position is restored.
-         */
-        bool is_legal_move(Position& pos, Move move)
-        {
-            const Color us = pos.sideToMove;
-            pos.make_move(move);
-            const bool legal = !pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
-            pos.unmake_move(move);
-            return legal;
-        }
 
         /**
          * @brief Identifies moves that must be searched in quiescence.
@@ -56,11 +42,12 @@ namespace Search
         const Color us = pos.sideToMove;
         const bool in_check = pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
 
-        if (ply >= MAX_SEARCH_PLY - 1 && !in_check)
+        if (ply >= MAX_SEARCH_PLY - 1)
             return Eval::evaluate(pos);
 
         Value stand_pat = Eval::evaluate(pos);
 
+        Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
         if (!in_check)
         {
             if (stand_pat >= beta)
@@ -81,23 +68,33 @@ namespace Search
             if (!move.is_ok())
                 break;
 
-            if (!is_tactical(move, in_check) || !is_legal_move(pos, move))
+            if (!is_tactical(move, in_check))
                 continue;
 
             pos.make_move(move);
+
+            if (pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1)))
+            {
+                pos.unmake_move(move);
+                continue;
+            }
             ++legal_moves;
             const Value score = -quiescence(pos, ply + 1, -beta, -alpha, ctx);
             pos.unmake_move(move);
 
-            if (score >= beta)
+            if (score > best_score)
+                best_score = score;
+
+            if (best_score >= beta)
                 return beta;
-            if (score > alpha)
-                alpha = score;
+
+            if (best_score > alpha)
+                alpha = best_score;
         }
 
         if (in_check && legal_moves == 0)
             return -VALUE_MATE + ply;
 
-        return alpha;
+        return best_score;
     }
 } // namespace Search

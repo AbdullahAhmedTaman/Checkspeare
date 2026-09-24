@@ -62,8 +62,5 @@ namespace MoveOrdering
 
         /** @brief Assigns ordering scores to the copied move list. */
         void score_moves(const Position& pos, Move tt_move);
-
-        /** @brief Compares scored moves for max-heap ordering. */
-        static bool lower_priority(const ScoredMove& left, const ScoredMove& right);
     };
 } // namespace MoveOrdering
