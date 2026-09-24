@@ -225,7 +225,8 @@ namespace Gui
 
     void renderBoard(sf::RenderTarget& target, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
                      const Assets::TextureLibrary& assets, const sf::Font& coordinateFont, const DragState& drag,
-                     sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations)
+                     sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations,
+                     const MoveAnimation& animation)
     {
         const float padding = piecePadding(geo.squareSize);
 
@@ -256,6 +257,11 @@ namespace Gui
             if (drag.active && sq == drag.from)
                 continue;
 
+            // The in-flight piece is drawn interpolated below; skipping it
+            // here prevents overlap with the destination sprite.
+            if (animation.active && sq == animation.to)
+                continue;
+
             const Piece pc = board.pieceAt(sq);
             if (pc == PIECE_NONE)
                 continue;
@@ -263,6 +269,21 @@ namespace Gui
             sf::Sprite sprite = makePieceSprite(assets, pc, geo);
             const sf::Vector2f tl = geo.topLeft(sq);
             sprite.setPosition({tl.x + padding, tl.y + padding});
+            target.draw(sprite);
+        }
+
+        // In-flight piece: drawn above static pieces, below an active drag.
+        if (animation.active && animation.piece != PIECE_NONE)
+        {
+            const sf::Vector2f fromPos = geo.topLeft(animation.from);
+            const sf::Vector2f toPos = geo.topLeft(animation.to);
+
+            const float t = animation.easedT();
+            const float x = fromPos.x + (toPos.x - fromPos.x) * t;
+            const float y = fromPos.y + (toPos.y - fromPos.y) * t;
+
+            sf::Sprite sprite = makePieceSprite(assets, animation.piece, geo);
+            sprite.setPosition({x + padding, y + padding});
             target.draw(sprite);
         }
 

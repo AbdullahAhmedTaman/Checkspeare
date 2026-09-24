@@ -8,6 +8,7 @@
 #include "EnginePlayer.hpp"
 #include "EvalBar.hpp"
 #include "GuiGameController.hpp"
+#include "MoveAnimation.hpp"
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
 #include "UciEngine.hpp"
@@ -59,4 +60,12 @@ private:
     std::size_t lastCursor_ = 0;
     ImFont* clockFont_ = nullptr;
     sf::Font coordinateFont_;
+
+    /// Started when a single new ply is committed; cleared on any cursor
+    /// change that is not a single forward step (undo, gotoPly, loadFEN).
+    Gui::MoveAnimation animation_;
+    /// Set in processEvents when a forwarded release ends an active drag.
+    /// Consumed by the cursor-change block in update, then cleared, so it
+    /// only ever affects the frame in which the release occurred.
+    bool justEndedDrag_ = false;
 };

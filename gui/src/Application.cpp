@@ -101,11 +101,21 @@ void Application::processEvents()
         if (!shouldForward)
             continue;
 
+        // Application must not know about board-space coordinates; the
+        // panel translates them.
         Gui::InputEvent forwarded = *inputEvent;
         if (!focusLost)
             forwarded.position = boardPanel_.toBoardSpace(forwarded.position);
 
+        // Observe the drag state before the controller consumes the event:
+        // on release it resets drag_, so afterwards we can no longer tell
+        // a drag-ended release from any other click.
+        const bool wasDragging = controller_.drag().active;
+
         controller_.handleEvent(forwarded, geo_);
+
+        if (wasDragging && forwarded.kind == Gui::InputEvent::Kind::PointerReleased)
+            justEndedDrag_ = true;
     }
 }
 
@@ -144,21 +154,41 @@ void Application::update(float dtSeconds)
 
     Gui::beginMainDockspace();
     boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
-                       controller_.annotations());
+                       controller_.annotations(), animation_);
     Gui::renderEngineThinkingPanel(snap, evalBar_);
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
     Gui::renderMoveListPanel(game_, controller_);
 
     // Advance the clock for each newly committed ply.
     const std::size_t curr = game_.cursor();
+
+    if (curr == lastCursor_ + 1)
+    {
+        // A drag-committed move is already visually at the destination;
+        // animating it would snap the piece back and slide it again. Only
+        // click-click and engine moves get the slide treatment.
+        if (!justEndedDrag_)
+        {
+            const MoveRecord& rec = game_.history()[curr - 1];
+            animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
+        }
+    }
+    else if (curr != lastCursor_)
+    {
+        animation_.active = false;
+    }
+
+    // Single-frame flag; only relevant to the release that set it.
+    justEndedDrag_ = false;
+
+    animation_.tick(dtSeconds);
+
     while (lastCursor_ < curr)
     {
         const Color mover = (lastCursor_ % 2 == 0) ? WHITE : BLACK;
         clock_.onMovePlayed(mover);
         ++lastCursor_;
     }
-
-    // Undo and history navigation do not rewind elapsed time.
     if (curr < lastCursor_)
         lastCursor_ = curr;
     clock_.update(dtSeconds);

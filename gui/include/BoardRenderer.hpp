@@ -4,6 +4,7 @@
 #include "BoardAnnotations.hpp"
 #include "BoardGeometry.hpp"
 #include "GuiGameController.hpp"
+#include "MoveAnimation.hpp"
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
 
@@ -32,6 +33,6 @@ namespace Gui
     /// caller owns it; the reference must remain valid for the call.
     void renderBoard(sf::RenderTarget& target, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
                      const Assets::TextureLibrary& assets, const sf::Font& coordinateFont, const DragState& drag,
-                     sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations);
-
+                     sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations,
+                     const MoveAnimation& animation);
 } // namespace Gui

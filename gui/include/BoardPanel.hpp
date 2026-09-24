@@ -4,6 +4,7 @@
 #include "BoardAnnotations.hpp"
 #include "BoardGeometry.hpp"
 #include "GuiGameController.hpp"
+#include "MoveAnimation.hpp"
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
 
@@ -32,9 +33,11 @@ namespace Gui
         /// panel). The flipped flag on `geo` is left untouched.
         /// `coordinateFont` is used to draw the a1–h8 / 1–8 labels along
         /// the board edges. The caller owns it and must keep it alive.
+        /// `animation` describes a piece in flight; while active, the renderer
+        /// draws it interpolated and skips the static piece at its destination.
         void render(BoardGeometry& geo, const BoardTheme& theme, const Board& board, const Assets::TextureLibrary& assets,
                     const sf::Font& coordinateFont, const DragState& drag, const PendingPromotion& promo,
-                    const BoardAnnotations& annotations);
+                    const BoardAnnotations& annotations, const MoveAnimation& animation);
 
         /// True if `windowPos` (window coordinates) falls inside the board
         /// image as drawn this frame. Used to bypass ImGui's mouse capture
