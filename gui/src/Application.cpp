@@ -19,12 +19,35 @@
 
 #include <stdexcept>
 
-Application::Application(Config& conf, const Assets::TextureLibrary& assets)
+namespace
+{
+    const char* soundKeyFor(MoveSound s)
+    {
+        switch (s)
+        {
+            case MoveSound::QuietMove:
+                return Assets::SoundKey::Move;
+            case MoveSound::Capture:
+                return Assets::SoundKey::Capture;
+            case MoveSound::Check:
+                return Assets::SoundKey::Check;
+            case MoveSound::Castle:
+                return Assets::SoundKey::Castle;
+            case MoveSound::Promotion:
+                return Assets::SoundKey::Promote;
+        }
+        return Assets::SoundKey::Move;
+    }
+} // namespace
+
+Application::Application(Config& conf, const Assets::TextureLibrary& assets, const Assets::SoundLibrary& sounds)
     : conf_(conf),
       assets_(assets),
+      sounds_(sounds),
       window_(sf::VideoMode({1280, 800}), "Chess GUI"),
       controller_(game_),
-      theme_(Gui::getBoardTheme("Default", assets))
+      theme_(Gui::getBoardTheme("Default", assets)),
+      soundPlayer_(sounds)
 {
     window_.setFramerateLimit(60);
 
@@ -78,6 +101,11 @@ void Application::wireClockCallbacks()
         {
             clock_.onMovePlayed(mover);
             game_.setClockSnapshotAt(ply, clock_.snapshot());
+
+            // Sound category was classified at commit time and stored in
+            // the record. Playing here catches both human and engine moves,
+            // since every commit routes through ChessGame::play.
+            soundPlayer_.play(soundKeyFor(game_.history()[ply].sound));
         });
 }
 
@@ -226,6 +254,60 @@ bool Application::canResign() const
     return !sideIsEngineControlled(game_.sideToMove());
 }
 
+bool Application::sideIsHuman(Color side) const
+{
+    const bool whitePlaysIt = playerWhite_.isSideControlled(side);
+    const bool blackPlaysIt = playerBlack_.isSideControlled(side);
+    return !whitePlaysIt && !blackPlaysIt;
+}
+
+std::string Application::gameOverSoundKey() const
+{
+    // Time loss beats anything the board says: the flag decides the game.
+    const auto outcomeFor = [this](Color loser)
+    {
+        const Color winner = (loser == WHITE) ? BLACK : WHITE;
+        const bool loserHuman = sideIsHuman(loser);
+        const bool winnerHuman = sideIsHuman(winner);
+
+        if (loserHuman && !winnerHuman)
+            return std::string(Assets::SoundKey::Defeat);
+        if (winnerHuman && !loserHuman)
+            return std::string(Assets::SoundKey::Victory);
+
+        // Both sides human (hotseat) or both engines (spectating): play
+        // the victory cue for whoever won.
+        return std::string(Assets::SoundKey::Victory);
+    };
+
+    if (clock_.flagFallen(WHITE))
+        return outcomeFor(WHITE);
+    if (clock_.flagFallen(BLACK))
+        return outcomeFor(BLACK);
+
+    const GameResult result = game_.result();
+
+    switch (result.kind)
+    {
+        case GameResultKind::Checkmate:
+        case GameResultKind::Resignation:
+            {
+                const Color loser = (result.winner == WHITE) ? BLACK : WHITE;
+                return outcomeFor(loser);
+            }
+
+        case GameResultKind::Stalemate:
+        case GameResultKind::FiftyMove:
+        case GameResultKind::Threefold:
+        case GameResultKind::InsufficientMaterial:
+            return std::string(Assets::SoundKey::Draw);
+
+        case GameResultKind::Ongoing:
+            return {};
+    }
+    return {};
+}
+
 bool Application::sideIsEngineControlled(Color side) const
 {
     // A side is blocked from human input only when an engine is actually
@@ -253,6 +335,25 @@ void Application::stepSimulation(float dtSeconds)
         game_.resign(*resigner);
 
     controller_.applyQueuedActions();
+
+    // Input-feedback sounds. These outcomes have no MoveRecord counterpart
+    // (a rejected or abandoned move is never committed), so they are keyed
+    // off the controller's ActionResult instead. The kind comparison against
+    // the previous frame prevents the sound from re-firing every frame the
+    // outcome remains current.
+    const Gui::ActionResult::Kind currentKind = controller_.result().kind;
+    if (currentKind != lastResultKind_)
+    {
+        switch (currentKind)
+        {
+            case Gui::ActionResult::Kind::IllegalMove:
+                soundPlayer_.play(Assets::SoundKey::Illegal);
+                break;
+            default:
+                break;
+        }
+        lastResultKind_ = currentKind;
+    }
 
     const bool setupOpen = setupModalOpen_;
 
@@ -306,6 +407,10 @@ void Application::stepSimulation(float dtSeconds)
         playerBlack_.abort();
         controller_.cancelSelection();
         controller_.reopenGameOverModal();
+
+        const std::string outcome = gameOverSoundKey();
+        if (!outcome.empty())
+            soundPlayer_.play(outcome);
     }
     gameOverWas_ = gameOver;
 

@@ -10,6 +10,9 @@
 #include "GameSetupPanel.hpp"
 #include "GuiGameController.hpp"
 #include "MoveAnimation.hpp"
+#include "MoveSound.hpp"
+#include "SoundLibrary.hpp"
+#include "SoundPlayer.hpp"
 #include "TextureLibrary.hpp"
 #include "Theme.hpp"
 #include "UciEngine.hpp"
@@ -20,6 +23,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <string>
 
 struct ImFont;
 
@@ -35,7 +39,7 @@ namespace Gui
 class Application
 {
 public:
-    Application(Config& conf, const Assets::TextureLibrary& assets);
+    Application(Config& conf, const Assets::TextureLibrary& assets, const Assets::SoundLibrary& sounds);
     ~Application();
 
     Application(const Application&) = delete;
@@ -68,6 +72,14 @@ private:
     /// True when the human side to move may resign.
     bool canResign() const;
 
+    /// True if no engine is configured to play `side`. Hotseat and
+    /// human-vs-human both resolve to "both sides human".
+    bool sideIsHuman(Color side) const;
+
+    /// Sound key for the current game-over result, from the local player's
+    /// perspective when there is one. Empty string when no sound applies.
+    std::string gameOverSoundKey() const;
+
     /// True if either engine is configured to play `side`.
     bool sideIsEngineControlled(Color side) const;
 
@@ -98,6 +110,7 @@ private:
 
     Config& conf_;
     const Assets::TextureLibrary& assets_;
+    const Assets::SoundLibrary& sounds_;
 
     sf::RenderWindow window_;
     sf::Clock deltaClock_;
@@ -116,6 +129,7 @@ private:
     Gui::BoardTheme theme_;
     Gui::EvalBar evalBar_;
     Gui::BoardPanel boardPanel_;
+    SoundPlayer soundPlayer_;
 
     /// Borrowed from ImGui's font atlas; valid while the ImGui context lives.
     ImFont* clockFont_ = nullptr;
@@ -147,4 +161,9 @@ private:
 
     /// True while the setup modal should be showing.
     bool setupModalOpen_ = true;
+
+    /// Last ActionResult kind seen by stepSimulation. Used to detect the
+    /// frame an error or cancel outcome first appears, so its sound plays
+    /// once rather than every frame it remains the current result.
+    Gui::ActionResult::Kind lastResultKind_ = Gui::ActionResult::Kind::Ready;
 };

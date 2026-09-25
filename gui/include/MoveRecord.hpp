@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ClockSnapshot.hpp"
+#include "MoveSound.hpp"
 #include "types.h"
 
 #include <string>
@@ -20,4 +21,5 @@ struct MoveRecord
     std::string san;
     Key positionKeyAfter = 0;
     ClockSnapshot clockAfter;
+    MoveSound sound = MoveSound::QuietMove;
 };

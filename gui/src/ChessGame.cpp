@@ -1,10 +1,34 @@
 #include "ChessGame.hpp"
 #include "GameResult.hpp"
+#include "MoveSound.hpp"
 #include "San.hpp"
 
 namespace
 {
     constexpr const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+    /// Categorises a committed move for sound playback. Priority is
+    /// specific-to-general: promotion and castling are distinctive, captures
+    /// are more impactful than quiet moves, and check is the fallback
+    /// "something happened" category.
+    /// Categorises a committed move for sound playback. Priority is
+    /// specific-to-general: promotion and castling are distinctive, captures
+    /// are more impactful than quiet moves, and check is the fallback
+    /// "something happened" category.
+    MoveSound classifyMoveSound(const Board& after, Move m)
+    {
+        if (m.is_promotion())
+            return MoveSound::Promotion;
+        if (m.is_castle())
+            return MoveSound::Castle;
+        if (m.is_capture())
+            return MoveSound::Capture;
+        if (after.inCheck())
+            return MoveSound::Check;
+        if (m.is_ep())
+            return MoveSound::Capture;
+        return MoveSound::QuietMove;
+    }
 } // namespace
 
 ChessGame::ChessGame()
@@ -78,6 +102,7 @@ std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
     MoveRecord rec;
     rec.move = *m;
     rec.san = toSan(before, *m);
+    rec.sound = classifyMoveSound(board_, *m);
     rec.positionKeyAfter = board_.position().key;
     // rec.clockAfter is set by the moveCommitted_ callback below.
     moves_.push_back(std::move(rec));
