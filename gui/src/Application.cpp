@@ -88,9 +88,11 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
-    /// Where Engine integration comes in :
-    // engine_.start(conf_.enginePath);
-    enginePlayer_.setSideControlled(BLACK, true);
+    // Neither engine is started here. The Engine Settings panel drives
+    // both lifecycles, so a missing or invalid binary for one side no
+    // longer blocks the GUI from opening.
+    playerWhite_.setSideControlled(WHITE, true);
+    playerBlack_.setSideControlled(BLACK, true);
 }
 
 Application::~Application()
@@ -169,7 +171,8 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     if (isGameOver())
         return false;
 
-    if (enginePlayer_.isSideControlled(game_.sideToMove()))
+    // Never let the human play for an engine-controlled side.
+    if (sideIsEngineControlled(game_.sideToMove()))
         return false;
 
     if (boardPanel_.contains(ev.position))
@@ -189,6 +192,18 @@ void Application::update(float dtSeconds)
     stepUi(dtSeconds);
 }
 
+bool Application::sideIsEngineControlled(Color side) const
+{
+    // A side is blocked from human input only when an engine is actually
+    // running and configured to play it. Configuration alone is a
+    // preference; starting an engine is what makes it take effect. This
+    // lets the user open the app, play, and start an engine mid-game
+    // without the two states contradicting each other.
+    const bool whiteWouldPlay = playerWhite_.isSideControlled(side) && engineWhite_.isRunning();
+    const bool blackWouldPlay = playerBlack_.isSideControlled(side) && engineBlack_.isRunning();
+    return whiteWouldPlay || blackWouldPlay;
+}
+
 void Application::stepSimulation(float dtSeconds)
 {
     // Quit first: if the user clicked Quit in the modal, do it before
@@ -204,16 +219,16 @@ void Application::stepSimulation(float dtSeconds)
 
     controller_.applyQueuedActions();
 
-    const bool gameOver = isGameOver();
+    playerWhite_.tick(game_, clock_);
+    playerBlack_.tick(game_, clock_);
 
-    enginePlayer_.tick(game_, clock_);
     controller_.updateAnnotations();
+
+    const bool gameOver = isGameOver();
 
     const std::size_t curr = game_.cursor();
 
-    // ------------------------------------------------------------------
     // Animation
-    // ------------------------------------------------------------------
     if (curr == lastCursor_ + 1)
     {
         if (curr != suppressAnimationAtPly_)
@@ -248,12 +263,14 @@ void Application::stepSimulation(float dtSeconds)
     // snapshot and flipped the active side a second time.
     lastCursor_ = curr;
 
-    if (justEnteredGameOver(gameOver, gameOverWas_))
+    if (gameOver && !gameOverWas_)
     {
-        enginePlayer_.abort();
+        playerWhite_.abort();
+        playerBlack_.abort();
         controller_.cancelSelection();
         controller_.reopenGameOverModal();
     }
+    gameOverWas_ = gameOver;
 
     if (!gameOver)
         clock_.update(dtSeconds);
@@ -276,7 +293,7 @@ void Application::stepUi(float dtSeconds)
                        controller_.annotations(), animation_);
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
-    Gui::renderEngineSettingsPanel(conf_, enginePlayer_, engine_);
+    Gui::renderEngineSettingsPanel(conf_, playerWhite_, engineWhite_, playerBlack_, engineBlack_);
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
     Gui::renderMoveListPanel(game_, controller_);
 }
@@ -284,17 +301,49 @@ void Application::stepUi(float dtSeconds)
 Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
 {
     Gui::EngineThinkingSnapshot snap;
-    snap.thinking = enginePlayer_.thinking();
-    snap.activeSide = (game_.sideToMove() == WHITE) ? "White" : "Black";
 
-    if (const auto& info = enginePlayer_.lastInfo())
+    // Pick which engine's info to display:
+    //   - If exactly one engine is running, show it regardless of whose
+    //     turn it is. A human playing against an engine wants to see that
+    //     engine's evaluation while they think, not a blank panel.
+    //   - If both are running, show the one whose side is to move.
+    //   - If neither is running, the snapshot stays empty and the panel
+    //     shows Idle.
+    //
+    // "Running" requires both a configured side and a live process: a
+    // preference without a started engine is not a reason to show its
+    // (empty) search info.
+    const bool whiteActive = engineWhite_.isRunning() && playerWhite_.isSideControlled(WHITE);
+    const bool blackActive = engineBlack_.isRunning() && playerBlack_.isSideControlled(BLACK);
+
+    const EnginePlayer* active = nullptr;
+    if (whiteActive && blackActive)
+        active = (game_.sideToMove() == WHITE) ? &playerWhite_ : &playerBlack_;
+    else if (whiteActive)
+        active = &playerWhite_;
+    else if (blackActive)
+        active = &playerBlack_;
+
+    if (active == nullptr)
+        return snap;
+
+    // `activeSide` names the engine being shown, not the side to move.
+    // When the human is on the clock against a running engine, the panel
+    // still reads "White" (or "Black") — meaning "this is White's engine."
+    snap.activeSide = (active == &playerWhite_) ? "White" : "Black";
+    snap.thinking = active->thinking();
+
+    if (const auto& info = active->lastInfo())
     {
         snap.depth = info->depth;
         snap.seldepth = info->seldepth;
         snap.nodes = info->nodes;
         snap.nps = info->nps;
 
-        const bool fromBlack = (enginePlayer_.lastInfoSide() == BLACK);
+        // Normalize to White's perspective for display. `lastInfoSide_`
+        // records which side produced the info, so this works whether the
+        // active player happens to be White or Black.
+        const bool fromBlack = (active->lastInfoSide() == BLACK);
         if (info->scoreCp)
             snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
         if (info->scoreMate)
@@ -319,7 +368,8 @@ void Application::newGame()
     lastCursor_ = 0;
     gameOverWas_ = false;
     animation_.active = false;
-    enginePlayer_.abort();
+    playerBlack_.abort();
+    playerWhite_.abort();
     controller_.updateAnnotations();
     controller_.reopenGameOverModal();
 

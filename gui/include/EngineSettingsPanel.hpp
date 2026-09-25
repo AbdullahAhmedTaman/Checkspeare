@@ -7,12 +7,10 @@
 namespace Gui
 {
 
-    /// Renders the "Engine Settings" panel. Exposes the runtime knobs that
-    /// are safe to toggle mid-session: which sides the engine plays, and
-    /// an informational readout of the engine's handshake state.
-    ///
-    /// `enginePlayer` is non-const because the side toggles call
-    /// setSideControlled. `engine` is const: the panel only reads status.
-    void renderEngineSettingsPanel(Config& conf, EnginePlayer& enginePlayer, UciEngine& engine);
+    /// Renders the "Engine Settings" panel. Two tabs, one per side, each
+    /// showing the binary path, start/stop controls, and the side-control
+    /// toggle for that engine.
+    void renderEngineSettingsPanel(Config& conf, EnginePlayer& whitePlayer, UciEngine& whiteEngine, EnginePlayer& blackPlayer,
+                                   UciEngine& blackEngine);
 
 } // namespace Gui

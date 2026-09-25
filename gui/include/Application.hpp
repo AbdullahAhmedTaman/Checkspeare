@@ -70,6 +70,10 @@ private:
     /// banner's New Game button fires a request.
     void newGame();
 
+    /// True if either engine is configured to play `side`. Used to gate
+    /// human input and to decide which player to snapshot for display.
+    bool sideIsEngineControlled(Color side) const;
+
     Config& conf_;
     const Assets::TextureLibrary& assets_;
 
@@ -78,8 +82,20 @@ private:
 
     ChessGame game_;
     ChessClock clock_;
-    UciEngine engine_;
-    EnginePlayer enginePlayer_{engine_};
+
+    /// One UCI subprocess per side. Each player owns the lifecycle of the
+    /// engine it binds to; neither is started until the user asks for it
+    /// from the Engine Settings panel.
+    UciEngine engineWhite_;
+    UciEngine engineBlack_;
+
+    /// One EnginePlayer per engine. Each is configured to control exactly
+    /// one side by convention; the class itself does not enforce this, so
+    /// a future "single engine plays both sides" mode is still reachable
+    /// by setting both flags on the same player.
+    EnginePlayer playerWhite_{engineWhite_};
+    EnginePlayer playerBlack_{engineBlack_};
+
     Gui::GuiGameController controller_;
 
     /// Recomputed each frame by BoardPanel::render. Describes the texture

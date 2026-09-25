@@ -62,8 +62,7 @@ namespace Gui
         const std::string scoreText = formatScore(snapshot);
 
         // Info block
-        ImGui::Text("Side: %s", snapshot.activeSide.c_str());
-
+        ImGui::Text("%s engine", snapshot.activeSide.c_str());
         if (snapshot.thinking)
             ImGui::TextColored(ImVec4(0.91f, 0.78f, 0.48f, 1.00f), "Thinking...");
         else
