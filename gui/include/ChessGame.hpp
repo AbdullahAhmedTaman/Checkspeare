@@ -24,15 +24,18 @@
 /// The game also carries a clock snapshot per ply so that undo/redo can
 /// restore the clock exactly. The game never owns the clock; Application
 /// installs a ClockSync callback and pushes snapshots in. Every cursor
-/// change invokes the callback with the snapshot that applies to the
-/// new cursor position.
+/// change invokes the callback with the snapshot that applies to the new
+/// cursor position.
 class ChessGame
 {
 public:
     /// Callback invoked with the clock snapshot that applies to the
-    /// current cursor after any navigation. Application installs a lambda
-    /// that forwards to ChessClock::restore.
+    /// current cursor after any navigation.
     using ClockSync = std::function<void(const ClockSnapshot&)>;
+
+    /// Callback invoked when a fresh move is committed. Receives the ply
+    /// index of the new move and the side that played it.
+    using MoveCommitted = std::function<void(std::size_t ply, Color mover)>;
 
     ChessGame();
 
@@ -47,12 +50,13 @@ public:
     void setClockSync(ClockSync sync);
 
     /// Records the clock snapshot that applies to the start position.
-    /// Called by Application after configuring the clock.
     void setInitialClockSnapshot(const ClockSnapshot& s);
 
     /// Records the clock snapshot that applies to the move at `ply`.
-    /// Called by Application the frame a move is committed.
     void setClockSnapshotAt(std::size_t ply, const ClockSnapshot& s);
+
+    /// Installs the callback invoked when a fresh move is committed.
+    void setMoveCommitted(MoveCommitted cb);
 
     /// Plays from -> to. If the cursor is behind the end of the list (user
     /// navigated back and then played), the redo tail is discarded first.
@@ -63,10 +67,10 @@ public:
     bool redo();
 
     /// Records that `side` resigned. Idempotent. Cleared by reset() and
-    /// loadFEN(), which are the two ways a new game begins.
+    /// loadFEN().
     ///
-    /// This is the one outcome that is not derived from the position or
-    /// the clock; it is asserted. Stored explicitly for that reason.
+    /// This is the one outcome not derived from the position or the clock;
+    /// it is asserted. Stored explicitly for that reason.
     void resign(Color side);
 
     /// Side that resigned, if any.
@@ -75,7 +79,6 @@ public:
     /// Moves the cursor to `ply` (0 = start position), clamped to
     /// [0, totalMoves()].
     void gotoPly(std::size_t ply);
-
     void gotoEnd();
     void gotoStart();
 
@@ -119,15 +122,11 @@ public:
         return board_.sideToMove();
     }
 
-    using MoveCommitted = std::function<void(std::size_t ply, Color mover)>;
-    void setMoveCommitted(MoveCommitted cb);
-
 private:
     void stepForward();
     void stepBackward();
 
     /// Pushes the snapshot for the current cursor to the sync callback.
-    /// Called by every public navigation method.
     void syncClockToCursor();
 
     std::optional<Move> findLegalMove(Square from, Square to, PieceType promo) const;

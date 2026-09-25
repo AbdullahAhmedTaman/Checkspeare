@@ -5,7 +5,7 @@
 namespace
 {
     constexpr const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-}
+} // namespace
 
 ChessGame::ChessGame()
 {
@@ -50,7 +50,7 @@ void ChessGame::setClockSnapshotAt(std::size_t ply, const ClockSnapshot& s)
     moves_[ply].clockAfter = s;
 
     // If the cursor is exactly on this ply, push the new snapshot through
-    // as well, so the clock reflects it immediately.
+    // immediately so the clock reflects it this frame.
     if (cursor_ == ply + 1)
         syncClockToCursor();
 }
@@ -82,9 +82,8 @@ std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
     // rec.clockAfter is set by the moveCommitted_ callback below.
     moves_.push_back(std::move(rec));
 
-    // A genuine commit: this is the only path that should ever touch the
-    // clock's increment / active side. Navigation (undo/redo/gotoPly) only
-    // ever *restores* snapshots through clockSync_.
+    // A genuine commit: the only path that may touch the clock's increment
+    // and active side. Navigation only ever restores snapshots.
     if (moveCommitted_)
         moveCommitted_(cursor_ - 1, mover);
 
@@ -141,26 +140,12 @@ void ChessGame::gotoPly(std::size_t ply)
 
 void ChessGame::gotoEnd()
 {
-    bool changed = false;
-    while (cursor_ < moves_.size())
-    {
-        stepForward();
-        changed = true;
-    }
-    if (changed)
-        syncClockToCursor();
+    gotoPly(moves_.size());
 }
 
 void ChessGame::gotoStart()
 {
-    bool changed = false;
-    while (cursor_ > 0)
-    {
-        stepBackward();
-        changed = true;
-    }
-    if (changed)
-        syncClockToCursor();
+    gotoPly(0);
 }
 
 std::vector<MoveRecord> ChessGame::historyToCursor() const
@@ -171,8 +156,7 @@ std::vector<MoveRecord> ChessGame::historyToCursor() const
 GameResult ChessGame::result() const
 {
     // Resignation takes priority: it is an asserted decision to end the
-    // game, and no position-derived classification can override it. The
-    // winner is the side that did not resign.
+    // game, and no position-derived classification can override it.
     if (resigned_.has_value())
     {
         const Color winner = (*resigned_ == WHITE) ? BLACK : WHITE;

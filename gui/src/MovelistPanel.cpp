@@ -130,7 +130,7 @@ namespace Gui
 
         ImGui::EndChild();
 
-        // ---- Footer: Undo / Redo ----
+        // Footer: Undo / Redo
         const bool canUndo = game.cursor() > 0;
         const bool canRedo = game.cursor() < game.totalMoves();
 

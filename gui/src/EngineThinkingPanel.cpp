@@ -55,7 +55,7 @@ namespace Gui
         ImGui::Begin("Engine");
 
         const float barWidth = 40.0f;
-        const float barHeight = 480.0f;
+        const float barHeight = 460.0f;
         const float lineWidth = 3.0f;
         const float gap = 10.0f;
 

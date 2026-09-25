@@ -2,7 +2,6 @@
 
 #include "ClockPanel.hpp"
 #include "Dockspace.hpp"
-#include "EngineSettingsPanel.hpp"
 #include "EngineThinkingPanel.hpp"
 #include "GameOverModal.hpp"
 #include "GameOverTransition.hpp"
@@ -34,74 +33,78 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     clock_.configure(conf_.timeControl);
     clock_.stop();
 
-    // Clock snapshot wiring.
-    //
-    // The game carries a ClockSnapshot per ply plus one for the start
-    // position. Whenever the cursor moves via navigation (undo, redo,
-    // gotoPly, etc.), it calls this callback with the snapshot that
-    // applies to the new cursor, and the clock restores it.
-    //
-    // Note: ChessGame::play does NOT fire this callback. A freshly-played
-    // move is handled by Application::stepSimulation instead, because the
-    // "after" snapshot for that ply only exists once the clock has been
-    // told about the move (increment added, side flipped).
+    wireClockCallbacks();
+
+    if (!ImGui::SFML::Init(window_, false))
+        throw std::runtime_error("[ImGui] Initialization failed!");
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+
+    loadFonts();
+    ImGui::SFML::UpdateFontTexture();
+
+    Gui::applyChessTheme();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
+        throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
+
+    seedSetupModalFromConfig();
+}
+
+Application::~Application()
+{
+    ImGui::SFML::Shutdown();
+}
+
+void Application::wireClockCallbacks()
+{
+    // The game carries a clock snapshot per ply. Navigation methods fire
+    // clockSync_, which restores the matching snapshot. ChessGame::play
+    // does not fire it; a fresh commit goes through moveCommitted_ instead,
+    // since the "after" snapshot for a ply only exists once the clock has
+    // been told about the move (increment added, side flipped).
     game_.setClockSync(
         [this](const ClockSnapshot& s)
         {
             clock_.restore(s);
         });
 
-    // Snapshot the initial clock state for ply 0.
     game_.setInitialClockSnapshot(clock_.snapshot());
 
-    // A fresh move commit is the only event that mutates the clock
-    // (increment + active side). The "after" snapshot for that ply can
-    // only be taken once that mutation has happened, so it's recorded
-    // here rather than in stepSimulation.
     game_.setMoveCommitted(
         [this](std::size_t ply, Color mover)
         {
             clock_.onMovePlayed(mover);
             game_.setClockSnapshotAt(ply, clock_.snapshot());
         });
+}
 
-    if (!ImGui::SFML::Init(window_, false))
-        throw std::runtime_error("[ImGui] Initialization failed!");
-
-    ImGui::GetIO().IniFilename = nullptr;
-
+void Application::loadFonts()
+{
     ImGuiIO& io = ImGui::GetIO();
 
     ImFont* uiFont = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Medium.ttf", 19.0f);
     IM_ASSERT(uiFont != nullptr && "[Fonts] Failed to load UI font!");
 
-    clockFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 36.0f);
-
+    clockFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 36.0f);
     if (clockFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load clock font!");
 
-    engineNameFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 26.0f);
-
+    engineNameFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 26.0f);
     if (engineNameFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load engine name font!");
 
-    moveListFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 22.0f);
-
+    moveListFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 22.0f);
     if (moveListFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load move list font!");
+}
 
-    ImGui::SFML::UpdateFontTexture();
-
-    Gui::applyChessTheme();
-
-    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-
-    if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
-        throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
-
-    // Seed the setup modal from Config. The user can change every field;
-    // committed values are written back into Config so the next session
-    // remembers them.
+void Application::seedSetupModalFromConfig()
+{
+    // Committed values are written back into Config by applyGameSetup, so
+    // this seed gives the next session the last-used settings.
     pendingSetup_.timeControl = conf_.timeControl;
 
     // Guard against a stored zero from an earlier session: a clock with
@@ -113,15 +116,6 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     pendingSetup_.blackKind = Gui::PlayerKind::Engine;
     pendingSetup_.whiteEnginePath = conf_.whiteEnginePath;
     pendingSetup_.blackEnginePath = conf_.blackEnginePath;
-
-    // Neither engine is started here. The setup modal drives their
-    // lifecycle; a missing or invalid binary no longer blocks the GUI
-    // from opening.
-}
-
-Application::~Application()
-{
-    ImGui::SFML::Shutdown();
 }
 
 void Application::run()
@@ -134,6 +128,19 @@ void Application::run()
         update(dt);
         render();
     }
+}
+
+void Application::update(float dtSeconds)
+{
+    stepSimulation(dtSeconds);
+    stepUi(dtSeconds);
+}
+
+void Application::render()
+{
+    window_.clear(sf::Color::White);
+    ImGui::SFML::Render(window_);
+    window_.display();
 }
 
 void Application::processEvents()
@@ -153,13 +160,9 @@ void Application::processEvents()
             continue;
 
         // Clicking anywhere outside the board clears a pending selection.
-        // This runs before shouldForwardInput because ImGui-captured
-        // panel clicks are otherwise not forwarded, and the controller
-        // would never see the click that should reset its state.
-        //
-        // Skipped while a modal is open: the modal owns every click, and
-        // its fields are not a signal to drop a selection made before it
-        // appeared.
+        // Runs before shouldForwardInput because ImGui-captured panel
+        // clicks are otherwise not forwarded. Skipped while a modal is
+        // open: the modal owns every click.
         if (!setupModalOpen_ && !isGameOver() && inputEvent->kind == Gui::InputEvent::Kind::PointerPressed &&
             inputEvent->button == Gui::MouseButton::Left && !boardPanel_.contains(inputEvent->position))
         {
@@ -196,15 +199,12 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     if (endsDrag)
         return true;
 
-    // While any modal is open, no pointer input reaches the board. ImGui's
-    // WantCaptureMouse would normally cover this, but the board-panel
-    // bypass below defeats it: the board is itself an ImGui panel, so a
-    // click anywhere over its rectangle is forwarded regardless of what
-    // is on top of it. Modals are checked explicitly to close that gap.
+    // Modals gate everything else. ImGui's WantCaptureMouse alone is not
+    // enough: the board is itself an ImGui panel, so a click over its
+    // rectangle would otherwise be forwarded regardless of what is on top.
     if (setupModalOpen_ || isGameOver())
         return false;
 
-    // Never let the human play for an engine-controlled side.
     if (sideIsEngineControlled(game_.sideToMove()))
         return false;
 
@@ -226,19 +226,11 @@ bool Application::canResign() const
     return !sideIsEngineControlled(game_.sideToMove());
 }
 
-void Application::update(float dtSeconds)
-{
-    stepSimulation(dtSeconds);
-    stepUi(dtSeconds);
-}
-
 bool Application::sideIsEngineControlled(Color side) const
 {
     // A side is blocked from human input only when an engine is actually
     // running and configured to play it. Configuration alone is a
-    // preference; starting an engine is what makes it take effect. This
-    // lets the user open the app, play, and start an engine mid-game
-    // without the two states contradicting each other.
+    // preference; starting an engine is what makes it take effect.
     const bool whiteWouldPlay = playerWhite_.isSideControlled(side) && engineWhite_.isRunning();
     const bool blackWouldPlay = playerBlack_.isSideControlled(side) && engineBlack_.isRunning();
     return whiteWouldPlay || blackWouldPlay;
@@ -273,10 +265,10 @@ void Application::stepSimulation(float dtSeconds)
     controller_.updateAnnotations();
 
     const bool gameOver = isGameOver();
-
     const std::size_t curr = game_.cursor();
 
-    // Animation
+    // Animation: a single forward step is a real commit; a single backward
+    // step is an undo. Multi-ply jumps snap.
     if (curr == lastCursor_ + 1)
     {
         if (curr != suppressAnimationAtPly_)
@@ -299,16 +291,13 @@ void Application::stepSimulation(float dtSeconds)
 
     animation_.tick(dtSeconds);
 
-    // Cursor bookkeeping
+    // Cursor bookkeeping.
     //
-    // The clock is no longer advanced here. ChessGame::play announces a
-    // fresh commit through moveCommitted_, which applies the increment,
-    // flips the active side, and stores the resulting "after" snapshot
-    // for that ply. Every other cursor change (undo, redo, gotoPly,
-    // gotoEnd, a history-row click) already pushed the matching snapshot
-    // through clockSync_, which *restores* it. Treating a redo as a
-    // commit here is what re-applied increments on top of the restored
-    // snapshot and flipped the active side a second time.
+    // The clock is advanced only by moveCommitted_, which fires from
+    // ChessGame::play. Every other cursor change already pushed the
+    // matching snapshot through clockSync_, which *restores* it. Treating
+    // a redo as a commit here would re-apply increments on top of the
+    // restored snapshot and flip the active side twice.
     lastCursor_ = curr;
 
     if (gameOver && !gameOverWas_)
@@ -343,11 +332,10 @@ void Application::stepUi(float dtSeconds)
     Gui::renderEngineThinkingPanel(snap, evalBar_);
     Gui::renderStatusPanel(controller_, game_, canResign());
     Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
+
     // A side is labeled with its engine's name when an engine is running,
-    // and with "Human" otherwise. During the brief handshake window
-    // between process start and the `id name` line arriving, the name is
-    // still empty; that shows "Engine" rather than "Human", which would be
-    // wrong for a side that is in fact being played by a machine.
+    // and "Human" otherwise. During the handshake window the name is still
+    // empty, so "Engine" is shown rather than "Human" for a machine side.
     auto displayName = [](const UciEngine& engine) -> std::string
     {
         if (!engine.isRunning())
@@ -358,6 +346,7 @@ void Application::stepUi(float dtSeconds)
 
     Gui::renderClockPanel(clock_, game_, clockFont_, engineNameFont_, displayName(engineWhite_), displayName(engineBlack_));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
+
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
     {
         applyGameSetup(*committed);
@@ -413,9 +402,8 @@ Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
         snap.nodes = info->nodes;
         snap.nps = info->nps;
 
-        // Normalize to White's perspective for display. `lastInfoSide_`
-        // records which side produced the info, so this works whether the
-        // active player happens to be White or Black.
+        // UCI reports from the engine's own point of view; normalize to
+        // White's perspective for display.
         const bool fromBlack = (active->lastInfoSide() == BLACK);
         if (info->scoreCp)
             snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
@@ -426,32 +414,21 @@ Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
     return snap;
 }
 
-void Application::render()
-{
-    window_.clear(sf::Color::White);
-    ImGui::SFML::Render(window_);
-    window_.display();
-}
-
 void Application::newGame()
 {
     // Defer the reset to applyGameSetup. The modal needs the old game to
-    // still be alive while it is on screen; resetting first would blank
-    // the board behind it. A failed or abandoned commit also cannot leave
-    // the game half-reset, because nothing changes until Start is pressed.
+    // still be alive while it is on screen, and nothing changes until the
+    // user commits a fresh setup.
     setupModalOpen_ = true;
     controller_.updateAnnotations();
 }
 
 void Application::applyGameSetup(const Gui::GameSetup& setup)
 {
-    // Snapshot the current state into Config so the next session can seed
-    // the modal from these choices.
     conf_.timeControl = setup.timeControl;
     conf_.whiteEnginePath = setup.whiteEnginePath;
     conf_.blackEnginePath = setup.blackEnginePath;
 
-    // Tear down the old game before building the new one.
     playerWhite_.abort();
     playerBlack_.abort();
     engineWhite_.stop();
@@ -463,13 +440,8 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
     animation_.active = false;
     suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
 
-    // Configure and start the clock. The snapshot taken immediately after
-    // start() becomes the "ply 0" state the clock restores to on undo.
-    //
     // Clamp the initial time to one minute: zero would make the flag fall
-    // on the first tick, before either side can move. The modal already
-    // enforces this, but a stale Config value or a future caller that
-    // bypasses the modal would otherwise slip through.
+    // on the first tick, before either side can move.
     ChessClock::TimeControl tc = setup.timeControl;
     if (tc.initialMs < 60 * 1000)
         tc.initialMs = 60 * 1000;
@@ -478,11 +450,9 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
     clock_.start();
     game_.setInitialClockSnapshot(clock_.snapshot());
 
-    // Player kinds.
     playerWhite_.setSideControlled(WHITE, setup.whiteKind == Gui::PlayerKind::Engine);
     playerBlack_.setSideControlled(BLACK, setup.blackKind == Gui::PlayerKind::Engine);
 
-    // Engines: launched for engine sides, stopped for human sides.
     launchOrStopEngine(engineWhite_, setup.whiteKind, setup.whiteEnginePath);
     launchOrStopEngine(engineBlack_, setup.blackKind, setup.blackEnginePath);
 
@@ -504,8 +474,7 @@ void Application::launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, co
     }
     catch (const std::exception&)
     {
-        // A bad path or a failed spawn leaves the engine stopped. The
-        // Engine Settings panel shows Not running and offers Start, so
-        // the user can recover without restarting the GUI.
+        // A bad path or failed spawn leaves the engine stopped. The setup
+        // panel can retry without restarting the GUI.
     }
 }

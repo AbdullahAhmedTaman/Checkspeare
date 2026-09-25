@@ -167,27 +167,26 @@ namespace Gui
         drag_ = {};
     }
 
+    bool GuiGameController::isPromotionMove(Square from, Square to) const
+    {
+        if (game_.pieceAt(from) == PIECE_NONE)
+            return false;
+
+        for (const Move& m : game_.board().legalMovesFrom(from))
+        {
+            if (m.to() == to && m.is_promotion())
+                return true;
+        }
+
+        return false;
+    }
+
     void GuiGameController::playMoveOrStartPromotion(Square from, Square to, bool fromDrag)
     {
         if (isFrozen(game_))
             return;
 
-        const Piece moving = game_.pieceAt(from);
-        bool isPromotion = false;
-
-        if (moving != PIECE_NONE)
-        {
-            for (const Move& m : game_.board().legalMovesFrom(from))
-            {
-                if (m.to() == to && m.is_promotion())
-                {
-                    isPromotion = true;
-                    break;
-                }
-            }
-        }
-
-        if (isPromotion)
+        if (isPromotionMove(from, to))
         {
             lastMoveWasDrag_ = fromDrag;
 
@@ -207,7 +206,7 @@ namespace Gui
                 promo_.choiceSquares[i] = (r < 0 || r > 7) ? SQ_NONE : static_cast<Square>(r * 8 + file);
             }
 
-            result_ = {ActionResult::Kind::PromotionPending, from, to, moving};
+            result_ = {ActionResult::Kind::PromotionPending, from, to, game_.pieceAt(from)};
             cancelSelection();
             return;
         }
