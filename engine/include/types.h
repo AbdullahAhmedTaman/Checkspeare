@@ -242,7 +242,7 @@ struct SearchLimits
     int wtime = 0, btime = 0;
     int winc = 0, binc = 0;
     int movetime = 0;
-    uint64_t max_nodes = UINT64_MAX; // Needed for UCI 'go nodes X'
+    uint64_t max_nodes = UINT64_MAX;
     bool infinite = false;
 };
 
