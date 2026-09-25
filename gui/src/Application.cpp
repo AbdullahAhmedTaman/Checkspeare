@@ -3,6 +3,7 @@
 #include "Dockspace.hpp"
 #include "EngineSettingsPanel.hpp"
 #include "EngineThinkingPanel.hpp"
+#include "GameOverModal.hpp"
 #include "GameOverTransition.hpp"
 #include "GameResult.hpp"
 #include "ImGuiLayer.hpp"
@@ -27,11 +28,10 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
 {
     window_.setFramerateLimit(60);
 
-    ChessClock::TimeControl tc;
-    tc.initialMs = 60 * 1000;
-    tc.incrementMs = 3 * 1000;
-    clock_.configure(tc);
-    clock_.start();
+    // Clock is configured but not started. It stays stopped until a setup
+    // is committed, so no time is lost while the user reads the modal.
+    clock_.configure(conf_.timeControl);
+    clock_.stop();
 
     // Clock snapshot wiring.
     //
@@ -88,11 +88,18 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
-    // Neither engine is started here. The Engine Settings panel drives
-    // both lifecycles, so a missing or invalid binary for one side no
-    // longer blocks the GUI from opening.
-    playerWhite_.setSideControlled(WHITE, true);
-    playerBlack_.setSideControlled(BLACK, true);
+    // Seed the setup modal from Config. The user can change every field;
+    // committed values are written back into Config so the next session
+    // remembers them.
+    pendingSetup_.timeControl = conf_.timeControl;
+    pendingSetup_.whiteKind = Gui::PlayerKind::Human;
+    pendingSetup_.blackKind = Gui::PlayerKind::Engine;
+    pendingSetup_.whiteEnginePath = conf_.whiteEnginePath;
+    pendingSetup_.blackEnginePath = conf_.blackEnginePath;
+
+    // Neither engine is started here. The setup modal drives their
+    // lifecycle; a missing or invalid binary no longer blocks the GUI
+    // from opening.
 }
 
 Application::~Application()
@@ -219,8 +226,13 @@ void Application::stepSimulation(float dtSeconds)
 
     controller_.applyQueuedActions();
 
-    playerWhite_.tick(game_, clock_);
-    playerBlack_.tick(game_, clock_);
+    const bool setupOpen = setupModalOpen_;
+
+    if (!setupOpen)
+    {
+        playerWhite_.tick(game_, clock_);
+        playerBlack_.tick(game_, clock_);
+    }
 
     controller_.updateAnnotations();
 
@@ -272,7 +284,7 @@ void Application::stepSimulation(float dtSeconds)
     }
     gameOverWas_ = gameOver;
 
-    if (!gameOver)
+    if (!gameOver && !setupOpen)
         clock_.update(dtSeconds);
 }
 
@@ -293,9 +305,17 @@ void Application::stepUi(float dtSeconds)
                        controller_.annotations(), animation_);
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
-    Gui::renderEngineSettingsPanel(conf_, playerWhite_, engineWhite_, playerBlack_, engineBlack_);
+    // Gui::renderEngineSettingsPanel(conf_, playerWhite_, engineWhite_, playerBlack_, engineBlack_,
+    //                                /*pathsLocked=*/!setupModalOpen_);
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
+    Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
+
     Gui::renderMoveListPanel(game_, controller_);
+    if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
+    {
+        applyGameSetup(*committed);
+        setupModalOpen_ = false;
+    }
 }
 
 Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
@@ -362,17 +382,68 @@ void Application::render()
 
 void Application::newGame()
 {
+    // Defer the reset to applyGameSetup. The modal needs the old game to
+    // still be alive while it is on screen; resetting first would blank
+    // the board behind it. A failed or abandoned commit also cannot leave
+    // the game half-reset, because nothing changes until Start is pressed.
+    setupModalOpen_ = true;
+    controller_.updateAnnotations();
+}
+
+void Application::applyGameSetup(const Gui::GameSetup& setup)
+{
+    // Snapshot the current state into Config so the next session can seed
+    // the modal from these choices.
+    conf_.timeControl = setup.timeControl;
+    conf_.whiteEnginePath = setup.whiteEnginePath;
+    conf_.blackEnginePath = setup.blackEnginePath;
+
+    // Tear down the old game before building the new one.
+    playerWhite_.abort();
+    playerBlack_.abort();
+    engineWhite_.stop();
+    engineBlack_.stop();
+
     game_.reset();
-    clock_.reset();
-    clock_.start();
     lastCursor_ = 0;
     gameOverWas_ = false;
     animation_.active = false;
-    playerBlack_.abort();
-    playerWhite_.abort();
+    suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
+
+    // Configure and start the clock. The snapshot taken immediately after
+    // start() becomes the "ply 0" state the clock restores to on undo.
+    clock_.configure(setup.timeControl);
+    clock_.start();
+    game_.setInitialClockSnapshot(clock_.snapshot());
+
+    // Player kinds.
+    playerWhite_.setSideControlled(WHITE, setup.whiteKind == Gui::PlayerKind::Engine);
+    playerBlack_.setSideControlled(BLACK, setup.blackKind == Gui::PlayerKind::Engine);
+
+    // Engines: launched for engine sides, stopped for human sides.
+    launchOrStopEngine(engineWhite_, setup.whiteKind, setup.whiteEnginePath);
+    launchOrStopEngine(engineBlack_, setup.blackKind, setup.blackEnginePath);
+
     controller_.updateAnnotations();
     controller_.reopenGameOverModal();
+}
 
-    // Re-snapshot the initial clock state for the fresh game.
-    game_.setInitialClockSnapshot(clock_.snapshot());
+void Application::launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path)
+{
+    if (kind != Gui::PlayerKind::Engine)
+    {
+        engine.stop();
+        return;
+    }
+
+    try
+    {
+        engine.start(path);
+    }
+    catch (const std::exception&)
+    {
+        // A bad path or a failed spawn leaves the engine stopped. The
+        // Engine Settings panel shows Not running and offers Start, so
+        // the user can recover without restarting the GUI.
+    }
 }

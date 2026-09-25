@@ -1,7 +1,6 @@
 #include "ImGuiLayer.hpp"
 
 #include "ClockPanel.hpp"
-#include "GameOverModal.hpp"
 #include "StatusPanel.hpp"
 
 #include <imgui-SFML.h>
@@ -20,8 +19,6 @@ namespace Gui
             ImGui::ShowDemoWindow(&conf.showDemoWindow);
 
         // Draw the game-over modal last so it renders on top of every panel.
-        renderGameOverModal(controller, game, clock);
-
         (void) window;
         (void) geo;
     }

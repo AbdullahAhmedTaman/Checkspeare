@@ -21,7 +21,7 @@ namespace Gui
             bool bufferInitialized = false;
         };
 
-        void renderSlot(SlotState& state, UciEngine& engine, EnginePlayer& player, std::string& path)
+        void renderSlot(SlotState& state, UciEngine& engine, EnginePlayer& player, std::string& path, bool pathsLocked)
         {
             if (!state.bufferInitialized)
             {
@@ -49,12 +49,15 @@ namespace Gui
 
             ImGui::Separator();
 
-            // Path input
+            // Path input. Disabled while a game is in progress; the setup
+            // modal owns path selection during that window.
             ImGui::TextDisabled("ENGINE PATH");
             ImGui::SetNextItemWidth(-FLT_MIN);
 
+            ImGui::BeginDisabled(pathsLocked);
             if (ImGui::InputText("##path", state.pathBuffer, sizeof(state.pathBuffer)))
                 path = state.pathBuffer;
+            ImGui::EndDisabled();
 
             // Lifecycle
             if (ImGui::Button("Start"))
@@ -91,7 +94,7 @@ namespace Gui
     } // namespace
 
     void renderEngineSettingsPanel(Config& conf, EnginePlayer& whitePlayer, UciEngine& whiteEngine, EnginePlayer& blackPlayer,
-                                   UciEngine& blackEngine)
+                                   UciEngine& blackEngine, bool pathsLocked)
     {
         ImGui::Begin("Engine Settings");
 
@@ -102,13 +105,13 @@ namespace Gui
         {
             if (ImGui::BeginTabItem("White"))
             {
-                renderSlot(whiteState, whiteEngine, whitePlayer, conf.whiteEnginePath);
+                renderSlot(whiteState, whiteEngine, whitePlayer, conf.whiteEnginePath, pathsLocked);
                 ImGui::EndTabItem();
             }
 
             if (ImGui::BeginTabItem("Black"))
             {
-                renderSlot(blackState, blackEngine, blackPlayer, conf.blackEnginePath);
+                renderSlot(blackState, blackEngine, blackPlayer, conf.blackEnginePath, pathsLocked);
                 ImGui::EndTabItem();
             }
 

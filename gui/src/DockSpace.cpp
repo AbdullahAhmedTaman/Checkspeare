@@ -43,9 +43,9 @@ namespace Gui
             {
                 ImGuiID root = dockspaceId;
 
-                ImGuiID rightColumn = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.22f, nullptr, &root);
-                ImGuiID movesCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.33f, nullptr, &rightColumn);
-                ImGuiID settingsCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.50f, nullptr, &rightColumn);
+                ImGuiID rightColumn = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.18f, nullptr, &root);
+                ImGuiID movesCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.70f, nullptr, &rightColumn);
+                // ImGuiID settingsCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.50f, nullptr, &rightColumn);
 
                 ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.18f, nullptr, &root);
 
@@ -57,7 +57,7 @@ namespace Gui
                 ImGui::DockBuilderDockWindow("Board", root);
                 ImGui::DockBuilderDockWindow("Clock", bottomStrip);
                 ImGui::DockBuilderDockWindow("Game", rightColumn);
-                ImGui::DockBuilderDockWindow("Engine Settings", settingsCell);
+                // ImGui::DockBuilderDockWindow("Engine Settings", settingsCell);
                 ImGui::DockBuilderDockWindow("Moves", movesCell);
 
                 ImGui::DockBuilderFinish(dockspaceId);

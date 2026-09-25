@@ -7,6 +7,7 @@
 #include "Config.hpp"
 #include "EnginePlayer.hpp"
 #include "EvalBar.hpp"
+#include "GameSetupPanel.hpp"
 #include "GuiGameController.hpp"
 #include "MoveAnimation.hpp"
 #include "TextureLibrary.hpp"
@@ -74,6 +75,16 @@ private:
     /// human input and to decide which player to snapshot for display.
     bool sideIsEngineControlled(Color side) const;
 
+    /// Applies a committed setup: resets the game, configures the clock,
+    /// sets the player kinds, and starts/stops the engines accordingly.
+    /// Called exactly once per commit, from stepUi.
+    void applyGameSetup(const Gui::GameSetup& setup);
+
+    /// Starts `engine` with `path` when `kind == Engine`, stops it
+    /// otherwise. Swallows start failures: a bad path leaves the engine
+    /// stopped and the settings panel shows Not running.
+    static void launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path);
+
     Config& conf_;
     const Assets::TextureLibrary& assets_;
 
@@ -131,4 +142,13 @@ private:
     /// response arriving on a later frame is unaffected.
     /// max() means "no suppression".
     std::size_t suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
+
+    /// Edit buffer for the setup modal. Persists across new-game requests
+    /// so the user sees their previous choices on reopening. Seeded from
+    /// Config in the constructor.
+    Gui::GameSetup pendingSetup_;
+
+    /// True while the setup modal should be showing. Set at construction
+    /// and on every new-game request; cleared when the modal commits.
+    bool setupModalOpen_ = true;
 };

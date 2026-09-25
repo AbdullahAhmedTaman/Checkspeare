@@ -1,14 +1,18 @@
 #pragma once
 
+#include "ChessClock.hpp"
+
 #include <string>
 
 struct Config
 {
     bool showDemoWindow = false;
 
-    /// Engine binaries for each side. Independent: either side may run a
-    /// different build, the same binary (self-play), or no engine at all
-    /// (human-vs-human on that side).
+    /// Engine binaries for each side. Persisted here so the setup modal
+    /// can seed from the last-used paths on the next launch.
     std::string whiteEnginePath = "C:\\Users\\PC\\Desktop\\stockfish\\stockfish-windows-x86-64-universal.exe";
     std::string blackEnginePath = "C:\\Users\\PC\\Desktop\\stockfish\\stockfish-windows-x86-64-universal.exe";
+
+    /// Last committed time control. Reused as the modal's default.
+    ChessClock::TimeControl timeControl{};
 };
