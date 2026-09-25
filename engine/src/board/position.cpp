@@ -1,8 +1,8 @@
 #include "position.h"
 #include "attacks.h"
 #include "bitboard.h"
-#include "evaluate.h"
-#include "pst.h"
+#include "eval/evaluate.h"
+#include "eval/pst.h"
 #include "zobrist.h"
 #include <cassert>
 #include <cctype>

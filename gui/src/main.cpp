@@ -1,9 +1,9 @@
 #include "Application.hpp"
 #include "Config.hpp"
-#include "SoundLibrary.hpp"
-#include "TextureLibrary.hpp"
-#include "attacks.h"
-#include "zobrist.h"
+#include "assets/TextureLibrary.hpp"
+#include "audio/SoundLibrary.hpp"
+#include "board/attacks.h"
+#include "board/zobrist.h"
 #include <iostream>
 
 int main()
@@ -14,11 +14,11 @@ int main()
         Zobrist::init();
 
         Assets::TextureLibrary textures;
-        textures.loadAllPieceTextures("gui/assets/textures/pieces/");
-        textures.loadAllSquareTextures("gui/assets/textures/squares/");
+        textures.loadAllPieceTextures(RESOURCES_PATH "/textures/pieces/");
+        textures.loadAllSquareTextures(RESOURCES_PATH "/textures/squares/");
 
         Assets::SoundLibrary sounds;
-        sounds.loadAll("gui/assets/sounds/");
+        sounds.loadAll(RESOURCES_PATH "/sounds/");
 
         Config conf;
         Application app(conf, textures, sounds);

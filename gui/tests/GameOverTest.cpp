@@ -2,17 +2,17 @@
 //
 // Standalone unit test for the game-over reaction logic.
 
-#include "Board.hpp"
-#include "ChessClock.hpp"
-#include "ChessGame.hpp"
-#include "EnginePlayer.hpp"
-#include "GameOverTransition.hpp"
-#include "GameResult.hpp"
-#include "GuiGameController.hpp"
-#include "InputEvent.hpp"
+#include "../src/game/Board.hpp"
+#include "../src/game/ChessClock.hpp"
+#include "../src/game/ChessGame.hpp"
+#include "../src/engine/EnginePlayer.hpp"
+#include "../src/game/GameOverTransition.hpp"
+#include "../src/game/GameResult.hpp"
+#include "../src/controller/GuiGameController.hpp"
+#include "../src/input/InputEvent.hpp"
 
-#include "attacks.h"
-#include "zobrist.h"
+#include "../../engine/src/board/attacks.h"
+#include "../../engine/src/board/zobrist.h"
 
 #include <iostream>
 #include <string>

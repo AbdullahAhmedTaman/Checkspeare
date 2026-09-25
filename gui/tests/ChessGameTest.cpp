@@ -3,13 +3,13 @@
 // Standalone unit test for ChessGame: history navigation and result().
 // No SFML. No ImGui. No Application.
 
-#include "ChessGame.hpp"
-#include "Board.hpp"
-#include "GameResult.hpp"
-#include "types.h"
+#include "../src/game/ChessGame.hpp"
+#include "../src/game/Board.hpp"
+#include "../src/game/GameResult.hpp"
+#include "../../engine/src/board/types.h"
 
-#include "attacks.h"
-#include "zobrist.h"
+#include "../../engine/src/board/attacks.h"
+#include "../../engine/src/board/zobrist.h"
 
 #include <iostream>
 #include <optional>

@@ -1,15 +1,16 @@
 #include "search.h"
-#include "evaluate.h"
+#include "board/movegen.h"
+#include "board/position.h"
+#include "board/types.h"
+#include "eval/evaluate.h"
 #include "heuristics.h"
 #include "move_ordering.h"
-#include "movegen.h"
-#include "position.h"
 #include "transposition.h"
-#include "types.h"
-#include "uci.h"
+#include "uci/uci.h"
 #include <cmath>
 #include <cstdint>
 #include <iostream>
+
 
 bool is_repetition(const Position& pos);
 
@@ -18,7 +19,7 @@ namespace Search
     Move killer_moves[MAX_PLY][2];
     int history_table[MAX_PIECES][MAX_SQUARES];
 
-    inline bool try_null_move_pruning(Position& pos, int depth, int ply, Value beta, SearchContext& ctx, Value& out_score)
+    bool try_null_move_pruning(Position& pos, int depth, int ply, Value beta, SearchContext& ctx, Value& out_score)
     {
         Value static_eval = Eval::evaluate(pos);
         Color us = pos.sideToMove;

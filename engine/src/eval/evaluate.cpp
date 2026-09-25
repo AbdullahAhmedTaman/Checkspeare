@@ -1,9 +1,9 @@
 #include "evaluate.h"
-#include "attacks.h"
-#include "bitboard.h"
-#include "position.h"
+#include "board/attacks.h"
+#include "board/bitboard.h"
+#include "board/position.h"
 #include "pst.h"
-#include "types.h"
+#include "board/types.h"
 #include <algorithm>
 
 namespace Eval

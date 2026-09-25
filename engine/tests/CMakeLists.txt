@@ -16,7 +16,7 @@ target_link_options(EngineTests PRIVATE
 
 target_link_libraries(EngineTests
     PRIVATE
-        ChessEngine
+        EngineCore
         Catch2::Catch2WithMain
 )
 

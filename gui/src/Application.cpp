@@ -1,16 +1,16 @@
 #include "Application.hpp"
 
-#include "ClockPanel.hpp"
-#include "Dockspace.hpp"
-#include "EngineThinkingPanel.hpp"
-#include "GameOverModal.hpp"
-#include "GameOverTransition.hpp"
-#include "GameResult.hpp"
-#include "ImGuiTheme.hpp"
-#include "InputEvent.hpp"
-#include "MoveListPanel.hpp"
-#include "SfmlInputAdapter.hpp"
-#include "StatusPanel.hpp"
+#include "ui/ClockPanel.hpp"
+#include "ui/DockSpace.hpp"
+#include "ui/engine/EngineThinkingPanel.hpp"
+#include "ui/dialogs/GameOverModal.hpp"
+#include "game/GameOverTransition.hpp"
+#include "game/GameResult.hpp"
+#include "ui/ImGuiTheme.hpp"
+#include "input/InputEvent.hpp"
+#include "ui/MoveListPanel.hpp"
+#include "input/SfmlInputAdapter.hpp"
+#include "ui/StatusPanel.hpp"
 
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>

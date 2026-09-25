@@ -1,6 +1,6 @@
-#include "evaluate.h"
+#include "eval/evaluate.h"
 #include "move_ordering.h"
-#include "movegen.h"
+#include "board/movegen.h"
 #include "search.h"
 #include "transposition.h"
 

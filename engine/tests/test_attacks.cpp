@@ -43,9 +43,9 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "../include/attacks.h"
-#include "../include/bitboard.h"
-#include "../include/types.h"
+#include "board/attacks.h"
+#include "board/bitboard.h"
+#include "board/types.h"
 
 #include <cstdint>
 #include <initializer_list>

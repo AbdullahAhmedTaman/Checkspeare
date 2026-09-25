@@ -1,60 +1,71 @@
-# gui/tests/CMakeLists.txt
-#
-# Standalone unit tests for the GUI-side domain layer (San, Board).
-# Does NOT link SFML or ImGui. Links ChessEngine for Position/MoveGen/etc.
+# Standalone tests for GUI game, controller, and engine-player logic.
 
-# --- Paths relative to this file ---
-set(GUI_SRC_DIR   "${CMAKE_CURRENT_SOURCE_DIR}/../src")
-set(GUI_INC_DIR   "${CMAKE_CURRENT_SOURCE_DIR}/../include")
-set(ENGINE_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../engine/include")
+set(GUI_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 
-# --- San unit test ---
+if(WIN32)
+    set(GUI_PROCESS_SOURCE "${GUI_SRC_DIR}/engine/Process_windows.cpp")
+else()
+    set(GUI_PROCESS_SOURCE "${GUI_SRC_DIR}/engine/Process_posix.cpp")
+endif()
+
+set(GUI_GAME_SOURCES
+    "${GUI_SRC_DIR}/game/Board.cpp"
+    "${GUI_SRC_DIR}/game/ChessGame.cpp"
+    "${GUI_SRC_DIR}/game/ChessClock.cpp"
+    "${GUI_SRC_DIR}/game/San.cpp"
+)
+
+set(GUI_ENGINE_PLAYER_SOURCES
+    "${GUI_SRC_DIR}/engine/EnginePlayer.cpp"
+    "${GUI_SRC_DIR}/engine/UciEngine.cpp"
+    "${GUI_PROCESS_SOURCE}"
+)
+
+add_executable(ChessClockTest
+    ChessClockTest.cpp
+    "${GUI_SRC_DIR}/game/ChessClock.cpp"
+)
+target_link_libraries(ChessClockTest PRIVATE EngineCore)
+add_test(NAME ChessClockTest COMMAND ChessClockTest)
+
+add_executable(ChessGameTest
+    ChessGameTest.cpp
+    "${GUI_SRC_DIR}/game/Board.cpp"
+    "${GUI_SRC_DIR}/game/ChessGame.cpp"
+    "${GUI_SRC_DIR}/game/San.cpp"
+)
+target_link_libraries(ChessGameTest PRIVATE EngineCore)
+add_test(NAME ChessGameTest COMMAND ChessGameTest)
+
+add_executable(SanTest
+    SanTest.cpp
+    "${GUI_SRC_DIR}/game/Board.cpp"
+    "${GUI_SRC_DIR}/game/San.cpp"
+)
+target_link_libraries(SanTest PRIVATE EngineCore)
+add_test(NAME SanTest COMMAND SanTest)
+
+add_executable(EnginePlayerDecideActionsTest
+    EnginePlayerDecideActionsTest.cpp
+    ${GUI_GAME_SOURCES}
+    ${GUI_ENGINE_PLAYER_SOURCES}
+)
+target_link_libraries(EnginePlayerDecideActionsTest PRIVATE EngineCore)
+add_test(NAME EnginePlayerDecideActionsTest COMMAND EnginePlayerDecideActionsTest)
+
 add_executable(EnginePlayerSelfGameTest
     EnginePlayerSelfGameTest.cpp
-    ${GUI_SRC_DIR}/EnginePlayer.cpp
-    ${GUI_SRC_DIR}/ChessGame.cpp
-    ${GUI_SRC_DIR}/Board.cpp
-    ${GUI_SRC_DIR}/San.cpp
-    ${GUI_SRC_DIR}/ChessClock.cpp
-    ${GUI_SRC_DIR}/UciEngine.cpp
-    ${GUI_SRC_DIR}/Process_windows.cpp
-    ${GUI_SRC_DIR}/Process_posix.cpp
-
+    ${GUI_GAME_SOURCES}
+    ${GUI_ENGINE_PLAYER_SOURCES}
 )
+target_link_libraries(EnginePlayerSelfGameTest PRIVATE EngineCore)
 
-target_include_directories(EnginePlayerSelfGameTest
-    PRIVATE
-        ${GUI_INC_DIR}
-        ${ENGINE_INC_DIR}
-)
-
-# Link the engine library (it provides Position, MoveGen, attacks, zobrist).
-# ChessEngine is defined in engine/CMakeLists.txt and already built.
-target_link_libraries(EnginePlayerSelfGameTest
-    PRIVATE
-        ChessEngine
-)
-
-# ---- GameOverTest ----
 add_executable(GameOverTest
     GameOverTest.cpp
-    ${GUI_SRC_DIR}/ChessGame.cpp
-    ${GUI_SRC_DIR}/Board.cpp
-    ${GUI_SRC_DIR}/San.cpp
-    ${GUI_SRC_DIR}/ChessClock.cpp
-    ${GUI_SRC_DIR}/EnginePlayer.cpp
-    ${GUI_SRC_DIR}/UciEngine.cpp
-    ${GUI_SRC_DIR}/Process_windows.cpp
-    ${GUI_SRC_DIR}/Process_posix.cpp
-    ${GUI_SRC_DIR}/GuiGameController.cpp
-    ${GUI_SRC_DIR}/BoardAnnotations.cpp
+    ${GUI_GAME_SOURCES}
+    ${GUI_ENGINE_PLAYER_SOURCES}
+    "${GUI_SRC_DIR}/controller/GuiGameController.cpp"
+    "${GUI_SRC_DIR}/ui/board/BoardAnnotations.cpp"
 )
-target_include_directories(GameOverTest PRIVATE
-    ${GUI_INC_DIR}
-    ${ENGINE_INC_DIR}
-)
-target_link_libraries(GameOverTest PRIVATE
-    ChessEngine
-    SFML::System
-)
+target_link_libraries(GameOverTest PRIVATE EngineCore SFML::System)
 add_test(NAME GameOverTest COMMAND GameOverTest)

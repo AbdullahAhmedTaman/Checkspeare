@@ -1,6 +1,6 @@
 // tests/decide_engine_action_test.cpp
 
-#include "EnginePlayer.hpp"
+#include "../src/engine/EnginePlayer.hpp"
 
 #include <cassert>
 #include <iostream>

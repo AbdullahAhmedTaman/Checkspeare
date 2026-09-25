@@ -4,17 +4,19 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
-#include "../include/attacks.h"
-#include "../include/bitboard.h"
-#include "../include/evaluate.h"
-#include "../include/heuristics.h"
-#include "../include/move_ordering.h"
-#include "../include/movegen.h"
-#include "../include/position.h"
-#include "../include/search.h"
-#include "../include/transposition.h"
-#include "../include/types.h"
-#include "../include/zobrist.h"
+#include "board/attacks.h"
+#include "board/bitboard.h"
+#include "board/movegen.h"
+#include "board/position.h"
+#include "board/types.h"
+#include "board/zobrist.h"
+
+#include "eval/evaluate.h"
+
+#include "search/heuristics.h"
+#include "search/move_ordering.h"
+#include "search/search.h"
+#include "search/transposition.h"
 
 #include <atomic>
 #include <cstring>

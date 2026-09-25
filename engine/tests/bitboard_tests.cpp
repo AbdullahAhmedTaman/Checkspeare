@@ -1,6 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "../include/bitboard.h"
+#include "board/bitboard.h"
 
 namespace
 {

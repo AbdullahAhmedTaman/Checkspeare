@@ -1,10 +1,10 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "../../include/attacks.h"
-#include "../../include/bitboard.h"
-#include "../../include/position.h"
-#include "../../include/types.h"
-#include "../../include/zobrist.h"
+#include "board/attacks.h"
+#include "board/bitboard.h"
+#include "board/position.h"
+#include "board/types.h"
+#include "board/zobrist.h"
 
 #include <cctype>
 #include <set>

@@ -1,8 +1,8 @@
-#include "../include/attacks.h"
-#include "../include/search.h"
-#include "../include/transposition.h"
-#include "../include/uci.h"
-#include "../include/zobrist.h"
+#include "board/attacks.h"
+#include "search/search.h"
+#include "search/transposition.h"
+#include "uci/uci.h"
+#include "board/zobrist.h"
 
 int main()
 {

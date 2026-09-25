@@ -1,10 +1,10 @@
 #include "uci.h"
-#include "evaluate.h"
-#include "movegen.h"
-#include "position.h"
-#include "search.h"
-#include "transposition.h"
-#include "types.h"
+#include "eval/evaluate.h"
+#include "board/movegen.h"
+#include "board/position.h"
+#include "search/search.h"
+#include "search/transposition.h"
+#include "board/types.h"
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
