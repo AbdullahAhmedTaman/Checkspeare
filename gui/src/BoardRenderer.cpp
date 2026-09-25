@@ -62,7 +62,7 @@ namespace
     }
 
     void drawAnnotations(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Gui::BoardAnnotations& annotations,
-                         const Gui::DragState& drag)
+                         const Gui::DragState& drag, const Board& board)
     {
         // Last move: soft yellow on the origin square, stronger on the
         // destination, plus a thin border on the destination so the eye is
@@ -108,20 +108,44 @@ namespace
 
         if (annotations.selected.has_value() || drag.active)
         {
-            sf::Color targetColor(0, 0, 0, 60);
             for (Square sq : annotations.legalTargets)
             {
-                // `marker` rather than `target`: the render-target parameter
-                // is named `target`, and a local of that name shadows it,
-                // turning `target.draw(marker)` into an illegal call on the
-                // shape's private draw().
-                sf::CircleShape marker(geo.squareSize * 0.15f);
-                marker.setFillColor(targetColor);
-                sf::Vector2f tl = geo.topLeft(sq);
-                // Center the circle in the square
-                marker.setPosition(
-                    {tl.x + (geo.squareSize / 2.0f) - marker.getRadius(), tl.y + (geo.squareSize / 2.0f) - marker.getRadius()});
-                target.draw(marker);
+                const sf::Vector2f tl = geo.topLeft(sq);
+
+                // A destination holding an enemy piece is a capture. The
+                // one exception is en passant, since the captured pawn is
+                // not on `to`; it will render as a quiet move, which is a
+                // minor visual mis-classification of a rare case.
+                const bool isCapture = board.pieceAt(sq) != PIECE_NONE;
+
+                if (isCapture)
+                {
+                    // Capture: hollow square frame nearly filling the
+                    // square. Reads as a target and stands out more than
+                    // the quiet-move dot because it has more surface area.
+                    const float inset = geo.squareSize * 0.1f;
+
+                    sf::RectangleShape frame({geo.squareSize - inset * 2.0f, geo.squareSize - inset * 2.0f});
+                    frame.setPosition({tl.x + inset, tl.y + inset});
+                    frame.setFillColor(sf::Color::Transparent);
+                    frame.setOutlineThickness(geo.squareSize * 0.1f);
+                    frame.setOutlineColor(sf::Color(160, 60, 60, 120));
+                    sf::CircleShape marker(geo.squareSize * 0.22f);
+                    marker.setFillColor(sf::Color(180, 60, 60, 120));
+                    marker.setPosition({tl.x + (geo.squareSize / 2.0f) - marker.getRadius(),
+                                        tl.y + (geo.squareSize / 2.0f) - marker.getRadius()});
+                    target.draw(marker);
+                    target.draw(frame);
+                }
+                else
+                {
+                    // Quiet move: small centered dot, unchanged.
+                    sf::CircleShape marker(geo.squareSize * 0.17f);
+                    marker.setFillColor(sf::Color(0, 0, 0, 90));
+                    marker.setPosition({tl.x + (geo.squareSize / 2.0f) - marker.getRadius(),
+                                        tl.y + (geo.squareSize / 2.0f) - marker.getRadius()});
+                    target.draw(marker);
+                }
             }
         }
 
@@ -248,8 +272,7 @@ namespace Gui
 
             target.draw(square);
         }
-        drawAnnotations(target, geo, annotations, drag);
-
+        drawAnnotations(target, geo, annotations, drag, board);
         // Static pieces. The dragged piece is skipped here and drawn on top below.
         for (int i = 0; i < 64; ++i)
         {

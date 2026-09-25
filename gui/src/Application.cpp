@@ -96,7 +96,7 @@ void Application::loadFonts()
     if (engineNameFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load engine name font!");
 
-    moveListFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 22.0f);
+    moveListFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 20.0f);
     if (moveListFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load move list font!");
 }
