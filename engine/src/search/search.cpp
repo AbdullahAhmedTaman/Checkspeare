@@ -375,6 +375,9 @@ namespace Search
 
             safe_best_move = ctx.info.best_move;
 
+            auto now = std::chrono::steady_clock::now();
+            ctx.info.time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
+
             // Output UCI telemetry progress update
             UCI::send_search_info(ctx.info);
         }
