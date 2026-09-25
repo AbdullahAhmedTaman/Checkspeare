@@ -184,10 +184,7 @@ namespace Gui
         const float cardW = (availW - gap) * 0.5f;
         const float cardH = 100.0f;
 
-        // The clock does not expose its initial time, so the bar is drawn
-        // relative to whichever side has the most time left. The leader is
-        // at 100%, the other side at whatever fraction remains.
-        const std::int64_t reference = std::max(clock.remainingMs(WHITE), clock.remainingMs(BLACK));
+        const std::int64_t reference = clock.timeControl().initialMs;
 
         const bool whiteToMove = (game.sideToMove() == WHITE);
 
