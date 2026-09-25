@@ -1,11 +1,20 @@
 #include "BoardRenderer.hpp"
-#include "BoardAnnotations.hpp"
 #include "../../assets/TextureLibrary.hpp"
+#include "BoardAnnotations.hpp"
 
 #include <SFML/Graphics.hpp>
+#include <cstdint>
 
 namespace
 {
+    // Subtle drop shadow for resting pieces.
+    constexpr float kShadowOffset = 0.045f;
+    constexpr std::uint8_t kShadowAlpha = 60;
+
+    // A lifted piece (drag) gets a slightly stronger shadow.
+    constexpr float kDragShadowOffset = 0.075f;
+    constexpr std::uint8_t kDragShadowAlpha = 90;
+
     sf::Sprite makePieceSprite(const Assets::TextureLibrary& assets, Piece pc, const Gui::BoardGeometry& geo)
     {
         const sf::Texture& tex = assets.getTexture(Assets::TextureLibrary::getPieceKey(pc));
@@ -17,20 +26,52 @@ namespace
         return sprite;
     }
 
+    // Draws a piece with a soft drop shadow. The shadow is built from a
+    // few low-alpha silhouette passes that fade and spread along the
+    // light direction, approximating a blur without a shader.
+    void drawPieceWithShadow(sf::RenderTarget& target, const Assets::TextureLibrary& assets, Piece pc,
+                             const Gui::BoardGeometry& geo, sf::Vector2f pos, float offsetFactor = kShadowOffset,
+                             std::uint8_t shadowAlpha = kShadowAlpha)
+    {
+        sf::Sprite sprite = makePieceSprite(assets, pc, geo);
+        const sf::Vector2f baseScale = sprite.getScale();
+        const float offset = geo.squareSize * offsetFactor;
+
+        constexpr int kPasses = 5;
+        const std::uint8_t passAlpha = static_cast<std::uint8_t>(shadowAlpha / (kPasses + 1));
+
+        // Passes run from the outermost (faintest, most spread) inward.
+        for (int i = kPasses; i >= 1; --i)
+        {
+            const float t = static_cast<float>(i) / static_cast<float>(kPasses);
+            const float d = offset * t;
+            const float spread = 1.0f + 0.05f * t;
+
+            sprite.setScale({baseScale.x * spread, baseScale.y * spread});
+            sprite.setPosition({pos.x + d, pos.y + d});
+            sprite.setColor(sf::Color(0, 0, 0, passAlpha));
+            target.draw(sprite);
+        }
+
+        sprite.setScale(baseScale);
+        sprite.setPosition(pos);
+        sprite.setColor(sf::Color::White);
+        target.draw(sprite);
+    }
+
     void drawPromotionPicker(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Assets::TextureLibrary& assets,
                              const Gui::PendingPromotion& promo)
     {
         if (!promo.active)
             return;
 
-        // Dim the whole board so the picker reads as modal.
+        // Dim the board to make the picker modal.
         sf::RectangleShape dim({geo.boardWidth(), geo.boardHeight()});
         dim.setPosition(geo.boardOrigin);
         dim.setFillColor(sf::Color(0, 0, 0, 100));
         target.draw(dim);
 
-        // Highlight the destination square so the user sees where the pawn
-        // landed.
+        // Highlight the destination square.
         sf::RectangleShape hl({geo.squareSize, geo.squareSize});
         hl.setPosition(geo.topLeft(promo.to));
         hl.setFillColor(sf::Color(255, 255, 0, 90));
@@ -54,19 +95,15 @@ namespace
             target.draw(cell);
 
             const Piece pc = make_piece(promo.side, order[i]);
-            sf::Sprite sprite = makePieceSprite(assets, pc, geo);
             const sf::Vector2f tl = geo.topLeft(sq);
-            sprite.setPosition({tl.x + padding, tl.y + padding});
-            target.draw(sprite);
+            drawPieceWithShadow(target, assets, pc, geo, {tl.x + padding, tl.y + padding});
         }
     }
 
     void drawAnnotations(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Gui::BoardAnnotations& annotations,
                          const Gui::DragState& drag, const Board& board)
     {
-        // Last move: soft yellow on the origin square, stronger on the
-        // destination, plus a thin border on the destination so the eye is
-        // drawn to where the piece landed rather than where it came from.
+        // Last move: soft yellow on origin, stronger on destination, plus border.
         const sf::Color fromColor(180, 200, 60, 70);
         const sf::Color toColor(180, 200, 60, 110);
         const sf::Color toBorder(150, 170, 40, 200);
@@ -112,17 +149,12 @@ namespace
             {
                 const sf::Vector2f tl = geo.topLeft(sq);
 
-                // A destination holding an enemy piece is a capture. The
-                // one exception is en passant, since the captured pawn is
-                // not on `to`; it will render as a quiet move, which is a
-                // minor visual mis-classification of a rare case.
+                // Capture if an enemy piece occupies the square. En passant
+                // renders as a quiet move (minor visual mis-classification).
                 const bool isCapture = board.pieceAt(sq) != PIECE_NONE;
 
                 if (isCapture)
                 {
-                    // Capture: hollow square frame nearly filling the
-                    // square. Reads as a target and stands out more than
-                    // the quiet-move dot because it has more surface area.
                     const float inset = geo.squareSize * 0.1f;
 
                     sf::RectangleShape frame({geo.squareSize - inset * 2.0f, geo.squareSize - inset * 2.0f});
@@ -139,7 +171,6 @@ namespace
                 }
                 else
                 {
-                    // Quiet move: small centered dot, unchanged.
                     sf::CircleShape marker(geo.squareSize * 0.17f);
                     marker.setFillColor(sf::Color(0, 0, 0, 90));
                     marker.setPosition({tl.x + (geo.squareSize / 2.0f) - marker.getRadius(),
@@ -153,24 +184,15 @@ namespace
         {
             sf::RectangleShape checkHl({geo.squareSize, geo.squareSize});
             checkHl.setPosition(geo.topLeft(*annotations.checkedKing));
-            // Red gradient-like effect using a semi-transparent red overlay
             checkHl.setFillColor(sf::Color(255, 0, 0, 130));
             target.draw(checkHl);
         }
     }
 
-    // Draws the a–h and 1–8 labels along the bottom and left edges of the
-    /// visible board. Called after pieces so the labels stay legible even
-    /// when a piece sprite overhangs its square.
-    ///
-    /// Contrast is chosen per-square: labels on dark squares are drawn
-    /// light, labels on light squares are drawn dark. This matches how
-    /// chess.com and lichess render coordinates and keeps the text
-    /// readable regardless of the underlying square's color.
+    // Draws a–h and 1–8 labels along bottom and left edges.
+    // Contrast chosen per-square: light labels on dark squares, dark on light.
     void drawCoordinateLabels(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const sf::Font& font)
     {
-        // 22% of a square is a good visual weight: big enough to read at
-        // a glance, small enough not to compete with the pieces.
         const float fontSize = geo.squareSize * 0.18f;
         const float pad = geo.squareSize * 0.05f;
 
@@ -178,16 +200,9 @@ namespace
         text.setCharacterSize(static_cast<unsigned>(fontSize));
         text.setStyle(sf::Text::Style::Bold);
 
-        // Two text colors: one for dark squares, one for light. Alpha is
-        // not quite full so the labels read as a subtle watermark rather
-        // than as content on the board.
         const sf::Color lightText(245, 245, 245, 230);
         const sf::Color darkText(30, 30, 30, 230);
 
-        // Determines the label color for a given grid cell by inspecting
-        // the chess coordinates of the square underneath it. "Dark" is
-        // (file + rank) even, matching how BoardRenderer picks the square
-        // texture: `((file + rank) % 2 == 0) ? darkTex : lightTex`.
         auto colorAtGrid = [&](int gridX, int gridY) -> sf::Color
         {
             const Square sq = Gui::BoardGeometry::gridToSquare(gridX, gridY, geo.flipped);
@@ -201,9 +216,7 @@ namespace
             return isDark ? lightText : darkText;
         };
 
-        // Files: a..h. Drawn along the bottom edge of the *visible* board,
-        // which is grid row 7 regardless of orientation — `geo.flipped`
-        // only affects which board file lands at each grid column.
+        // Files: a..h along the bottom edge (grid row 7).
         for (int f = 0; f < 8; ++f)
         {
             const int gridX = geo.flipped ? 7 - f : f;
@@ -214,19 +227,13 @@ namespace
             text.setString(std::string(1, static_cast<char>('A' + f)));
             text.setFillColor(colorAtGrid(gridX, gridY));
 
-            // SFML's Text local origin is not the top-left of the drawn
-            // glyphs; getLocalBounds().position is that offset. The idiom
-            // is to subtract it so setPosition places the bounding box,
-            // not the baseline-anchored origin.
             const sf::FloatRect b = text.getLocalBounds();
             text.setPosition(
                 {tl.x + geo.squareSize - pad - b.size.x - b.position.x, tl.y + geo.squareSize - pad - b.size.y - b.position.y});
             target.draw(text);
         }
 
-        // Ranks: 1..8. Drawn along the left edge of the visible board,
-        // which is grid column 0. `geo.flipped` decides which board rank
-        // lands on each grid row.
+        // Ranks: 1..8 along the left edge (grid column 0).
         for (int r = 0; r < 8; ++r)
         {
             const int gridY = geo.flipped ? r : 7 - r;
@@ -246,7 +253,6 @@ namespace
 
 namespace Gui
 {
-
     void renderBoard(sf::RenderTarget& target, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
                      const Assets::TextureLibrary& assets, const sf::Font& coordinateFont, const DragState& drag,
                      sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations,
@@ -273,15 +279,14 @@ namespace Gui
             target.draw(square);
         }
         drawAnnotations(target, geo, annotations, drag, board);
-        // Static pieces. The dragged piece is skipped here and drawn on top below.
+
+        // Static pieces. Skip dragged piece and in-flight destination.
         for (int i = 0; i < 64; ++i)
         {
             const Square sq = static_cast<Square>(i);
             if (drag.active && sq == drag.from)
                 continue;
 
-            // The in-flight piece is drawn interpolated below; skipping it
-            // here prevents overlap with the destination sprite.
             if (animation.active && sq == animation.to)
                 continue;
 
@@ -289,13 +294,11 @@ namespace Gui
             if (pc == PIECE_NONE)
                 continue;
 
-            sf::Sprite sprite = makePieceSprite(assets, pc, geo);
             const sf::Vector2f tl = geo.topLeft(sq);
-            sprite.setPosition({tl.x + padding, tl.y + padding});
-            target.draw(sprite);
+            drawPieceWithShadow(target, assets, pc, geo, {tl.x + padding, tl.y + padding});
         }
 
-        // In-flight piece: drawn above static pieces, below an active drag.
+        // In-flight piece (above static pieces, below active drag).
         if (animation.active && animation.piece != PIECE_NONE)
         {
             const sf::Vector2f fromPos = geo.topLeft(animation.from);
@@ -305,9 +308,7 @@ namespace Gui
             const float x = fromPos.x + (toPos.x - fromPos.x) * t;
             const float y = fromPos.y + (toPos.y - fromPos.y) * t;
 
-            sf::Sprite sprite = makePieceSprite(assets, animation.piece, geo);
-            sprite.setPosition({x + padding, y + padding});
-            target.draw(sprite);
+            drawPieceWithShadow(target, assets, animation.piece, geo, {x + padding, y + padding});
         }
 
         if (drag.active)
@@ -315,18 +316,13 @@ namespace Gui
             const Piece pc = board.pieceAt(drag.from);
             if (pc != PIECE_NONE)
             {
-                sf::Sprite sprite = makePieceSprite(assets, pc, geo);
-
-                // The pointer position is now supplied by the caller, so the
-                // renderer no longer reaches back into sf::Mouse. This is
-                // what lets the board be drawn into a RenderTexture.
-                sprite.setPosition({dragPixelPos.x - drag.offset.x + padding, dragPixelPos.y - drag.offset.y + padding});
-                target.draw(sprite);
+                drawPieceWithShadow(target, assets, pc, geo,
+                                    {dragPixelPos.x - drag.offset.x + padding, dragPixelPos.y - drag.offset.y + padding},
+                                    kDragShadowOffset, kDragShadowAlpha);
             }
         }
 
         drawPromotionPicker(target, geo, assets, promo);
         drawCoordinateLabels(target, geo, coordinateFont);
     }
-
 } // namespace Gui

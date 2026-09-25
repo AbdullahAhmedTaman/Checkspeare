@@ -58,7 +58,7 @@ namespace Assets
                 sf::Texture texture;
                 if (!texture.loadFromFile(fullPath))
                     throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath);
-
+                texture.setSmooth(true);
                 m_textures[key] = std::move(texture);
             }
         }
@@ -77,7 +77,7 @@ namespace Assets
             sf::Texture texture;
             if (!texture.loadFromFile(fullPath))
                 throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath);
-
+            texture.setSmooth(true);
             m_textures[key] = std::move(texture);
         }
 
