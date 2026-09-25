@@ -8,6 +8,7 @@
 #include "types.h"
 #include "uci.h"
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 
 bool is_repetition(const Position& pos);
@@ -157,6 +158,16 @@ namespace Search
         }
 
         ctx.info.nodes++;
+        if ((ctx.info.nodes & 2047) == 0 && ctx.time_limit_ms > 0)
+        {
+            auto now = std::chrono::steady_clock::now();
+            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
+
+            if (elapsed >= ctx.time_limit_ms)
+            {
+                Signals_stop.store(true, std::memory_order_relaxed);
+            }
+        }
 
         // Compile-time check: Stripped out completely for PV and ROOT nodes.
         if constexpr (!IsPV)
@@ -325,6 +336,19 @@ namespace Search
     {
         init();
         SearchContext ctx(limits, Signals_stop);
+
+        if (limits.movetime > 0)
+        {
+            ctx.time_limit_ms = limits.movetime - 20; // 20ms safety margin
+        }
+        else if (pos.sideToMove == WHITE && limits.wtime > 0)
+        {
+            ctx.time_limit_ms = (limits.wtime / 30) + (limits.winc / 2);
+        }
+        else if (pos.sideToMove == BLACK && limits.btime > 0)
+        {
+            ctx.time_limit_ms = (limits.btime / 30) + (limits.binc / 2);
+        }
 
         // Retain move from the last fully completed depth iteration
         Move safe_best_move = Move::none();

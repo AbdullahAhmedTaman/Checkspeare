@@ -50,6 +50,7 @@ namespace Search
 
         // Time tracking
         std::chrono::steady_clock::time_point start_time;
+        uint64_t time_limit_ms = 0;
 
         HistoryTable* history_table = nullptr;
 
@@ -68,6 +69,12 @@ namespace Search
      * @brief Clears search heuristics (history, killers, etc.) before a new search.
      */
     void init();
+
+    /**
+     * @brief Precomputes the baseline Late Move Reduction values using a logarithmic curve.
+     *        Called once during engine startup.
+     */
+    void init_lmr_table();
 
     /**
      * @brief Primary engine execution loop implementing Iterative Deepening.

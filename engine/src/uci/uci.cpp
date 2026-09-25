@@ -3,6 +3,7 @@
 #include "movegen.h"
 #include "position.h"
 #include "search.h"
+#include "transposition.h"
 #include "types.h"
 #include <cstdint>
 #include <cstdlib>
@@ -76,8 +77,8 @@ namespace UCI
 
             if (command == "uci")
             {
-                std::cout << "id name dummyEngine" << std::endl;
-                std::cout << "id author dummyTeam" << std::endl;
+                std::cout << "id name Check-Spear" << std::endl;
+                std::cout << "id author Check-Mates" << std::endl;
                 std::cout << "uciok" << std::endl;
             }
             else if (command == "isready")
@@ -87,6 +88,7 @@ namespace UCI
             else if (command == "ucinewgame")
             {
                 Search::init();
+                Search::TT.clear();
             }
             else if (command == "position")
             {

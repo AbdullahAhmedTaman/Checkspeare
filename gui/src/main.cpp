@@ -1,120 +1,29 @@
-#include <SFML/Graphics.hpp>
-#include <SFML/Window.hpp>
-
-#include <imgui-SFML.h>
-#include <imgui.h>
+#include "Application.hpp"
+#include "Config.hpp"
+#include "TextureLibrary.hpp"
+#include "attacks.h"
+#include "zobrist.h"
+#include <iostream>
 
 int main()
 {
-    sf::RenderWindow window(sf::VideoMode({1000, 700}), "Chess GUI - SFML + ImGui Test");
-
-    window.setFramerateLimit(60);
-
-    // Initialize ImGui-SFML
-    if (!ImGui::SFML::Init(window))
+    try
     {
+        init_attacks();
+        Zobrist::init();
+
+        Assets::TextureLibrary textures;
+        textures.loadAllPieceTextures("gui/assets/textures/pieces/");
+        textures.loadAllSquareTextures("gui/assets/textures/squares/");
+
+        Config conf;
+        Application app(conf, textures);
+        app.run();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "[Fatal] " << e.what() << '\n';
         return 1;
     }
-
-    sf::Clock deltaClock;
-
-    bool showDemoWindow = true;
-    float squareSize = 80.0f;
-
-    while (window.isOpen())
-    {
-        // ----------------------------------------------------
-        // Events
-        // ----------------------------------------------------
-
-        while (const std::optional event = window.pollEvent())
-        {
-            ImGui::SFML::ProcessEvent(window, *event);
-
-            if (event->is<sf::Event::Closed>())
-            {
-                window.close();
-            }
-        }
-
-        // ----------------------------------------------------
-        // Update ImGui
-        // ----------------------------------------------------
-
-        sf::Time deltaTime = deltaClock.restart();
-
-        ImGui::SFML::Update(window, deltaTime);
-
-        // ----------------------------------------------------
-        // ImGui
-        // ----------------------------------------------------
-
-        ImGui::Begin("Chess Engine Test");
-
-        ImGui::Text("SFML + ImGui are working!");
-
-        ImGui::Separator();
-
-        ImGui::Text("Window size: %u x %u", window.getSize().x, window.getSize().y);
-
-        ImGui::SliderFloat("Square Size", &squareSize, 20.0f, 150.0f);
-
-        if (ImGui::Button("Test Button"))
-        {
-            // Just testing interaction
-        }
-
-        ImGui::Checkbox("Show ImGui Demo", &showDemoWindow);
-
-        ImGui::End();
-
-        if (showDemoWindow)
-        {
-            ImGui::ShowDemoWindow(&showDemoWindow);
-        }
-
-        // ----------------------------------------------------
-        // SFML rendering
-        // ----------------------------------------------------
-
-        window.clear(sf::Color(30, 30, 30));
-
-        // Draw a simple chessboard
-        for (int rank = 0; rank < 8; ++rank)
-        {
-            for (int file = 0; file < 8; ++file)
-            {
-                sf::RectangleShape square(sf::Vector2f(squareSize, squareSize));
-
-                square.setPosition({file * squareSize, rank * squareSize});
-
-                if ((rank + file) % 2 == 0)
-                {
-                    square.setFillColor(sf::Color(240, 217, 181));
-                }
-                else
-                {
-                    square.setFillColor(sf::Color(181, 136, 99));
-                }
-
-                window.draw(square);
-            }
-        }
-
-        // ----------------------------------------------------
-        // ImGui rendering
-        // ----------------------------------------------------
-
-        ImGui::SFML::Render(window);
-
-        window.display();
-    }
-
-    // --------------------------------------------------------
-    // Shutdown
-    // --------------------------------------------------------
-
-    ImGui::SFML::Shutdown();
-
     return 0;
 }

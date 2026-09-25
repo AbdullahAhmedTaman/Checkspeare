@@ -10,7 +10,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
     ${CMAKE_BINARY_DIR}/bin
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -Wall -Wextra")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
 
 include(FetchContent)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
@@ -30,7 +30,7 @@ FetchContent_MakeAvailable(SFML)
 FetchContent_Declare(
     imgui
     GIT_REPOSITORY https://github.com/ocornut/imgui.git
-    GIT_TAG v1.91.9
+    GIT_TAG v1.91.9-docking
     GIT_SHALLOW TRUE
     EXCLUDE_FROM_ALL
 )
@@ -69,3 +69,4 @@ enable_testing()
 
 add_subdirectory(engine)
 add_subdirectory(gui)
+add_subdirectory(gui/tests)
