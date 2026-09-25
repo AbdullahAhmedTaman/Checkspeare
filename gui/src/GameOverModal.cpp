@@ -22,8 +22,17 @@ namespace Gui
         }
     } // namespace
 
-    void renderGameOverModal(GuiGameController& controller, const ChessGame& game, const ChessClock& clock)
+    void renderGameOverModal(GuiGameController& controller, const ChessGame& game, const ChessClock& clock, bool setupModalOpen)
     {
+        // While the setup modal is on screen, the game-over modal must stay
+        // hidden. The game state still carries the previous game's result
+        // (checkmate, or a fallen flag) until the new setup is committed
+        // and applyGameSetup resets it, so without this guard the checks
+        // below would re-open the modal and produce two simultaneous
+        // popups fighting for the screen.
+        if (setupModalOpen)
+            return;
+
         const GameResult result = game.result();
         const bool clockOver = clock.flagFallen(WHITE) || clock.flagFallen(BLACK);
 

@@ -18,6 +18,6 @@ namespace Gui
     /// clock through `flagFallen` on the passed clock; callers that don't
     /// have a clock pass a default-constructed one, in which no side is
     /// flagged and the modal falls back to game.result() only.
-    void renderGameOverModal(GuiGameController& controller, const ChessGame& game, const ChessClock& clock);
+    void renderGameOverModal(GuiGameController& controller, const ChessGame& game, const ChessClock& clock, bool setupModalOpen);
 
 } // namespace Gui

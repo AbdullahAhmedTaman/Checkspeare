@@ -24,6 +24,10 @@ namespace Gui
         std::optional<int> scoreMate;
         std::vector<std::string> pvSan;
         std::string activeSide;
+
+        /// Engine's advertised name, or empty if the handshake has not
+        /// yet produced it. Displayed as an identity line above the stats.
+        std::string engineName;
     };
 
     void renderEngineThinkingPanel(const EngineThinkingSnapshot& snapshot, const EvalBar& evalBar);

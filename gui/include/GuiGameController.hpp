@@ -51,6 +51,9 @@ namespace Gui
         Piece piece = PIECE_NONE;
     };
 
+    /// Translates backend-agnostic input events into moves on a ChessGame.
+    /// Owns no resources and knows nothing about SFML; see SfmlInputAdapter
+    /// for the boundary that produces the InputEvent vocabulary.
     class GuiGameController
     {
     public:
@@ -61,6 +64,47 @@ namespace Gui
 
         void handleEvent(const InputEvent& event, const BoardGeometry& geo);
         void cancelDrag();
+
+        /// Clears `selected` and `legalTargets` if a selection is active.
+        /// Called when the user clicks outside the board, so a stale
+        /// selection doesn't persist into unrelated UI interaction.
+        void cancelSelection();
+
+        void completePromotion(PieceType type);
+        void cancelPromotion();
+
+        void requestUndo();
+        void requestRedo();
+        void requestGotoPly(std::size_t ply);
+        void applyQueuedActions();
+
+        void requestNewGame();
+        bool consumeNewGameRequest();
+
+        void requestResign(Color side);
+        std::optional<Color> consumeResignRequest();
+
+        /// Sets the "quit application" flag. Application drains it once per
+        /// frame and closes the window.
+        void requestQuit();
+        bool consumeQuitRequest();
+
+        bool gameOverModalDismissed() const
+        {
+            return gameOverModalDismissed_;
+        }
+
+        void dismissGameOverModal()
+        {
+            gameOverModalDismissed_ = true;
+        }
+
+        void reopenGameOverModal()
+        {
+            gameOverModalDismissed_ = false;
+        }
+
+        void updateAnnotations();
 
         const DragState& drag() const
         {
@@ -87,55 +131,26 @@ namespace Gui
             return lastMoveWasDrag_;
         }
 
-        void completePromotion(PieceType type);
-        void cancelPromotion();
-
-        void requestUndo();
-        void requestRedo();
-        void requestGotoPly(std::size_t ply);
-        void applyQueuedActions();
-
-        void clearHints();
-
-        void requestNewGame();
-        bool consumeNewGameRequest();
-
-        bool gameOverModalDismissed() const
-        {
-            return gameOverModalDismissed_;
-        }
-
-        void dismissGameOverModal()
-        {
-            gameOverModalDismissed_ = true;
-        }
-
-        void reopenGameOverModal()
-        {
-            gameOverModalDismissed_ = false;
-        }
-
-        /// Sets the "quit application" flag. Application drains it once per
-        /// frame and closes the window.
-        void requestQuit();
-        bool consumeQuitRequest();
-
-        void updateAnnotations();
-
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void playMoveOrStartPromotion(Square from, Square to, bool fromDrag);
 
+        /// True if from -> to is a legal promotion in the current position.
+        bool isPromotionMove(Square from, Square to) const;
+
         ChessGame& game_;
+
         DragState drag_;
         PendingPromotion promo_;
         ActionResult result_{};
-        mutable std::optional<std::size_t> queuedGotoPly_;
         BoardAnnotations annotations_;
+        bool lastMoveWasDrag_ = false;
+
+        mutable std::optional<std::size_t> queuedGotoPly_;
         mutable bool queuedUndo_ = false;
         mutable bool queuedRedo_ = false;
-        bool lastMoveWasDrag_ = false;
+        mutable std::optional<Color> queuedResign_;
         bool newGameRequested_ = false;
         bool gameOverModalDismissed_ = false;
         bool quitRequested_ = false;

@@ -3,7 +3,8 @@
 #include "ChessClock.hpp"
 #include "ChessGame.hpp"
 
-// Forward-declared; see ImGuiLayer.hpp.
+#include <string>
+
 struct ImFont;
 
 namespace Gui
@@ -14,9 +15,11 @@ namespace Gui
     /// is the fraction of the leading side's clock. The side to move is
     /// highlighted; a flagged side is drawn in red.
     ///
-    /// `clockFont` should be a font rasterized at the size the numbers are
-    /// drawn at (36px in the current layout). If null, the panel falls back
-    /// to the default UI font scaled up, which is readable but soft.
-    void renderClockPanel(const ChessClock& clock, const ChessGame& game, ImFont* clockFont);
+    /// `whiteEngineName` and `blackEngineName` are shown next to each
+    /// card's label when non-empty. Empty strings mean "no engine on that
+    /// side" or "engine has not yet reported its name," and the card
+    /// renders without the extra text.
+    void renderClockPanel(const ChessClock& clock, const ChessGame& game, ImFont* clockFont, ImFont* engineNameFont,
+                          const std::string& whiteEngineName, const std::string& blackEngineName);
 
 } // namespace Gui

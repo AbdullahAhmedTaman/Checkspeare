@@ -48,20 +48,6 @@ namespace
         return static_cast<char>('1' + (static_cast<int>(sq) / 8));
     }
 
-    /// True if `m` is a castling move.
-    /// We detect it geometrically rather than relying on an engine flag:
-    /// only a king move of exactly two files along the same rank can be
-    /// castling, so this is unambiguous. If the engine's Move type ever
-    /// gains an is_castle() helper, this can be replaced by it.
-    bool isCastle(const Move& m)
-    {
-        const int from = static_cast<int>(m.from());
-        const int to = static_cast<int>(m.to());
-        const int fileDelta = (to % 8) - (from % 8);
-        const bool sameRank = (from / 8) == (to / 8);
-        return sameRank && std::abs(fileDelta) == 2;
-    }
-
     /// Disambiguation decision for a non-pawn, non-king move.
     ///
     /// SAN requires disambiguation whenever *another* piece of the same type
@@ -153,7 +139,7 @@ std::string toSan(Board board, Move m)
     // Case 1: castling. SAN uses "O-O" / "O-O-O" and never names squares.
     // We still need the check/mate suffix, so we don't return immediately.
 
-    if (isCastle(m))
+    if (m.is_castle())
     {
         std::string san = (fileChar(m.to()) == 'g') ? "O-O" : "O-O-O";
 

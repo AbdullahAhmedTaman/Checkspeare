@@ -24,7 +24,12 @@ enum class GameResultKind
     Stalemate,
     FiftyMove,
     Threefold,
-    InsufficientMaterial
+    InsufficientMaterial,
+
+    /// A player resigned. Asserted externally, unlike the other kinds,
+    /// which are derived from the position or the clock. `winner` holds
+    /// the side that did NOT resign.
+    Resignation,
 };
 
 /// Value returned by ChessGame::result(). Pure data; no behaviour.
@@ -51,7 +56,7 @@ inline std::string toString(const GameResult& r)
         case GameResultKind::Ongoing:
             return "";
         case GameResultKind::Checkmate:
-            return (r.winner == WHITE) ? "Checkmate - White wins" : "Checkmate - Black wins";
+            return (r.winner == WHITE) ? "White wins" : "Black wins";
         case GameResultKind::Stalemate:
             return "Stalemate - Draw";
         case GameResultKind::FiftyMove:
@@ -60,6 +65,8 @@ inline std::string toString(const GameResult& r)
             return "Draw by threefold repetition";
         case GameResultKind::InsufficientMaterial:
             return "Draw by insufficient material";
+        case GameResultKind::Resignation:
+            return (r.winner == WHITE) ? "White wins" : "Black wins";
     }
     return "";
 }

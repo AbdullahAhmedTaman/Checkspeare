@@ -55,14 +55,17 @@ namespace Gui
         ImGui::Begin("Engine");
 
         const float barWidth = 40.0f;
-        const float barHeight = 480.0f;
+        const float barHeight = 460.0f;
         const float lineWidth = 3.0f;
         const float gap = 10.0f;
 
         const std::string scoreText = formatScore(snapshot);
 
         // Info block
-        ImGui::Text("Side: %s", snapshot.activeSide.c_str());
+        ImGui::Text("%s", snapshot.activeSide.c_str());
+
+        if (!snapshot.engineName.empty())
+            ImGui::Text("%s", snapshot.engineName.c_str());
 
         if (snapshot.thinking)
             ImGui::TextColored(ImVec4(0.91f, 0.78f, 0.48f, 1.00f), "Thinking...");

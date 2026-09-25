@@ -41,9 +41,17 @@ namespace Gui
         {
             drag_ = {};
             result_ = {ActionResult::Kind::MoveCancelled};
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
+            cancelSelection();
         }
+    }
+
+    void GuiGameController::cancelSelection()
+    {
+        if (!annotations_.selected.has_value())
+            return;
+
+        annotations_.clearSelection();
+        annotations_.refreshFrom(game_);
     }
 
     void GuiGameController::onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo)
@@ -99,16 +107,14 @@ namespace Gui
 
         if (pc == PIECE_NONE)
         {
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
+            cancelSelection();
             return;
         }
 
         if (color_of(pc) != game_.sideToMove())
         {
             result_ = {ActionResult::Kind::NotYourTurn};
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
+            cancelSelection();
             return;
         }
 
@@ -133,8 +139,7 @@ namespace Gui
         if (isFrozen(game_))
         {
             drag_ = {};
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
+            cancelSelection();
             return;
         }
 
@@ -144,8 +149,7 @@ namespace Gui
         {
             result_ = {ActionResult::Kind::DroppedOutsideBoard};
             drag_ = {};
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
+            cancelSelection();
             return;
         }
 
@@ -163,27 +167,26 @@ namespace Gui
         drag_ = {};
     }
 
+    bool GuiGameController::isPromotionMove(Square from, Square to) const
+    {
+        if (game_.pieceAt(from) == PIECE_NONE)
+            return false;
+
+        for (const Move& m : game_.board().legalMovesFrom(from))
+        {
+            if (m.to() == to && m.is_promotion())
+                return true;
+        }
+
+        return false;
+    }
+
     void GuiGameController::playMoveOrStartPromotion(Square from, Square to, bool fromDrag)
     {
         if (isFrozen(game_))
             return;
 
-        const Piece moving = game_.pieceAt(from);
-        bool isPromotion = false;
-
-        if (moving != PIECE_NONE)
-        {
-            for (const Move& m : game_.board().legalMovesFrom(from))
-            {
-                if (m.to() == to && m.is_promotion())
-                {
-                    isPromotion = true;
-                    break;
-                }
-            }
-        }
-
-        if (isPromotion)
+        if (isPromotionMove(from, to))
         {
             lastMoveWasDrag_ = fromDrag;
 
@@ -203,9 +206,8 @@ namespace Gui
                 promo_.choiceSquares[i] = (r < 0 || r > 7) ? SQ_NONE : static_cast<Square>(r * 8 + file);
             }
 
-            result_ = {ActionResult::Kind::PromotionPending, from, to, moving};
-            annotations_.clearSelection();
-            annotations_.refreshFrom(game_);
+            result_ = {ActionResult::Kind::PromotionPending, from, to, game_.pieceAt(from)};
+            cancelSelection();
             return;
         }
 
@@ -219,8 +221,7 @@ namespace Gui
             result_ = {ActionResult::Kind::IllegalMove, from, to};
         }
 
-        annotations_.clearSelection();
-        annotations_.refreshFrom(game_);
+        cancelSelection();
     }
 
     void GuiGameController::completePromotion(PieceType type)
@@ -244,8 +245,7 @@ namespace Gui
         else
             result_ = {ActionResult::Kind::IllegalMove, from, to};
 
-        annotations_.clearSelection();
-        annotations_.refreshFrom(game_);
+        cancelSelection();
     }
 
     void GuiGameController::cancelPromotion()
@@ -259,8 +259,7 @@ namespace Gui
         promo_ = {};
         result_ = {ActionResult::Kind::MoveCancelled, from, to};
 
-        annotations_.clearSelection();
-        annotations_.refreshFrom(game_);
+        cancelSelection();
     }
 
     void GuiGameController::applyQueuedActions()
@@ -299,14 +298,7 @@ namespace Gui
 
         drag_ = {};
         promo_ = {};
-        annotations_.clearSelection();
-        annotations_.refreshFrom(game_);
-    }
-
-    void GuiGameController::clearHints()
-    {
-        annotations_.clearSelection();
-        annotations_.refreshFrom(game_);
+        cancelSelection();
     }
 
     void GuiGameController::updateAnnotations()
@@ -339,6 +331,18 @@ namespace Gui
         const bool requested = newGameRequested_;
         newGameRequested_ = false;
         return requested;
+    }
+
+    void GuiGameController::requestResign(Color side)
+    {
+        queuedResign_ = side;
+    }
+
+    std::optional<Color> GuiGameController::consumeResignRequest()
+    {
+        const auto result = queuedResign_;
+        queuedResign_.reset();
+        return result;
     }
 
     void GuiGameController::requestQuit()

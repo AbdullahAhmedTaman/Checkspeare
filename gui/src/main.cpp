@@ -1,5 +1,6 @@
 #include "Application.hpp"
 #include "Config.hpp"
+#include "SoundLibrary.hpp"
 #include "TextureLibrary.hpp"
 #include "attacks.h"
 #include "zobrist.h"
@@ -16,8 +17,11 @@ int main()
         textures.loadAllPieceTextures("gui/assets/textures/pieces/");
         textures.loadAllSquareTextures("gui/assets/textures/squares/");
 
+        Assets::SoundLibrary sounds;
+        sounds.loadAll("gui/assets/sounds/");
+
         Config conf;
-        Application app(conf, textures);
+        Application app(conf, textures, sounds);
         app.run();
     }
     catch (const std::exception& e)
