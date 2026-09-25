@@ -1,6 +1,7 @@
 #include "Application.hpp"
 
 #include "Dockspace.hpp"
+#include "EngineSettingsPanel.hpp"
 #include "EngineThinkingPanel.hpp"
 #include "GameOverTransition.hpp"
 #include "GameResult.hpp"
@@ -88,7 +89,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
     /// Where Engine integration comes in :
-    engine_.start(conf_.enginePath);
+    // engine_.start(conf_.enginePath);
     enginePlayer_.setSideControlled(BLACK, true);
 }
 
@@ -122,7 +123,20 @@ void Application::processEvents()
         }
 
         const auto inputEvent = Gui::toInputEvent(*event);
-        if (!inputEvent || !shouldForwardInput(*inputEvent))
+        if (!inputEvent)
+            continue;
+
+        // Clicking anywhere outside the board clears a pending selection.
+        // This runs before shouldForwardInput because ImGui-captured
+        // panel clicks are otherwise not forwarded, and the controller
+        // would never see the click that should reset its state.
+        if (inputEvent->kind == Gui::InputEvent::Kind::PointerPressed && inputEvent->button == Gui::MouseButton::Left &&
+            !boardPanel_.contains(inputEvent->position))
+        {
+            controller_.cancelSelection();
+        }
+
+        if (!shouldForwardInput(*inputEvent))
             continue;
 
         Gui::InputEvent forwarded = *inputEvent;
@@ -237,7 +251,7 @@ void Application::stepSimulation(float dtSeconds)
     if (justEnteredGameOver(gameOver, gameOverWas_))
     {
         enginePlayer_.abort();
-        controller_.clearHints();
+        controller_.cancelSelection();
         controller_.reopenGameOverModal();
     }
 
@@ -262,6 +276,7 @@ void Application::stepUi(float dtSeconds)
                        controller_.annotations(), animation_);
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
+    Gui::renderEngineSettingsPanel(conf_, enginePlayer_, engine_);
     Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
     Gui::renderMoveListPanel(game_, controller_);
 }

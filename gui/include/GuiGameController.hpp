@@ -62,6 +62,11 @@ namespace Gui
         void handleEvent(const InputEvent& event, const BoardGeometry& geo);
         void cancelDrag();
 
+        /// Clears `selected` and `legalTargets` if a selection is active.
+        /// Called when the user clicks outside the board, so a stale
+        /// selection doesn't persist into unrelated UI interaction.
+        void cancelSelection();
+
         const DragState& drag() const
         {
             return drag_;
@@ -94,8 +99,6 @@ namespace Gui
         void requestRedo();
         void requestGotoPly(std::size_t ply);
         void applyQueuedActions();
-
-        void clearHints();
 
         void requestNewGame();
         bool consumeNewGameRequest();
