@@ -20,6 +20,11 @@ public:
         std::int64_t incrementMs = 0;
     };
 
+    TimeControl timeControl() const
+    {
+        return tc_;
+    }
+
     /// Sets both sides to `tc.initialMs` and stores the increment.
     /// Does not start ticking.
     void configure(const TimeControl& tc);
