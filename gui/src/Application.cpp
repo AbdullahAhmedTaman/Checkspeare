@@ -1,5 +1,6 @@
 #include "Application.hpp"
 
+#include "ClockPanel.hpp"
 #include "Dockspace.hpp"
 #include "EngineSettingsPanel.hpp"
 #include "EngineThinkingPanel.hpp"
@@ -11,6 +12,7 @@
 #include "InputEvent.hpp"
 #include "MoveListPanel.hpp"
 #include "SfmlInputAdapter.hpp"
+#include "StatusPanel.hpp"
 
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
@@ -92,6 +94,12 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     // committed values are written back into Config so the next session
     // remembers them.
     pendingSetup_.timeControl = conf_.timeControl;
+
+    // Guard against a stored zero from an earlier session: a clock with
+    // zero time falls on the first tick, before either side can move.
+    if (pendingSetup_.timeControl.initialMs < 60 * 1000)
+        pendingSetup_.timeControl.initialMs = 60 * 1000;
+
     pendingSetup_.whiteKind = Gui::PlayerKind::Human;
     pendingSetup_.blackKind = Gui::PlayerKind::Engine;
     pendingSetup_.whiteEnginePath = conf_.whiteEnginePath;
@@ -139,8 +147,12 @@ void Application::processEvents()
         // This runs before shouldForwardInput because ImGui-captured
         // panel clicks are otherwise not forwarded, and the controller
         // would never see the click that should reset its state.
-        if (inputEvent->kind == Gui::InputEvent::Kind::PointerPressed && inputEvent->button == Gui::MouseButton::Left &&
-            !boardPanel_.contains(inputEvent->position))
+        //
+        // Skipped while a modal is open: the modal owns every click, and
+        // its fields are not a signal to drop a selection made before it
+        // appeared.
+        if (!setupModalOpen_ && !isGameOver() && inputEvent->kind == Gui::InputEvent::Kind::PointerPressed &&
+            inputEvent->button == Gui::MouseButton::Left && !boardPanel_.contains(inputEvent->position))
         {
             controller_.cancelSelection();
         }
@@ -175,7 +187,12 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     if (endsDrag)
         return true;
 
-    if (isGameOver())
+    // While any modal is open, no pointer input reaches the board. ImGui's
+    // WantCaptureMouse would normally cover this, but the board-panel
+    // bypass below defeats it: the board is itself an ImGui panel, so a
+    // click anywhere over its rectangle is forwarded regardless of what
+    // is on top of it. Modals are checked explicitly to close that gap.
+    if (setupModalOpen_ || isGameOver())
         return false;
 
     // Never let the human play for an engine-controlled side.
@@ -191,6 +208,13 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
 bool Application::isGameOver() const
 {
     return (game_.result().kind != GameResultKind::Ongoing) || clock_.flagFallen(WHITE) || clock_.flagFallen(BLACK);
+}
+
+bool Application::canResign() const
+{
+    if (isGameOver())
+        return false;
+    return !sideIsEngineControlled(game_.sideToMove());
 }
 
 void Application::update(float dtSeconds)
@@ -223,6 +247,9 @@ void Application::stepSimulation(float dtSeconds)
 
     if (controller_.consumeNewGameRequest())
         newGame();
+
+    if (auto resigner = controller_.consumeResignRequest())
+        game_.resign(*resigner);
 
     controller_.applyQueuedActions();
 
@@ -307,8 +334,9 @@ void Application::stepUi(float dtSeconds)
     Gui::renderEngineThinkingPanel(snap, evalBar_);
     // Gui::renderEngineSettingsPanel(conf_, playerWhite_, engineWhite_, playerBlack_, engineBlack_,
     //                                /*pathsLocked=*/!setupModalOpen_);
-    Gui::renderImGui(window_, conf_, geo_, controller_, game_, clock_, clockFont_);
+    Gui::renderStatusPanel(controller_, game_, canResign());
     Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
+    Gui::renderClockPanel(clock_, game_, clockFont_);
 
     Gui::renderMoveListPanel(game_, controller_);
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
@@ -412,7 +440,16 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
 
     // Configure and start the clock. The snapshot taken immediately after
     // start() becomes the "ply 0" state the clock restores to on undo.
-    clock_.configure(setup.timeControl);
+    //
+    // Clamp the initial time to one minute: zero would make the flag fall
+    // on the first tick, before either side can move. The modal already
+    // enforces this, but a stale Config value or a future caller that
+    // bypasses the modal would otherwise slip through.
+    ChessClock::TimeControl tc = setup.timeControl;
+    if (tc.initialMs < 60 * 1000)
+        tc.initialMs = 60 * 1000;
+
+    clock_.configure(tc);
     clock_.start();
     game_.setInitialClockSnapshot(clock_.snapshot());
 

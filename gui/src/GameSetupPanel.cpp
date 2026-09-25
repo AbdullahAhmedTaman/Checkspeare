@@ -89,6 +89,20 @@ namespace Gui
 
         if (ImGui::BeginPopupModal(kPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
         {
+            // Scoped field styling. The global theme disables frame borders
+            // and sets FrameBg close to WindowBg, which makes InputText and
+            // Combo read as flat text on the panel. These pushes darken the
+            // field fill, enable a 1px border, and add internal padding so
+            // each editable widget reads as a slot. Everything else -- the
+            // section separators, the button, the modal chrome -- is
+            // untouched.
+            ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.165f, 0.163f, 0.161f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.180f, 0.178f, 0.176f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.195f, 0.193f, 0.191f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.28f, 0.30f, 0.36f, 1.0f));
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 6.0f));
+
             // Time control
             ImGui::SeparatorText("Time control");
 
@@ -115,8 +129,10 @@ namespace Gui
             ImGui::SetNextItemWidth(120.0f);
             if (ImGui::InputInt("Minutes", &initialMinutes))
             {
-                if (initialMinutes < 0)
-                    initialMinutes = 0;
+                // Minimum one minute. Zero would make the flag fall on the
+                // first clock tick, before either side can move.
+                if (initialMinutes < 1)
+                    initialMinutes = 1;
                 pending.timeControl.initialMs = static_cast<std::int64_t>(initialMinutes) * 60000;
                 selectedPreset = presetFor(pending.timeControl);
             }
@@ -177,6 +193,9 @@ namespace Gui
                 committed = pending;
                 ImGui::CloseCurrentPopup();
             }
+
+            ImGui::PopStyleVar(2);
+            ImGui::PopStyleColor(4);
 
             ImGui::EndPopup();
         }

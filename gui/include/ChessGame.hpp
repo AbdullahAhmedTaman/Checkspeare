@@ -62,6 +62,16 @@ public:
     bool undo();
     bool redo();
 
+    /// Records that `side` resigned. Idempotent. Cleared by reset() and
+    /// loadFEN(), which are the two ways a new game begins.
+    ///
+    /// This is the one outcome that is not derived from the position or
+    /// the clock; it is asserted. Stored explicitly for that reason.
+    void resign(Color side);
+
+    /// Side that resigned, if any.
+    std::optional<Color> resignation() const;
+
     /// Moves the cursor to `ply` (0 = start position), clamped to
     /// [0, totalMoves()].
     void gotoPly(std::size_t ply);
@@ -126,6 +136,7 @@ private:
     Board board_;
     std::vector<MoveRecord> moves_;
     std::size_t cursor_ = 0;
+    std::optional<Color> resigned_;
 
     ClockSnapshot initialClock_;
     ClockSync clockSync_;

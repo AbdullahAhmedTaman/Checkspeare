@@ -103,6 +103,9 @@ namespace Gui
         void requestNewGame();
         bool consumeNewGameRequest();
 
+        void requestResign(Color side);
+        std::optional<Color> consumeResignRequest();
+
         bool gameOverModalDismissed() const
         {
             return gameOverModalDismissed_;
@@ -138,6 +141,7 @@ namespace Gui
         BoardAnnotations annotations_;
         mutable bool queuedUndo_ = false;
         mutable bool queuedRedo_ = false;
+        mutable std::optional<Color> queuedResign_;
         bool lastMoveWasDrag_ = false;
         bool newGameRequested_ = false;
         bool gameOverModalDismissed_ = false;

@@ -334,6 +334,18 @@ namespace Gui
         return requested;
     }
 
+    void GuiGameController::requestResign(Color side)
+    {
+        queuedResign_ = side;
+    }
+
+    std::optional<Color> GuiGameController::consumeResignRequest()
+    {
+        const auto result = queuedResign_;
+        queuedResign_.reset();
+        return result;
+    }
+
     void GuiGameController::requestQuit()
     {
         quitRequested_ = true;

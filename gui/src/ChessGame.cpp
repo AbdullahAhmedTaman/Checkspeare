@@ -17,6 +17,7 @@ void ChessGame::loadFEN(const std::string& fen)
     board_.loadFEN(fen);
     moves_.clear();
     cursor_ = 0;
+    resigned_.reset();
     syncClockToCursor();
 }
 
@@ -25,6 +26,7 @@ void ChessGame::reset()
     board_.reset();
     moves_.clear();
     cursor_ = 0;
+    resigned_.reset();
     syncClockToCursor();
 }
 
@@ -107,6 +109,16 @@ bool ChessGame::redo()
     return true;
 }
 
+void ChessGame::resign(Color side)
+{
+    resigned_ = side;
+}
+
+std::optional<Color> ChessGame::resignation() const
+{
+    return resigned_;
+}
+
 void ChessGame::gotoPly(std::size_t ply)
 {
     if (ply > moves_.size())
@@ -158,6 +170,15 @@ std::vector<MoveRecord> ChessGame::historyToCursor() const
 
 GameResult ChessGame::result() const
 {
+    // Resignation takes priority: it is an asserted decision to end the
+    // game, and no position-derived classification can override it. The
+    // winner is the side that did not resign.
+    if (resigned_.has_value())
+    {
+        const Color winner = (*resigned_ == WHITE) ? BLACK : WHITE;
+        return {GameResultKind::Resignation, winner};
+    }
+
     if (board_.isCheckmate())
     {
         const Color loser = board_.sideToMove();

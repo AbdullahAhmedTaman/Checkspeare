@@ -12,7 +12,6 @@ namespace Gui
     void renderImGui(sf::RenderWindow& window, Config& conf, BoardGeometry& geo, GuiGameController& controller,
                      const ChessGame& game, const ChessClock& clock, ImFont* clockFont)
     {
-        renderStatusPanel(controller, game);
         renderClockPanel(clock, game, clockFont);
 
         if (conf.showDemoWindow)

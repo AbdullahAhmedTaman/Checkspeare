@@ -67,6 +67,11 @@ private:
     /// terminal, or either side's clock has flagged.
     bool isGameOver() const;
 
+    /// True when the human side to move has the option to resign.
+    /// Combines the game-over check with the engine-control check so the
+    /// button state can be computed in one place.
+    bool canResign() const;
+
     /// Resets game and clock for a fresh game. Called when the game-over
     /// banner's New Game button fires a request.
     void newGame();

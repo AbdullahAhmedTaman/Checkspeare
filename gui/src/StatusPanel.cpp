@@ -41,7 +41,7 @@ namespace Gui
         }
     } // namespace
 
-    void renderStatusPanel(GuiGameController& controller, const ChessGame& game)
+    void renderStatusPanel(GuiGameController& controller, const ChessGame& game, bool canResign)
     {
         ImGui::Begin("Game");
 
@@ -71,7 +71,27 @@ namespace Gui
         ImGui::TextDisabled("STATUS");
         ImGui::SameLine();
         const std::string status = formatActionResult(controller.result());
-        ImGui::TextColored(ImVec4(0.91f, 0.78f, 0.48f, 1.00f), "%s", status.c_str());
+        ImGui::TextColored(ImVec4(0.94f, 0.72f, 0.30f, 1.0f), "%s", status.c_str());
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Enabled only when the human side to move can give up. In human
+        // Enabled only when the human side to move can give up. In human
+        // vs engine this is the human's turn only; in engine vs engine it
+        // is never enabled; in human vs human it tracks the clock. The
+        // click resigns for the side to move, matching real chess.
+        constexpr float kResignButtonWidth = 120.0f;
+        const float availW = ImGui::GetContentRegionAvail().x;
+
+        if (availW > kResignButtonWidth)
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - kResignButtonWidth) * 0.5f);
+
+        ImGui::BeginDisabled(!canResign);
+        if (ImGui::Button("Resign", ImVec2(kResignButtonWidth, 0.0f)))
+            controller.requestResign(game.sideToMove());
+        ImGui::EndDisabled();
 
         // Passive result banner. The modal is the active prompt; this is
         // a persistent indicator that survives after the modal is closed.
@@ -86,14 +106,24 @@ namespace Gui
             const ImVec2 textSize = ImGui::CalcTextSize(resultText.c_str());
             const float cardH = textSize.y + 22.0f;
 
-            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.24f, 0.12f, 0.10f, 1.00f));
-            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.78f, 0.44f, 0.34f, 1.00f));
+            ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.34f, 0.14f, 0.14f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.86f, 0.42f, 0.34f, 1.0f));
             ImGui::BeginChild("##result", ImVec2(0, cardH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
 
-            const float availW = ImGui::GetContentRegionAvail().x;
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (availW - textSize.x) * 0.5f);
-            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 8.0f);
-            ImGui::TextColored(ImVec4(0.98f, 0.90f, 0.72f, 1.00f), "%s", resultText.c_str());
+            // Center both axes within the child's content region. At the
+            // top of a child, GetContentRegionAvail returns the full inner
+            // rect; offsetting by half the slack places the text at the
+            // visual center regardless of the theme's WindowPadding.
+            const ImVec2 avail = ImGui::GetContentRegionAvail();
+            const float offsetX = (avail.x - textSize.x) * 0.5f;
+            const float offsetY = (avail.y - textSize.y) * 0.5f;
+
+            if (offsetX > 0.0f)
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + offsetX);
+            if (offsetY > 0.0f)
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + offsetY);
+
+            ImGui::TextColored(ImVec4(1.0f, 0.86f, 0.58f, 1.0f), "%s", resultText.c_str());
 
             ImGui::EndChild();
             ImGui::PopStyleColor(2);
