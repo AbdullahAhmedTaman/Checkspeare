@@ -6,6 +6,7 @@
 #include "position.h"
 #include "transposition.h"
 #include "types.h"
+#include "uci.h"
 #include <cmath>
 #include <iostream>
 
@@ -342,6 +343,7 @@ namespace Search
 
             // Invoke root search template
             Value score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
+            ctx.info.score = score;
 
             // Discard partial depth results if interrupted mid-search
             if (Signals_stop.load(std::memory_order_relaxed))
@@ -350,7 +352,7 @@ namespace Search
             safe_best_move = ctx.info.best_move;
 
             // Output UCI telemetry progress update
-            std::cout << "info depth " << current_depth << " score cp " << score << " nodes " << ctx.info.nodes << std::endl;
+            UCI::send_search_info(ctx.info);
         }
 
         // Output final UCI choice
