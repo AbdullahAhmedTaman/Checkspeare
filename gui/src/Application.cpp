@@ -52,6 +52,17 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
     // Snapshot the initial clock state for ply 0.
     game_.setInitialClockSnapshot(clock_.snapshot());
 
+    // A fresh move commit is the only event that mutates the clock
+    // (increment + active side). The "after" snapshot for that ply can
+    // only be taken once that mutation has happened, so it's recorded
+    // here rather than in stepSimulation.
+    game_.setMoveCommitted(
+        [this](std::size_t ply, Color mover)
+        {
+            clock_.onMovePlayed(mover);
+            game_.setClockSnapshotAt(ply, clock_.snapshot());
+        });
+
     if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
 
@@ -77,8 +88,8 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
     /// Where Engine integration comes in :
-    // engine_.start(conf_.enginePath);
-    // enginePlayer_.setSideControlled(BLACK, true);
+    engine_.start(conf_.enginePath);
+    enginePlayer_.setSideControlled(BLACK, true);
 }
 
 Application::~Application()
@@ -211,44 +222,17 @@ void Application::stepSimulation(float dtSeconds)
 
     animation_.tick(dtSeconds);
 
-    // ------------------------------------------------------------------
-    // Clock advancement
+    // Cursor bookkeeping
     //
-    // Two distinct cases, handled separately:
-    //
-    //   1. Exactly one new ply was played (curr == lastCursor_ + 1).
-    //      This is a fresh move commit. Tell the clock about it (add
-    //      increment, flip active side) and *then* record the resulting
-    //      state as the "after" snapshot for that ply. The order matters:
-    //      the snapshot must reflect the clock as it is once the move has
-    //      been accounted for, so that undo/redo restores the correct
-    //      numbers AND the correct active side.
-    //
-    //   2. Any other cursor change (undo, redo, gotoPly, gotoEnd, a
-    //      history-row click). The clock was already restored to the
-    //      correct snapshot by ChessGame's sync callback when the cursor
-    //      moved, so nothing to do here except resync lastCursor_.
-    //
-    // The previous version used a `while (lastCursor_ < curr)` loop that
-    // treated both cases identically. That produced two bugs:
-    //   - snapshots were taken before onMovePlayed, so they held the
-    //     pre-move active side; undo flipped the clock to the wrong side.
-    //   - a multi-ply forward jump (gotoPly / gotoEnd) re-applied every
-    //     increment in the jumped range, corrupting the numbers.
-    // ------------------------------------------------------------------
-    if (curr == lastCursor_ + 1)
-    {
-        const Color mover = (lastCursor_ % 2 == 0) ? WHITE : BLACK;
-        clock_.onMovePlayed(mover);
-        ++lastCursor_;
-
-        // Post-increment snapshot for this ply.
-        game_.setClockSnapshotAt(curr - 1, clock_.snapshot());
-    }
-    else if (curr != lastCursor_)
-    {
-        lastCursor_ = curr;
-    }
+    // The clock is no longer advanced here. ChessGame::play announces a
+    // fresh commit through moveCommitted_, which applies the increment,
+    // flips the active side, and stores the resulting "after" snapshot
+    // for that ply. Every other cursor change (undo, redo, gotoPly,
+    // gotoEnd, a history-row click) already pushed the matching snapshot
+    // through clockSync_, which *restores* it. Treating a redo as a
+    // commit here is what re-applied increments on top of the restored
+    // snapshot and flipped the active side a second time.
+    lastCursor_ = curr;
 
     if (justEnteredGameOver(gameOver, gameOverWas_))
     {

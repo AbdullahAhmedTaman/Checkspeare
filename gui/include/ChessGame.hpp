@@ -109,6 +109,9 @@ public:
         return board_.sideToMove();
     }
 
+    using MoveCommitted = std::function<void(std::size_t ply, Color mover)>;
+    void setMoveCommitted(MoveCommitted cb);
+
 private:
     void stepForward();
     void stepBackward();
@@ -126,4 +129,5 @@ private:
 
     ClockSnapshot initialClock_;
     ClockSync clockSync_;
+    MoveCommitted moveCommitted_;
 };

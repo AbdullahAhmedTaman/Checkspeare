@@ -53,6 +53,11 @@ void ChessGame::setClockSnapshotAt(std::size_t ply, const ClockSnapshot& s)
         syncClockToCursor();
 }
 
+void ChessGame::setMoveCommitted(MoveCommitted cb)
+{
+    moveCommitted_ = std::move(cb);
+}
+
 std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
 {
     const auto m = findLegalMove(from, to, promo);
@@ -62,6 +67,8 @@ std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
     if (cursor_ < moves_.size())
         moves_.resize(cursor_);
 
+    const Color mover = board_.sideToMove();
+
     Board before = board_;
     board_.applyMove(*m);
     ++cursor_;
@@ -70,8 +77,14 @@ std::optional<Move> ChessGame::play(Square from, Square to, PieceType promo)
     rec.move = *m;
     rec.san = toSan(before, *m);
     rec.positionKeyAfter = board_.position().key;
-    // rec.clockAfter is set later by Application via setClockSnapshotAt.
+    // rec.clockAfter is set by the moveCommitted_ callback below.
     moves_.push_back(std::move(rec));
+
+    // A genuine commit: this is the only path that should ever touch the
+    // clock's increment / active side. Navigation (undo/redo/gotoPly) only
+    // ever *restores* snapshots through clockSync_.
+    if (moveCommitted_)
+        moveCommitted_(cursor_ - 1, mover);
 
     return m;
 }

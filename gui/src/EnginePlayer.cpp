@@ -143,6 +143,15 @@ EnginePlayerAction decideEngineAction(const EnginePlayerInputs& in)
     if (!in.engineAlive || !in.engineReady)
         return EnginePlayerAction::Idle;
 
+    // Only auto-play at the live tip. If the cursor is behind the tip the
+    // user is reviewing history (undo / redo / gotoPly), and starting a
+    // search would be destructive: ChessGame::play truncates moves_ at the
+    // cursor, wiping the redo line being browsed. Returning to the tip
+    // (redo, gotoEnd, or playing a move from the review position) will
+    // re-enable auto-play naturally on the next tick.
+    if (in.gameCursor != in.historySize)
+        return EnginePlayerAction::Idle;
+
     return EnginePlayerAction::StartSearch;
 }
 
@@ -180,6 +189,7 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
     in.thinking = thinking_;
     in.thinkStartPly = thinkStartPly_;
     in.gameCursor = game.cursor();
+    in.historySize = game.history().size();
     in.sideToMove = game.sideToMove();
     in.sideControlled = controlled_[static_cast<int>(game.sideToMove())];
 

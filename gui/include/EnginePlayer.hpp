@@ -26,6 +26,7 @@ struct EnginePlayerInputs
 
     // Game state.
     std::size_t gameCursor = 0;
+    std::size_t historySize = 0;
     Color sideToMove = WHITE;
     bool sideControlled = false;
 
