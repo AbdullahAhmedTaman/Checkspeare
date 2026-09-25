@@ -47,7 +47,7 @@ namespace Gui
                 ImGuiID movesCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.70f, nullptr, &rightColumn);
                 // ImGuiID settingsCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.50f, nullptr, &rightColumn);
 
-                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.18f, nullptr, &root);
+                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.15f, nullptr, &root);
 
                 ImGuiID engineCol = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.13f, nullptr, &root);
 

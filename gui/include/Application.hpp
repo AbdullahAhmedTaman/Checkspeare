@@ -134,6 +134,8 @@ private:
 
     /// Borrowed from ImGui's font atlas; valid while the ImGui context lives.
     ImFont* clockFont_ = nullptr;
+    ImFont* engineNameFont_ = nullptr;
+    ImFont* moveListFont_ = nullptr;
 
     /// Owned. Used to draw a1-h8 / 1-8 labels along the board edges.
     sf::Font coordinateFont_;

@@ -7,7 +7,6 @@
 #include "GameOverModal.hpp"
 #include "GameOverTransition.hpp"
 #include "GameResult.hpp"
-#include "ImGuiLayer.hpp"
 #include "ImGuiTheme.hpp"
 #include "InputEvent.hpp"
 #include "MoveListPanel.hpp"
@@ -73,13 +72,23 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets)
 
     ImGuiIO& io = ImGui::GetIO();
 
-    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Regular.ttf", 18.0f);
+    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Medium.ttf", 19.0f);
     IM_ASSERT(uiFont != nullptr && "[Fonts] Failed to load UI font!");
 
     clockFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 36.0f);
 
     if (clockFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load clock font!");
+
+    engineNameFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 26.0f);
+
+    if (engineNameFont_ == nullptr)
+        throw std::runtime_error("[Fonts] Failed to load engine name font!");
+
+    moveListFont_ = ImGui::GetIO().Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 22.0f);
+
+    if (moveListFont_ == nullptr)
+        throw std::runtime_error("[Fonts] Failed to load move list font!");
 
     ImGui::SFML::UpdateFontTexture();
 
@@ -332,13 +341,23 @@ void Application::stepUi(float dtSeconds)
                        controller_.annotations(), animation_);
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
-    // Gui::renderEngineSettingsPanel(conf_, playerWhite_, engineWhite_, playerBlack_, engineBlack_,
-    //                                /*pathsLocked=*/!setupModalOpen_);
     Gui::renderStatusPanel(controller_, game_, canResign());
     Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
-    Gui::renderClockPanel(clock_, game_, clockFont_);
+    // A side is labeled with its engine's name when an engine is running,
+    // and with "Human" otherwise. During the brief handshake window
+    // between process start and the `id name` line arriving, the name is
+    // still empty; that shows "Engine" rather than "Human", which would be
+    // wrong for a side that is in fact being played by a machine.
+    auto displayName = [](const UciEngine& engine) -> std::string
+    {
+        if (!engine.isRunning())
+            return "Human";
+        const std::string& n = engine.name();
+        return n.empty() ? "Engine" : n;
+    };
 
-    Gui::renderMoveListPanel(game_, controller_);
+    Gui::renderClockPanel(clock_, game_, clockFont_, engineNameFont_, displayName(engineWhite_), displayName(engineBlack_));
+    Gui::renderMoveListPanel(game_, controller_, moveListFont_);
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
     {
         applyGameSetup(*committed);
@@ -350,35 +369,41 @@ Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
 {
     Gui::EngineThinkingSnapshot snap;
 
-    // Pick which engine's info to display:
-    //   - If exactly one engine is running, show it regardless of whose
-    //     turn it is. A human playing against an engine wants to see that
-    //     engine's evaluation while they think, not a blank panel.
-    //   - If both are running, show the one whose side is to move.
-    //   - If neither is running, the snapshot stays empty and the panel
-    //     shows Idle.
-    //
-    // "Running" requires both a configured side and a live process: a
-    // preference without a started engine is not a reason to show its
-    // (empty) search info.
     const bool whiteActive = engineWhite_.isRunning() && playerWhite_.isSideControlled(WHITE);
     const bool blackActive = engineBlack_.isRunning() && playerBlack_.isSideControlled(BLACK);
 
     const EnginePlayer* active = nullptr;
+    const UciEngine* activeEngine = nullptr;
+
     if (whiteActive && blackActive)
-        active = (game_.sideToMove() == WHITE) ? &playerWhite_ : &playerBlack_;
+    {
+        if (game_.sideToMove() == WHITE)
+        {
+            active = &playerWhite_;
+            activeEngine = &engineWhite_;
+        }
+        else
+        {
+            active = &playerBlack_;
+            activeEngine = &engineBlack_;
+        }
+    }
     else if (whiteActive)
+    {
         active = &playerWhite_;
+        activeEngine = &engineWhite_;
+    }
     else if (blackActive)
+    {
         active = &playerBlack_;
+        activeEngine = &engineBlack_;
+    }
 
     if (active == nullptr)
         return snap;
 
-    // `activeSide` names the engine being shown, not the side to move.
-    // When the human is on the clock against a running engine, the panel
-    // still reads "White" (or "Black") — meaning "this is White's engine."
     snap.activeSide = (active == &playerWhite_) ? "White" : "Black";
+    snap.engineName = activeEngine->name();
     snap.thinking = active->thinking();
 
     if (const auto& info = active->lastInfo())

@@ -76,6 +76,11 @@ public:
 
     bool isReady() const;
 
+    /// Engine's advertised name, taken from the first `id name ...` line
+    /// received during the UCI handshake. Empty until the engine has sent
+    /// it, which happens shortly before `uciok`.
+    const std::string& name() const;
+
     void newGame();
 
     void setPosition(const std::string& fen, const std::vector<Move>& moves);

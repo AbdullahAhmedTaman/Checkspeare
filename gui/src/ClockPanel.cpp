@@ -89,8 +89,8 @@ namespace Gui
         ///
         /// `clockFont` may be null; if so, the time is drawn with the
         /// default UI font at a larger point size.
-        void drawClockCard(const char* label, std::int64_t remainingMs, std::int64_t referenceMs, bool active, bool flagged,
-                           ImVec2 size, ImFont* clockFont)
+        void drawClockCard(const char* label, const std::string& engineName, std::int64_t remainingMs, std::int64_t referenceMs,
+                           bool active, bool flagged, ImVec2 size, ImFont* clockFont, ImFont* engineNameFont)
         {
             const CardColors c = colorsFor(active, flagged);
 
@@ -102,35 +102,44 @@ namespace Gui
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
             // Card background + border.
-            //
-            // Drawn as two nested *filled* rects rather than AddRect with a
-            // thickness. A stroked rounded rect puts two AA fringes close
-            // together at 2px thickness and the corners come out pinched;
-            // an outer fill plus an inset inner fill has no such fringe.
             const float borderThickness = active ? 2.5f : 1.0f;
             const float rounding = 8.0f;
 
             dl->AddRectFilled(p0, p1, c.border, rounding);
 
-            // Inset the inner fill by the border thickness and reduce the
-            // corner radius by the same amount so the two curves stay
-            // concentric.
             const ImVec2 inner0 = ImVec2(p0.x + borderThickness, p0.y + borderThickness);
             const ImVec2 inner1 = ImVec2(p1.x - borderThickness, p1.y - borderThickness);
             dl->AddRectFilled(inner0, inner1, c.bg, rounding - borderThickness);
 
             const float pad = 12.0f;
+            const float dotRadius = 4.5f;
+            const float dotGap = 10.0f;
+            const float rowY = p0.y + pad;
+            const float lineH = ImGui::GetTextLineHeight();
 
-            // Active dot + label, top-left.
-            const ImVec2 dotCenter = ImVec2(p0.x + pad + 5.0f, p0.y + pad + 7.0f);
-            dl->AddCircleFilled(dotCenter, 4.5f, c.accent);
-            dl->AddText(ImVec2(dotCenter.x + 12.0f, p0.y + pad), c.text, label);
+            const ImVec2 dotCenter(p0.x + pad + dotRadius, rowY + lineH * 0.5f);
+            dl->AddCircleFilled(dotCenter, dotRadius, c.accent);
+
+            const float labelX = p0.x + pad + dotRadius * 2.0f + dotGap;
+            dl->AddText(ImVec2(labelX, rowY), c.text, label);
+
+            if (!engineName.empty())
+            {
+                ImFont* font = engineNameFont ? engineNameFont : ImGui::GetFont();
+                const float nameSize = engineNameFont ? engineNameFont->FontSize : ImGui::GetFontSize();
+
+                const float nameW = font->CalcTextSizeA(nameSize, FLT_MAX, 0.0f, engineName.c_str()).x;
+                const float nameX = p0.x + size.x - pad - nameW;
+                const float nameLineH = nameSize;
+                const float labelLineH = lineH;
+                const float nameY = rowY + (labelLineH - nameLineH) * 0.5f;
+
+                const float labelW = ImGui::CalcTextSize(label).x;
+                if (nameX > labelX + labelW + 8.0f)
+                    dl->AddText(font, nameSize, ImVec2(nameX, nameY), c.accent, engineName.c_str());
+            }
 
             // Big time readout, horizontally centered.
-            //
-            // If a clock font was supplied, use it at its native size (the
-            // size it was rasterized at). Otherwise fall back to the default
-            // font scaled up, which is legible but softer.
             const std::string timeText = formatClock(remainingMs);
 
             ImFont* font = clockFont ? clockFont : ImGui::GetFont();
@@ -159,14 +168,14 @@ namespace Gui
                 dl->AddRectFilled(barP0, fillP1, c.barFill, 3.0f);
             }
 
-            // Reserve the layout slot now that the card has been drawn.
             ImGui::Dummy(size);
 
             ImGui::PopID();
         }
     } // namespace
 
-    void renderClockPanel(const ChessClock& clock, const ChessGame& game, ImFont* clockFont)
+    void renderClockPanel(const ChessClock& clock, const ChessGame& game, ImFont* clockFont, ImFont* engineNameFont,
+                          const std::string& whiteEngineName, const std::string& blackEngineName)
     {
         ImGui::Begin("Clock");
 
@@ -182,13 +191,13 @@ namespace Gui
 
         const bool whiteToMove = (game.sideToMove() == WHITE);
 
-        drawClockCard("White", clock.remainingMs(WHITE), reference, whiteToMove, clock.flagFallen(WHITE), ImVec2(cardW, cardH),
-                      clockFont);
+        drawClockCard("White", whiteEngineName, clock.remainingMs(WHITE), reference, whiteToMove, clock.flagFallen(WHITE),
+                      ImVec2(cardW, cardH), clockFont, engineNameFont);
 
         ImGui::SameLine();
 
-        drawClockCard("Black", clock.remainingMs(BLACK), reference, !whiteToMove, clock.flagFallen(BLACK), ImVec2(cardW, cardH),
-                      clockFont);
+        drawClockCard("Black", blackEngineName, clock.remainingMs(BLACK), reference, !whiteToMove, clock.flagFallen(BLACK),
+                      ImVec2(cardW, cardH), clockFont, engineNameFont);
 
         ImGui::End();
     }

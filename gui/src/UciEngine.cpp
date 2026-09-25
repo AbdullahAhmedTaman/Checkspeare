@@ -106,6 +106,12 @@ struct UciEngine::Impl
 
     State state = State::Stopped;
 
+    /// Engine's self-reported name. Populated during the handshake from
+    /// the `id name ...` line. Cleared on every start() so a fresh engine
+    /// does not show a previous binary's name while its own handshake is
+    /// still in flight.
+    std::string name;
+
     void start(const std::filesystem::path& path);
     void startReaderThread();
     void writeLine(const std::string& line);
@@ -139,6 +145,7 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
     }
 
     state = State::Starting;
+    name.clear();
 
     try
     {
@@ -257,6 +264,11 @@ bool UciEngine::isReady() const
     }
 
     return impl_->state == Impl::State::Ready;
+}
+
+const std::string& UciEngine::name() const
+{
+    return impl_->name;
 }
 
 void UciEngine::stop()
@@ -428,7 +440,13 @@ UciPollResult UciEngine::poll()
             }
         }
 
-        if (line == "uciok")
+        if (line.starts_with("id name "))
+        {
+            // Everything after the "id name " prefix is the name, which
+            // may contain spaces (e.g. "Stockfish 16", "Lc0 v0.30.0").
+            impl_->name = line.substr(8);
+        }
+        else if (line == "uciok")
         {
             if (isRunning() && impl_->state == Impl::State::Starting)
             {
@@ -449,12 +467,6 @@ UciPollResult UciEngine::poll()
                 impl_->state = Impl::State::Ready;
             }
         }
-
-        // Intentionally ignored for now:
-        // id ...
-        // option ...
-        // info string ...
-        // etc.
     }
 
     if (!isRunning())
