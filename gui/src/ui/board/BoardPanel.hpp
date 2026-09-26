@@ -37,7 +37,7 @@ namespace Gui
         /// draws it interpolated and skips the static piece at its destination.
         void render(BoardGeometry& geo, const BoardTheme& theme, const Board& board, const Assets::TextureLibrary& assets,
                     const sf::Font& coordinateFont, const DragState& drag, const PendingPromotion& promo,
-                    const BoardAnnotations& annotations, const MoveAnimation& animation);
+                    const BoardAnnotations& annotations, const MoveAnimation& animation, const std::vector<Arrow>& arrows);
 
         /// True if `windowPos` (window coordinates) falls inside the board
         /// image as drawn this frame. Used to bypass ImGui's mouse capture

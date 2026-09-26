@@ -31,6 +31,12 @@ namespace Gui
         std::array<Square, 4> choiceSquares{SQ_NONE, SQ_NONE, SQ_NONE, SQ_NONE};
     };
 
+    struct Arrow
+    {
+        Square from = SQ_NONE;
+        Square to = SQ_NONE;
+    };
+
     struct ActionResult
     {
         enum class Kind
@@ -131,14 +137,29 @@ namespace Gui
             return lastMoveWasDrag_;
         }
 
+        const std::vector<Arrow>& arrows() const
+        {
+            return arrows_;
+        }
+
+        void clearArrows()
+        {
+            arrows_.clear();
+            arrowAnchor_.reset();
+            rightPressActive_ = false;
+        }
+
     private:
         void onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
         void onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo);
+        void onRightPress(sf::Vector2f position, const BoardGeometry& geo);
+        void onRightRelease(sf::Vector2f position, const BoardGeometry& geo);
         void playMoveOrStartPromotion(Square from, Square to, bool fromDrag);
 
         /// True if from -> to is a legal promotion in the current position.
         bool isPromotionMove(Square from, Square to) const;
-
+        void addOrReplaceArrow(Square from, Square to);
+        bool eraseArrowFrom(Square from);
         ChessGame& game_;
 
         DragState drag_;
@@ -146,6 +167,10 @@ namespace Gui
         ActionResult result_{};
         BoardAnnotations annotations_;
         bool lastMoveWasDrag_ = false;
+
+        std::vector<Arrow> arrows_;
+        std::optional<Square> arrowAnchor_;
+        bool rightPressActive_ = false;
 
         mutable std::optional<std::size_t> queuedGotoPly_;
         mutable bool queuedUndo_ = false;

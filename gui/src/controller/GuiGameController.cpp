@@ -25,6 +25,8 @@ namespace Gui
                     cancelPromotion();
                 else
                     cancelDrag();
+                arrowAnchor_.reset();
+                rightPressActive_ = false;
                 return;
             case InputEvent::Kind::PointerPressed:
                 onPress(event.button, event.position, geo);
@@ -56,6 +58,11 @@ namespace Gui
 
     void GuiGameController::onPress(MouseButton button, sf::Vector2f position, const BoardGeometry& geo)
     {
+        if (button == MouseButton::Right)
+        {
+            onRightPress(position, geo);
+            return;
+        }
         if (button != MouseButton::Left)
             return;
 
@@ -133,6 +140,12 @@ namespace Gui
 
     void GuiGameController::onRelease(MouseButton button, sf::Vector2f position, const BoardGeometry& geo)
     {
+        if (button == MouseButton::Right)
+        {
+            onRightRelease(position, geo);
+            return;
+        }
+
         if (button != MouseButton::Left || !drag_.active)
             return;
 
@@ -165,6 +178,74 @@ namespace Gui
 
         playMoveOrStartPromotion(from, to, /*fromDrag=*/true);
         drag_ = {};
+    }
+
+    void GuiGameController::onRightPress(sf::Vector2f position, const BoardGeometry& geo)
+    {
+        const auto sqOpt = geo.squareAt(position);
+
+        if (!sqOpt)
+        {
+            // Right-click outside the board clears every arrow. Matches
+            // chess.com and lichess; useful as a single-gesture reset.
+            clearArrows();
+            return;
+        }
+
+        rightPressActive_ = true;
+
+        const Square sq = *sqOpt;
+
+        // A two-click chain is in progress: this click completes it.
+        if (arrowAnchor_.has_value())
+        {
+            const Square from = *arrowAnchor_;
+            arrowAnchor_.reset();
+
+            if (from == sq)
+            {
+                // Same square twice: no arrow.
+                return;
+            }
+
+            addOrReplaceArrow(from, sq);
+            return;
+        }
+
+        // An arrow already starts on this square: erase it and consume
+        // the click. This is the single-right-click erase gesture.
+        if (eraseArrowFrom(sq))
+            return;
+
+        // Otherwise, start a new chain. The arrow materializes on either
+        // the second click (click-click gesture) or the release (drag).
+        arrowAnchor_ = sq;
+    }
+
+    void GuiGameController::onRightRelease(sf::Vector2f position, const BoardGeometry& geo)
+    {
+        if (!rightPressActive_)
+            return;
+
+        rightPressActive_ = false;
+
+        // No pending anchor means the press was an erase or a clear;
+        // nothing for the release to complete.
+        if (!arrowAnchor_.has_value())
+            return;
+
+        const auto sqOpt = geo.squareAt(position);
+        if (!sqOpt)
+            return;
+
+        if (*sqOpt == *arrowAnchor_)
+            return; // no drag; wait for the second click
+
+        const Square from = *arrowAnchor_;
+        const Square to = *sqOpt;
+        arrowAnchor_.reset();
+
+        addOrReplaceArrow(from, to);
     }
 
     bool GuiGameController::isPromotionMove(Square from, Square to) const
@@ -355,6 +436,52 @@ namespace Gui
         const bool requested = quitRequested_;
         quitRequested_ = false;
         return requested;
+    }
+
+    void GuiGameController::addOrReplaceArrow(Square from, Square to)
+    {
+        // Toggle: drawing the same arrow twice removes it.
+        for (auto it = arrows_.begin(); it != arrows_.end(); ++it)
+        {
+            if (it->from == from && it->to == to)
+            {
+                arrows_.erase(it);
+                return;
+            }
+        }
+
+        // One arrow per tail: a new arrow from the same source replaces
+        // the existing one rather than stacking. Keeps the board readable.
+        for (auto it = arrows_.begin(); it != arrows_.end(); ++it)
+        {
+            if (it->from == from)
+            {
+                it->to = to;
+                return;
+            }
+        }
+
+        // Soft cap. Oldest arrow drops off to make room, matching the
+        // way a single-finger drawing app behaves.
+        constexpr std::size_t kMaxArrows = 8;
+        if (arrows_.size() >= kMaxArrows)
+            arrows_.erase(arrows_.begin());
+
+        arrows_.push_back({from, to});
+    }
+
+    bool GuiGameController::eraseArrowFrom(Square from)
+    {
+        for (auto it = arrows_.begin(); it != arrows_.end(); ++it)
+        {
+            if (it->from == from)
+            {
+                arrows_.erase(it);
+                return true;
+            }
+        }
+
+        return false;
     }
 
 } // namespace Gui
