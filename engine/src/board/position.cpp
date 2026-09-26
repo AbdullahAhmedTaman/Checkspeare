@@ -538,6 +538,7 @@ Position Position::from_fen(const std::string& fen)
     pos.update_occupancy();
     pos.key = Zobrist::generate_key(pos);
     Eval::init_scores(pos);
+    Eval::init_pawn_masks();
 
     return pos;
 }

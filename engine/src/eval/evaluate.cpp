@@ -2,8 +2,8 @@
 #include "board/attacks.h"
 #include "board/bitboard.h"
 #include "board/position.h"
-#include "pst.h"
 #include "board/types.h"
+#include "pst.h"
 #include <algorithm>
 
 namespace Eval
@@ -42,25 +42,23 @@ namespace Eval
     Bitboard ISOLATED_MASKS[8];
     Bitboard WHITE_PASSED_MASKS[64];
     Bitboard BLACK_PASSED_MASKS[64];
-    // run once in FEN 
-    void init_pawn_masks() 
+
+    // run once in FEN
+    void init_pawn_masks()
     {
-        // 1. Build File Masks
         for (int col = 0; col < 8; ++col)
         {
             FILE_MASKS[col] = FILE_A << col;
         }
 
-        // 2. Build Isolated Pawn Masks
         for (int col = 0; col < 8; ++col)
         {
-            Bitboard left_file  = (FILE_MASKS[col] >> 1) & NOT_H_FILE;
+            Bitboard left_file = (FILE_MASKS[col] >> 1) & NOT_H_FILE;
             Bitboard right_file = (FILE_MASKS[col] << 1) & NOT_A_FILE;
-            
+
             ISOLATED_MASKS[col] = left_file | right_file;
         }
 
-        // 3. Build Passed Pawn Masks
         for (int sq = 0; sq < 64; ++sq)
         {
             int col = sq & 7;
@@ -387,7 +385,7 @@ namespace Eval
         score += evaluate_bishop_pair(pos);
         score += evaluate_king_shield(pos);
         score += evaluate_pieces(pos);
-        score += evaluate_pawns(pos); 
+        score += evaluate_pawns(pos);
         score += evaluate_outposts(pos);
 
         int mg_total = score.mg[WHITE] - score.mg[BLACK];

@@ -12,7 +12,6 @@
 #include <string>
 #include <thread>
 
-
 namespace UCI
 {
     Move string_to_move(const std::string& move_str, Position& pos)
@@ -112,6 +111,7 @@ namespace UCI
                 }
 
                 Eval::init_scores(pos);
+                Eval::init_pawn_masks();
 
                 if (token == "moves")
                 {
