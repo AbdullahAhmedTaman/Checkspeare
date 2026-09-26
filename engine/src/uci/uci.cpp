@@ -1,16 +1,17 @@
 #include "uci.h"
-#include "eval/evaluate.h"
 #include "board/movegen.h"
 #include "board/position.h"
+#include "board/types.h"
+#include "eval/evaluate.h"
 #include "search/search.h"
 #include "search/transposition.h"
-#include "board/types.h"
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <thread>
+
 
 namespace UCI
 {
@@ -77,7 +78,7 @@ namespace UCI
 
             if (command == "uci")
             {
-                std::cout << "id name Check-Spear" << std::endl;
+                std::cout << "id name Checkspeare" << std::endl;
                 std::cout << "id author Check-Mates" << std::endl;
                 std::cout << "uciok" << std::endl;
             }

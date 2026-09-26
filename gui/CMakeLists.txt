@@ -24,9 +24,11 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 
     if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
         target_link_options(ChessGUI PRIVATE
+                -static
                 -static-libgcc
                 -static-libstdc++
         )
+        
     endif()
 
 elseif(MSVC)
@@ -46,13 +48,33 @@ endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
     target_compile_definitions(ChessGUI PRIVATE
-            RESOURCES_PATH="./assets/"
+            RESOURCES_PATH="assets/"
             PRODUCTION_BUILD=1
     )
 else()
     target_compile_definitions(ChessGUI PRIVATE
             RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/"
             PRODUCTION_BUILD=0
+    )
+endif()
+
+if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
+
+    if(WIN32)
+        set_target_properties(ChessGUI PROPERTIES
+                WIN32_EXECUTABLE TRUE
+        )
+    elseif(APPLE)
+        set_target_properties(ChessGUI PROPERTIES
+                MACOSX_BUNDLE TRUE
+        )
+    endif()
+
+endif()
+
+if(WIN32)
+    target_sources(ChessGUI PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/app.rc"
     )
 endif()
 

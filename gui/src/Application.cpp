@@ -1,16 +1,17 @@
 #include "Application.hpp"
 
-#include "ui/ClockPanel.hpp"
-#include "ui/DockSpace.hpp"
-#include "ui/engine/EngineThinkingPanel.hpp"
-#include "ui/dialogs/GameOverModal.hpp"
 #include "game/GameOverTransition.hpp"
 #include "game/GameResult.hpp"
-#include "ui/ImGuiTheme.hpp"
 #include "input/InputEvent.hpp"
-#include "ui/MoveListPanel.hpp"
 #include "input/SfmlInputAdapter.hpp"
+#include "ui/ClockPanel.hpp"
+#include "ui/DockSpace.hpp"
+#include "ui/ImGuiTheme.hpp"
+#include "ui/MoveListPanel.hpp"
 #include "ui/StatusPanel.hpp"
+#include "ui/dialogs/GameOverModal.hpp"
+#include "ui/engine/EngineThinkingPanel.hpp"
+
 
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
@@ -70,7 +71,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     Gui::applyChessTheme();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    if (!coordinateFont_.openFromFile("gui/assets/fonts/Roboto-Regular.ttf"))
+    if (!coordinateFont_.openFromFile(RESOURCES_PATH "fonts/Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
     seedSetupModalFromConfig();
@@ -113,18 +114,18 @@ void Application::loadFonts()
 {
     ImGuiIO& io = ImGui::GetIO();
 
-    ImFont* uiFont = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Medium.ttf", 19.0f);
+    ImFont* uiFont = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Medium.ttf", 19.0f);
     IM_ASSERT(uiFont != nullptr && "[Fonts] Failed to load UI font!");
 
-    clockFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 36.0f);
+    clockFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 36.0f);
     if (clockFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load clock font!");
 
-    engineNameFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 26.0f);
+    engineNameFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 26.0f);
     if (engineNameFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load engine name font!");
 
-    moveListFont_ = io.Fonts->AddFontFromFileTTF("gui/assets/fonts/Roboto-Bold.ttf", 20.0f);
+    moveListFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 20.0f);
     if (moveListFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load move list font!");
 }

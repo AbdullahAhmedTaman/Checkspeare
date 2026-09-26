@@ -1,5 +1,6 @@
 #pragma once
 
+#include <bit>
 #include <cassert>
 
 #include "types.h"
@@ -107,7 +108,7 @@ constexpr void toggle_bit(Bitboard& bb, Square square)
 // Returns the total number of set bits (population count).
 inline int popcount(Bitboard bb)
 {
-    return __builtin_popcountll(bb);
+    return std::popcount(bb);
 }
 
 // Returns the square index of the least significant set bit (LSB).
@@ -115,7 +116,7 @@ inline int popcount(Bitboard bb)
 inline Square lsb(Bitboard bb)
 {
     assert(bb != 0);
-    return static_cast<Square>(__builtin_ctzll(bb));
+    return static_cast<Square>(std::countr_zero(bb));
 }
 
 // Returns the LSB index and clears it from the bitboard in-place.
@@ -219,6 +220,6 @@ constexpr Bitboard reverse_bb(Bitboard x)
     x = ((x & 0x3333333333333333ULL) << 2) | ((x >> 2) & 0x3333333333333333ULL);
     x = ((x & 0x0F0F0F0F0F0F0F0FULL) << 4) | ((x >> 4) & 0x0F0F0F0F0F0F0F0FULL);
 
-    // Reverse byte order — GCC lowers this to a single BSWAP instruction.
-    return __builtin_bswap64(x);
+    // Reverse byte order to complete the 64-bit bit reversal.
+    return std::byteswap(x);
 }
