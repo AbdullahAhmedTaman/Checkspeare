@@ -242,6 +242,59 @@ namespace
             target.draw(text);
         }
     }
+
+    void drawArrow(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Gui::Arrow& a)
+    {
+        if (a.from == SQ_NONE || a.to == SQ_NONE || a.from == a.to)
+            return;
+
+        const sf::Color fill(232, 168, 56, 210);
+
+        const float shaftWidth = geo.squareSize * 0.13f;
+        const float headLength = geo.squareSize * 0.34f;
+        const float headWidth = geo.squareSize * 0.34f;
+
+        const sf::Vector2f fromCenter = geo.topLeft(a.from) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
+        const sf::Vector2f toCenter = geo.topLeft(a.to) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
+
+        const sf::Vector2f delta = toCenter - fromCenter;
+        const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+        if (length < 1.0f)
+            return;
+
+        const sf::Vector2f dir = delta / length;
+        const sf::Vector2f perp(-dir.y, dir.x);
+
+        // End the shaft where the arrowhead begins, so the head sits
+        // cleanly on the destination square.
+        const sf::Vector2f shaftEnd = toCenter - dir * headLength;
+        const sf::Vector2f half = perp * (shaftWidth * 0.5f);
+
+        sf::ConvexShape shaft(4);
+        shaft.setPoint(0, fromCenter + half);
+        shaft.setPoint(1, shaftEnd + half);
+        shaft.setPoint(2, shaftEnd - half);
+        shaft.setPoint(3, fromCenter - half);
+        shaft.setFillColor(fill);
+        target.draw(shaft);
+
+        // Arrowhead.
+        const sf::Vector2f headBase = toCenter - dir * headLength;
+        const sf::Vector2f headHalf = perp * (headWidth * 0.5f);
+
+        sf::ConvexShape head(3);
+        head.setPoint(0, toCenter);
+        head.setPoint(1, headBase + headHalf);
+        head.setPoint(2, headBase - headHalf);
+        head.setFillColor(fill);
+        target.draw(head);
+    }
+
+    void drawArrows(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const std::vector<Gui::Arrow>& arrows)
+    {
+        for (const Gui::Arrow& a : arrows)
+            drawArrow(target, geo, a);
+    }
 } // namespace
 
 namespace Gui
@@ -250,7 +303,7 @@ namespace Gui
     void renderBoard(sf::RenderTarget& target, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
                      const Assets::TextureLibrary& assets, const sf::Font& coordinateFont, const DragState& drag,
                      sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations,
-                     const MoveAnimation& animation)
+                     const MoveAnimation& animation, const std::vector<Arrow>& arrows)
     {
         const float padding = piecePadding(geo.squareSize);
 
@@ -327,6 +380,7 @@ namespace Gui
 
         drawPromotionPicker(target, geo, assets, promo);
         drawCoordinateLabels(target, geo, coordinateFont);
+        drawArrows(target, geo, arrows);
     }
 
 } // namespace Gui

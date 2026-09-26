@@ -1,5 +1,6 @@
 #include "Application.hpp"
 
+#include "CapturedPiecesPanel.hpp"
 #include "ClockPanel.hpp"
 #include "Dockspace.hpp"
 #include "EngineThinkingPanel.hpp"
@@ -195,6 +196,23 @@ void Application::processEvents()
             inputEvent->button == Gui::MouseButton::Left && !boardPanel_.contains(inputEvent->position))
         {
             controller_.cancelSelection();
+        }
+
+        if (inputEvent->kind == Gui::InputEvent::Kind::PointerPressed && inputEvent->button == Gui::MouseButton::Right &&
+            !boardPanel_.contains(inputEvent->position))
+        {
+            continue;
+        }
+
+        // A right-click outside the board should also not end an arrow
+        // mid-gesture; let releases through only when they started on
+        // the board, which the controller tracks itself. Releases outside
+        // the board are forwarded and the controller treats them as a
+        // cancel, matching a "drag off the board" gesture.
+        if (inputEvent->kind == Gui::InputEvent::Kind::PointerReleased && inputEvent->button == Gui::MouseButton::Right &&
+            controller_.arrows().empty() == false && !boardPanel_.contains(inputEvent->position))
+        {
+            // Fall through; the controller will resolve the gesture.
         }
 
         if (!shouldForwardInput(*inputEvent))
@@ -432,7 +450,7 @@ void Application::stepUi(float dtSeconds)
     Gui::beginMainDockspace();
 
     boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
-                       controller_.annotations(), animation_);
+                       controller_.annotations(), animation_, controller_.arrows());
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
     Gui::renderStatusPanel(controller_, game_, canResign());
@@ -451,6 +469,7 @@ void Application::stepUi(float dtSeconds)
 
     Gui::renderClockPanel(clock_, game_, clockFont_, engineNameFont_, displayName(engineWhite_), displayName(engineBlack_));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
+    Gui::renderCapturedPiecesPanel(game_.board(), assets_);
 
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
     {
@@ -563,6 +582,7 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
 
     controller_.updateAnnotations();
     controller_.reopenGameOverModal();
+    controller_.clearArrows();
 }
 
 void Application::launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path)

@@ -34,5 +34,5 @@ namespace Gui
     void renderBoard(sf::RenderTarget& target, const BoardGeometry& geo, const BoardTheme& theme, const Board& board,
                      const Assets::TextureLibrary& assets, const sf::Font& coordinateFont, const DragState& drag,
                      sf::Vector2f dragPixelPos, const PendingPromotion& promo, const BoardAnnotations& annotations,
-                     const MoveAnimation& animation);
+                     const MoveAnimation& animation, const std::vector<Arrow>& arrows);
 } // namespace Gui
