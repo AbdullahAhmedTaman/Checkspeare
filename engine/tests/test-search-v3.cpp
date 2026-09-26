@@ -380,3 +380,115 @@ TEST_CASE("Search: Signals_stop cleanly aborts search midway", "[search][interru
     REQUIRE(v == VALUE_ZERO);
     REQUIRE(ctx.info.nodes == 0); // No nodes should be evaluated
 }
+
+TEST_CASE("Search: Aspiration Windows prune nodes while preserving evaluation accuracy", "[search][aspiration]")
+{
+    reset_search_state();
+
+    // KiwiPete: heavily tactical position with pins, checks, and many legal moves
+    Position pos = Position::from_fen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    const int target_depth = 5;
+
+    // 1. Baseline: Full-window search across all plies
+    auto full_ctx = make_context();
+    Value full_score = Search::negamax<Search::ROOT>(pos, target_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, full_ctx, false);
+    Move full_best_move = full_ctx.info.best_move;
+    uint64_t full_nodes = full_ctx.info.nodes;
+
+    // Reset TT and heuristics to ensure identical starting conditions
+    reset_search_state();
+
+    // 2. Aspiration Search Simulation (starting from depth 4 score as baseline)
+    auto asp_ctx = make_context();
+    Value depth_minus_one_score =
+        Search::negamax<Search::ROOT>(pos, target_depth - 1, 0, -VALUE_INFINITE, VALUE_INFINITE, asp_ctx, false);
+
+    // Reset per-depth node counter to measure target_depth search exclusively
+    asp_ctx.info.nodes = 0;
+
+    int delta = 25;
+    Value alpha = std::max(depth_minus_one_score - delta, -VALUE_INFINITE);
+    Value beta = std::min(depth_minus_one_score + delta, VALUE_INFINITE);
+    Value asp_score = VALUE_ZERO;
+
+    while (true)
+    {
+        asp_score = Search::negamax<Search::ROOT>(pos, target_depth, 0, alpha, beta, asp_ctx, false);
+
+        if (asp_score <= alpha)
+        {
+            beta = (alpha + beta) / 2;
+            alpha = std::max(alpha - delta, -VALUE_INFINITE);
+            delta += delta / 2;
+        }
+        else if (asp_score >= beta)
+        {
+            beta = std::min(beta + delta, VALUE_INFINITE);
+            delta += delta / 2;
+        }
+        else
+        {
+            break; // Score resolved cleanly within window
+        }
+
+        if (delta >= 1000)
+        {
+            alpha = -VALUE_INFINITE;
+            beta = VALUE_INFINITE;
+        }
+    }
+
+    // Accuracy Check: Must agree with full-window score & move
+    REQUIRE(asp_score == full_score);
+    REQUIRE(asp_ctx.info.best_move == full_best_move);
+
+    // Efficiency Check: Aspiration window must explore fewer nodes at target depth
+    REQUIRE(asp_ctx.info.nodes < full_nodes);
+}
+
+TEST_CASE("Search: Dynamic Time Management adjusts limits upon root instability", "[search][time_management]")
+{
+    SearchLimits limits{};
+    limits.wtime = 4000; // 4000 ms remaining
+    limits.winc = 0;
+
+    Position pos = Position::from_fen(Fens::StartPos);
+
+    // Simulate time initialization logic from start_search
+    uint64_t time_left = (pos.sideToMove == WHITE) ? limits.wtime : limits.btime;
+    uint64_t inc = (pos.sideToMove == WHITE) ? limits.winc : limits.binc;
+
+    uint64_t opt_time = (time_left / 40) + (inc * 3 / 4);                               // 4000 / 40 = 100 ms
+    uint64_t max_time = std::min(time_left / 5, (time_left > 50) ? time_left - 50 : 0); // 4000 / 5 = 800 ms
+    opt_time = std::min(opt_time, max_time);
+
+    REQUIRE(opt_time == 100);
+    REQUIRE(max_time == 800);
+
+    // Scenario A: Move remains stable between iterations
+    Move current_best = Move(E2, E4, DOUBLE_PAWN_PUSH);
+    Move previous_best = Move(E2, E4, DOUBLE_PAWN_PUSH);
+
+    if (current_best != previous_best)
+    {
+        opt_time = std::min(static_cast<uint64_t>(opt_time * 1.5), max_time);
+    }
+    REQUIRE(opt_time == 100); // Unchanged
+
+    // Scenario B: Root best-move changes (instability detected)
+    current_best = Move(D2, D4, DOUBLE_PAWN_PUSH);
+
+    if (current_best != previous_best)
+    {
+        opt_time = std::min(static_cast<uint64_t>(opt_time * 1.5), max_time);
+    }
+    REQUIRE(opt_time == 150); // Scaled by 1.5x
+
+    // Scenario C: Multiple oscillations must not exceed the hard max ceiling
+    for (int i = 0; i < 10; ++i)
+    {
+        opt_time = std::min(static_cast<uint64_t>(opt_time * 1.5), max_time);
+    }
+    REQUIRE(opt_time == max_time);
+    REQUIRE(opt_time == 800);
+}

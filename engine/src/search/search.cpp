@@ -343,13 +343,19 @@ namespace Search
 
         if (limits.movetime > 0)
         {
-            ctx.opt_time_ms = limits.movetime - 20; // 20ms safety margin
-            ctx.max_time_ms = limits.movetime - 20;
+            ctx.opt_time_ms = (limits.movetime > 20) ? limits.movetime - 20 : 1;
+            ctx.max_time_ms = ctx.opt_time_ms;
         }
         else if (time_left > 0)
         {
             ctx.opt_time_ms = (time_left / 40) + (inc * 3 / 4);
-            ctx.max_time_ms = std::min(time_left / 5, (time_left > 50) ? time_left - 50 : 0);
+            // Prevent max_time_ms from becoming 0 in extreme time trouble
+            uint64_t safe_margin = (time_left > 50) ? time_left - 50 : time_left / 2;
+            ctx.max_time_ms = std::min(time_left / 5, safe_margin);
+
+            if (ctx.max_time_ms == 0)
+                ctx.max_time_ms = 1;
+
             ctx.opt_time_ms = std::min(ctx.opt_time_ms, ctx.max_time_ms);
         }
         else
@@ -396,7 +402,6 @@ namespace Search
 
                     if (score <= alpha)
                     {
-                        beta = (alpha + beta) / 2;
                         alpha = std::max(alpha - delta, -VALUE_INFINITE);
                         delta += delta / 2;
                     }
@@ -441,7 +446,7 @@ namespace Search
             // Output UCI telemetry progress update
             UCI::send_search_info(ctx.info);
 
-            if (limits.movetime == 0 && time_left > 0 && elapsed >= ctx.opt_time_ms)
+            if (elapsed >= ctx.opt_time_ms)
                 break;
 
             // Checkmate early exit
