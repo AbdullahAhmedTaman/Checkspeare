@@ -50,7 +50,8 @@ namespace Search
 
         // Time tracking
         std::chrono::steady_clock::time_point start_time;
-        uint64_t time_limit_ms = 0;
+        uint64_t opt_time_ms = 0; // Soft limit: target time for a stable move
+        uint64_t max_time_ms = 0; // Hard limit: absolute maximum to avoid flagging
 
         HistoryTable* history_table = nullptr;
 

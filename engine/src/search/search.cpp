@@ -7,10 +7,10 @@
 #include "move_ordering.h"
 #include "transposition.h"
 #include "uci/uci.h"
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <iostream>
-
 
 bool is_repetition(const Position& pos);
 
@@ -159,12 +159,12 @@ namespace Search
         }
 
         ctx.info.nodes++;
-        if ((ctx.info.nodes & 2047) == 0 && ctx.time_limit_ms > 0)
+        if ((ctx.info.nodes & 2047) == 0 && ctx.max_time_ms > 0)
         {
             auto now = std::chrono::steady_clock::now();
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
 
-            if (elapsed >= ctx.time_limit_ms)
+            if (elapsed >= ctx.max_time_ms)
             {
                 Signals_stop.store(true, std::memory_order_relaxed);
             }
@@ -338,17 +338,24 @@ namespace Search
         init();
         SearchContext ctx(limits, Signals_stop);
 
+        uint64_t time_left = (pos.sideToMove == WHITE) ? limits.wtime : limits.btime;
+        uint64_t inc = (pos.sideToMove == WHITE) ? limits.winc : limits.binc;
+
         if (limits.movetime > 0)
         {
-            ctx.time_limit_ms = limits.movetime - 20; // 20ms safety margin
+            ctx.opt_time_ms = limits.movetime - 20; // 20ms safety margin
+            ctx.max_time_ms = limits.movetime - 20;
         }
-        else if (pos.sideToMove == WHITE && limits.wtime > 0)
+        else if (time_left > 0)
         {
-            ctx.time_limit_ms = (limits.wtime / 30) + (limits.winc / 2);
+            ctx.opt_time_ms = (time_left / 40) + (inc * 3 / 4);
+            ctx.max_time_ms = std::min(time_left / 5, (time_left > 50) ? time_left - 50 : 0);
+            ctx.opt_time_ms = std::min(ctx.opt_time_ms, ctx.max_time_ms);
         }
-        else if (pos.sideToMove == BLACK && limits.btime > 0)
+        else
         {
-            ctx.time_limit_ms = (limits.btime / 30) + (limits.binc / 2);
+            ctx.opt_time_ms = UINT64_MAX;
+            ctx.max_time_ms = UINT64_MAX;
         }
 
         // Retain move from the last fully completed depth iteration
@@ -358,29 +365,88 @@ namespace Search
         MoveGen::generate_legal_moves(pos, root_moves);
         if (root_moves.count > 0)
             safe_best_move = root_moves.moves[0];
+
         // Iterative Deepening Loop
+        Value prev_score = VALUE_ZERO;
         for (int current_depth = 1; current_depth <= limits.depth; ++current_depth)
         {
             if (Signals_stop.load(std::memory_order_relaxed))
                 break;
 
             ctx.info.depth = current_depth;
+            Value score = VALUE_ZERO;
 
-            // Invoke root search template
-            Value score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
-            ctx.info.score = score;
+            // search with a full window at low depths, as evaluation is still unstable
+            if (current_depth <= 4)
+            {
+                score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
+            }
+            else
+            {
+                int delta = 25;
+                Value alpha = std::max(prev_score - delta, -VALUE_INFINITE);
+                Value beta = std::min(prev_score + delta, VALUE_INFINITE);
+
+                while (!Signals_stop.load(std::memory_order_relaxed))
+                {
+                    score = negamax<ROOT>(pos, current_depth, 0, alpha, beta, ctx, false);
+
+                    if (Signals_stop.load(std::memory_order_relaxed))
+                        break;
+
+                    if (score <= alpha)
+                    {
+                        beta = (alpha + beta) / 2;
+                        alpha = std::max(alpha - delta, -VALUE_INFINITE);
+                        delta += delta / 2;
+                    }
+
+                    else if (score >= beta)
+                    {
+                        beta = std::min(beta + delta, VALUE_INFINITE);
+                        delta += delta / 2;
+                    }
+
+                    else
+                    {
+                        break;
+                    }
+
+                    // If delta grows too wide, fall back to a full window
+                    if (delta >= 1000)
+                    {
+                        alpha = -VALUE_INFINITE;
+                        beta = VALUE_INFINITE;
+                    }
+                }
+            }
 
             // Discard partial depth results if interrupted mid-search
             if (Signals_stop.load(std::memory_order_relaxed))
                 break;
 
-            safe_best_move = ctx.info.best_move;
-
             auto now = std::chrono::steady_clock::now();
-            ctx.info.time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
+            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
+
+            if (current_depth > 1 && ctx.info.best_move != safe_best_move)
+            {
+                ctx.opt_time_ms = std::min(static_cast<uint64_t>(ctx.opt_time_ms * 1.5), ctx.max_time_ms);
+            }
+
+            safe_best_move = ctx.info.best_move;
+            prev_score = score;
+            ctx.info.score = score;
+            ctx.info.time_ms = elapsed;
 
             // Output UCI telemetry progress update
             UCI::send_search_info(ctx.info);
+
+            if (limits.movetime == 0 && time_left > 0 && elapsed >= ctx.opt_time_ms)
+                break;
+
+            // Checkmate early exit
+            if (std::abs(score) >= MATE_BOUND && current_depth >= (VALUE_MATE - std::abs(score)))
+                break;
         }
 
         // Output final UCI choice
