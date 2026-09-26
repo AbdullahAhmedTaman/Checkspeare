@@ -7,8 +7,6 @@ namespace Eval
     constexpr int MG_WEIGHT[PieceType::NONE] = {82, 337, 365, 477, 1025, 0};
     constexpr int EG_WEIGHT[PieceType::NONE] = {94, 281, 297, 512, 936, 0};
 
-    void init_scores(Position& pos); // call it once after parsing FEN
-
     // Pawn Structure Penalties & Bonuses
     constexpr int DOUBLED_PAWN_PENALTY_MG = 12;
     constexpr int DOUBLED_PAWN_PENALTY_EG = 20;
@@ -24,11 +22,48 @@ namespace Eval
     constexpr int KNIGHT_OUTPOST_MG = 20;
     constexpr int KNIGHT_OUTPOST_EG = 10;
 
+    /**
+     * @brief generates the initial evaluation score for a given position
+     * @attention call it once after parsing FEN!
+     */
+    void init_scores(Position& pos);
+
+    /**
+     * @brief generate masks for pawn evaluation
+     * @attention call it once after parsing FEN!
+     */
     void init_pawn_masks();
+
+    /**
+     * @brief main evaluation (HCE) function.
+     * It compines all the implemented heuristics and applies Taper evaluation to them.
+     */
     int evaluate(const Position& pos);
+
+    /**
+     * @brief give evaluation bonuses for bishop pair.
+     * @attention this function only accounts for number of bishops a color have. It doesn't take bishop type into consideration.
+     */
     Score evaluate_bishop_pair(const Position& pos);
-    Score evaluate_king_shield(const Position& pos); // only evluates king pawn shield
-    Score evaluate_pieces(const Position& pos);      // evaluates mobility and king attacking zones
-    Score evaluate_pawns(const Position& pos);       // Pawn evaluation logic
+
+    /**
+     * @brief evaluates king pawn shield.
+     */
+    Score evaluate_king_shield(const Position& pos);
+
+    /**
+     * @brief evaluates mobility and king attacking zones.
+     */
+    Score evaluate_pieces(const Position& pos);
+
+    /**
+     * @brief evaluates douple, isolated, and passed pawns.
+     * gives penalty for doupled and isolated pawns and bonus for passed pawn.
+     */
+    Score evaluate_pawns(const Position& pos);
+
+    /**
+     * @brief gives bonuses for knights on an output square (usually center of the board)
+     */
     Score evaluate_outposts(const Position& pos);
 } // namespace Eval
