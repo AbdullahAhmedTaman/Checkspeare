@@ -20,11 +20,15 @@ namespace Eval
     constexpr int PASSED_PAWN_BONUS_MG[8] = {0, 5, 10, 20, 35, 60, 100, 0};
     constexpr int PASSED_PAWN_BONUS_EG[8] = {0, 10, 20, 40, 70, 110, 160, 0};
 
-    void init_pawn_masks();
+    // knight outpost bonus
+    constexpr int KNIGHT_OUTPOST_MG = 20;
+    constexpr int KNIGHT_OUTPOST_EG = 10;
 
+    void init_pawn_masks();
     int evaluate(const Position& pos);
     Score evaluate_bishop_pair(const Position& pos);
     Score evaluate_king_shield(const Position& pos); // only evluates king pawn shield
     Score evaluate_pieces(const Position& pos);      // evaluates mobility and king attacking zones
     Score evaluate_pawns(const Position& pos);       // Pawn evaluation logic
+    Score evaluate_outposts(const Position& pos);
 } // namespace Eval
