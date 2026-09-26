@@ -109,6 +109,32 @@ enum MoveFlag
     QUEEN_PROMO_CAP = 15
 };
 
+struct Score
+{
+    int mg[2] = {0, 0};
+    int eg[2] = {0, 0};
+
+    Score() = default;
+
+    Score& operator+=(const Score& rhs)
+    {
+        mg[WHITE] += rhs.mg[WHITE];
+        mg[BLACK] += rhs.mg[BLACK];
+        eg[WHITE] += rhs.eg[WHITE];
+        eg[BLACK] += rhs.eg[BLACK];
+        return *this;
+    }
+
+    Score& operator-=(const Score& rhs)
+    {
+        mg[WHITE] -= rhs.mg[WHITE];
+        mg[BLACK] -= rhs.mg[BLACK];
+        eg[WHITE] -= rhs.eg[WHITE];
+        eg[BLACK] -= rhs.eg[BLACK];
+        return *this;
+    }
+};
+
 // 16-bit encoding:
 // bits 0-5: from square, bits 6-11: to square, bits 12-15: flag.
 struct Move
