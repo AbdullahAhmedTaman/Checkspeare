@@ -12,7 +12,7 @@ namespace Gui
 
     void BoardPanel::render(BoardGeometry& geo, const BoardTheme& theme, const Board& board, const Assets::TextureLibrary& assets,
                             const sf::Font& coordinateFont, const DragState& drag, const PendingPromotion& promo,
-                            const BoardAnnotations& annotations, const MoveAnimation& animation)
+                            const BoardAnnotations& annotations, const MoveAnimation& animation, const std::vector<Arrow>& arrows)
     {
         // The board texture is rendered at this multiple of the display size,
         // then downsampled by ImGui's texture sampler. 2x is a big improvement
@@ -65,7 +65,8 @@ namespace Gui
         const sf::Vector2f mouseTex{(mouseScreen.x - origin_.x) * kSupersample, (mouseScreen.y - origin_.y) * kSupersample};
 
         texture_.clear(sf::Color::White);
-        Gui::renderBoard(texture_, geo, theme, board, assets, coordinateFont, drag, mouseTex, promo, annotations, animation);
+        Gui::renderBoard(texture_, geo, theme, board, assets, coordinateFont, drag, mouseTex, promo, annotations, animation,
+                         arrows);
         texture_.display();
 
         const auto textureId = static_cast<ImTextureID>(texture_.getTexture().getNativeHandle());
