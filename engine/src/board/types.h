@@ -150,7 +150,8 @@ struct Move
      * @param moveFlag Encoded move type.
      */
     constexpr Move(Square from, Square to, MoveFlag moveFlag)
-        : data(from | (to << 6) | (moveFlag << 12))
+        : data(static_cast<uint16_t>(static_cast<uint16_t>(from) | (static_cast<uint16_t>(to) << 6) |
+                                     (static_cast<uint16_t>(moveFlag) << 12)))
     {
         assert(is_valid(from) && is_valid(to));
     }

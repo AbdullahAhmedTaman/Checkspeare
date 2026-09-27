@@ -9,11 +9,6 @@ target_link_options(EngineTests PRIVATE
     "LINKER:--allow-multiple-definition"
 )
 
-# Force GCC runtime libraries to link statically on Windows
-#if(WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
- #   target_link_options(EngineTests PRIVATE -static -static-libgcc -static-libstdc++)
-#endif()
-
 target_link_libraries(EngineTests
     PRIVATE
         EngineCore

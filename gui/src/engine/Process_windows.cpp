@@ -143,7 +143,7 @@ bool Process::write(std::string_view data)
     {
         const std::size_t remaining = data.size() - offset;
 
-        const std::size_t maxDwordSize = static_cast<std::size_t>(std::numeric_limits<DWORD>::max());
+        const std::size_t maxDwordSize = static_cast<std::size_t>((std::numeric_limits<DWORD>::max)());
 
         const DWORD bytesToWrite = static_cast<DWORD>(remaining < maxDwordSize ? remaining : maxDwordSize);
 
@@ -171,7 +171,7 @@ std::ptrdiff_t Process::read(char* buffer, std::size_t size)
     if (size == 0)
         return 0;
 
-    const std::size_t maxDwordSize = static_cast<std::size_t>(std::numeric_limits<DWORD>::max());
+    const std::size_t maxDwordSize = static_cast<std::size_t>((std::numeric_limits<DWORD>::max)());
 
     const DWORD bytesToRead = static_cast<DWORD>(size < maxDwordSize ? size : maxDwordSize);
 
@@ -210,7 +210,7 @@ bool Process::waitForExit(std::chrono::milliseconds timeout) noexcept
     {
         timeoutMs = 0;
     }
-    else if (static_cast<unsigned long long>(count) > static_cast<unsigned long long>(std::numeric_limits<DWORD>::max()))
+    else if (static_cast<unsigned long long>(count) > static_cast<unsigned long long>((std::numeric_limits<DWORD>::max)()))
     {
         timeoutMs = INFINITE;
     }

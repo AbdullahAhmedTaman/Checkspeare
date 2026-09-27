@@ -6,7 +6,11 @@
 #include "board/zobrist.h"
 #include <iostream>
 
-int main()
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+int runApplication()
 {
     try
     {
@@ -31,3 +35,15 @@ int main()
     }
     return 0;
 }
+
+int main()
+{
+    return runApplication();
+}
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+{
+    return runApplication();
+}
+#endif

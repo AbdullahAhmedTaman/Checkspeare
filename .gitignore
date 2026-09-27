@@ -5,6 +5,7 @@
 # Build directories
 build/
 bin/
+build-vs/
 *.o
 *.out
 *.exe

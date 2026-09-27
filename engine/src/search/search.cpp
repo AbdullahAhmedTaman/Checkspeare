@@ -7,6 +7,7 @@
 #include "move_ordering.h"
 #include "transposition.h"
 #include "uci/uci.h"
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
