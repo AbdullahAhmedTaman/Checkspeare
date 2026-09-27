@@ -1,13 +1,16 @@
 #pragma once
 
-#include "../game/ChessGame.hpp"
 #include "../controller/GuiGameController.hpp"
+#include "../game/ChessGame.hpp"
+#include "assets/TextureLibrary.hpp"
 
 namespace Gui
 {
 
     /// Renders the "Game" panel: whose turn it is, the latest controller
-    /// feedback, and a Resign button enabled when `canResign` is true.
-    void renderStatusPanel(GuiGameController& controller, const ChessGame& game, bool canResign);
+    /// feedback, the captured pieces of each side, and a Resign button
+    /// enabled when `canResign` is true.
+    void renderStatusPanel(GuiGameController& controller, const ChessGame& game, bool canResign,
+                           const Assets::TextureLibrary& assets);
 
 } // namespace Gui

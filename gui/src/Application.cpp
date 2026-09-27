@@ -4,7 +4,6 @@
 #include "game/GameResult.hpp"
 #include "input/InputEvent.hpp"
 #include "input/SfmlInputAdapter.hpp"
-#include "ui/CapturedPiecesPanel.hpp"
 #include "ui/ClockPanel.hpp"
 #include "ui/DockSpace.hpp"
 #include "ui/ImGuiTheme.hpp"
@@ -12,7 +11,6 @@
 #include "ui/StatusPanel.hpp"
 #include "ui/dialogs/GameOverModal.hpp"
 #include "ui/engine/EngineThinkingPanel.hpp"
-
 
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
@@ -454,7 +452,7 @@ void Application::stepUi(float dtSeconds)
                        controller_.annotations(), animation_, controller_.arrows());
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
-    Gui::renderStatusPanel(controller_, game_, canResign());
+    Gui::renderStatusPanel(controller_, game_, canResign(), assets_);
     Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
 
     // A side is labeled with its engine's name when an engine is running,
@@ -470,7 +468,6 @@ void Application::stepUi(float dtSeconds)
 
     Gui::renderClockPanel(clock_, game_, clockFont_, engineNameFont_, displayName(engineWhite_), displayName(engineBlack_));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
-    Gui::renderCapturedPiecesPanel(game_.board(), assets_);
 
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
     {
