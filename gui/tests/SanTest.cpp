@@ -2,11 +2,11 @@
 //
 // Standalone unit test for San.cpp. No SFML. No ImGui. No ChessGame.
 
-#include "San.hpp"
-#include "Board.hpp"
+#include "../src/game/San.hpp"
+#include "../src/game/Board.hpp"
 
-#include "attacks.h"
-#include "zobrist.h"
+#include "../../engine/src/board/attacks.h"
+#include "../../engine/src/board/zobrist.h"
 
 #include <iostream>
 #include <optional>

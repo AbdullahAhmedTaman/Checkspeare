@@ -2,8 +2,8 @@
 //
 // Standalone unit test for ChessClock. No SFML, no ImGui.
 
-#include "ChessClock.hpp"
-#include "types.h"
+#include "../src/game/ChessClock.hpp"
+#include "../../engine/src/board/types.h"
 
 #include <iostream>
 #include <string>

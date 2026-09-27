@@ -43,9 +43,9 @@
 
 #include <catch2/catch_all.hpp>
 
-#include "../include/attacks.h"
-#include "../include/bitboard.h"
-#include "../include/types.h"
+#include "board/attacks.h"
+#include "board/bitboard.h"
+#include "board/types.h"
 
 #include <cstdint>
 #include <initializer_list>
@@ -154,8 +154,7 @@ TEST_CASE("knight_attacks: exact attack sets on representative squares", "[attac
     CHECK(knight_attacks(Square::D1) == bb_of({Square::B2, Square::C3, Square::E3, Square::F2}));
 
     // One square in from the edge: exactly 6 moves.
-    CHECK(knight_attacks(Square::B4) ==
-          bb_of({Square::A2, Square::A6, Square::C2, Square::C6, Square::D3, Square::D5}));
+    CHECK(knight_attacks(Square::B4) == bb_of({Square::A2, Square::A6, Square::C2, Square::C6, Square::D3, Square::D5}));
 
     // Fully interior square: exactly 8 moves.
     CHECK(knight_attacks(Square::D4) ==

@@ -1,6 +1,6 @@
 #include "perft.h"
-#include "../../include/movegen.h"
-#include "../../include/types.h"
+#include "board/movegen.h"
+#include "board/types.h"
 #include <chrono>
 #include <iostream>
 

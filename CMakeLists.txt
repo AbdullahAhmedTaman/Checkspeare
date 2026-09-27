@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 project(Chess VERSION 1.0 LANGUAGES CXX)
+option(PRODUCTION_BUILD "Make this a production build!" OFF)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
@@ -10,12 +11,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
     ${CMAKE_BINARY_DIR}/bin
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-
-include(FetchContent)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libraries" FORCE)
 set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
+include(FetchContent)
 
 FetchContent_Declare(
     SFML
@@ -64,6 +63,7 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(Catch2)
+
 
 enable_testing()
 

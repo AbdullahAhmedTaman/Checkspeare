@@ -1,6 +1,6 @@
-#include "../../include/attacks.h"
-#include "../../include/position.h"
-#include "../../include/zobrist.h"
+#include "board/attacks.h"
+#include "board/position.h"
+#include "board/zobrist.h"
 #include "perft.h"
 #include <catch2/catch_test_macros.hpp>
 

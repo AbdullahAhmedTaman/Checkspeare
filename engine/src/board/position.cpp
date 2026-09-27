@@ -1,7 +1,8 @@
 #include "position.h"
+#include "attacks.h"
 #include "bitboard.h"
-#include "evaluate.h"
-#include "pst.h"
+#include "eval/evaluate.h"
+#include "eval/pst.h"
 #include "zobrist.h"
 #include <cassert>
 #include <cctype>
@@ -537,6 +538,30 @@ Position Position::from_fen(const std::string& fen)
     pos.update_occupancy();
     pos.key = Zobrist::generate_key(pos);
     Eval::init_scores(pos);
+    Eval::init_pawn_masks();
 
     return pos;
+}
+
+bool Position::in_check() const
+{
+    const Square ksq = king_square(sideToMove);
+    const Color them = static_cast<Color>(sideToMove ^ 1);
+    return is_square_attacked(ksq, them);
+}
+
+bool is_repetition(const Position& pos)
+{
+    // Limit the search to the last irreversible move.
+    int limit = pos.ply - pos.halfmoveClock;
+    if (limit < 0)
+        limit = 0;
+
+    // Check every second half-move (since only the same side to move can repeat a position).
+    for (int i = pos.ply - 2; i >= limit; i -= 2)
+    {
+        if (pos.history[i].key == pos.key)
+            return true;
+    }
+    return false;
 }

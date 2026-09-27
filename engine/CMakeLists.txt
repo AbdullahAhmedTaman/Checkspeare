@@ -1,27 +1,58 @@
-
-file(GLOB_RECURSE BOARD_SRC "src/board/*.cpp")
-file(GLOB_RECURSE SEARCH_SRC "src/search/*.cpp")
-file(GLOB_RECURSE EVAL_SRC "src/eval/*.cpp")
-file(GLOB_RECURSE UCI_SRC "src/uci/*.cpp")
-
-add_library(ChessEngine
-         ${BOARD_SRC}
-         ${SEARCH_SRC}
-         ${EVAL_SRC}
-         ${UCI_SRC}
+file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
-target_include_directories(ChessEngine
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+list(REMOVE_ITEM ENGINE_SRC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
 )
 
-add_executable(Engine
-         src/main.cpp
-)   
-
-target_link_libraries(Engine
-    PRIVATE ChessEngine
+add_library(EngineCore
+        ${ENGINE_SRC}
 )
+
+target_include_directories(EngineCore
+        PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+add_executable(CheckSpeare
+        src/main.cpp
+)
+
+target_link_libraries(CheckSpeare
+        PRIVATE
+        EngineCore
+)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(CheckSpeare PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wno-unused-parameter
+    )
+
+    if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
+        target_link_options(CheckSpeare PRIVATE
+                -static
+                -static-libgcc
+                -static-libstdc++
+        )
+    endif()
+
+elseif(MSVC)
+    target_compile_options(CheckSpeare PRIVATE
+            /W4
+            /wd4100
+            /wd4189
+    )
+
+    if(PRODUCTION_BUILD)
+        set_property(TARGET CheckSpeare PROPERTY
+                MSVC_RUNTIME_LIBRARY
+                "MultiThreaded$<$<CONFIG:Debug>:Debug>"
+        )
+    endif()
+endif()
 
 add_subdirectory(tests)
