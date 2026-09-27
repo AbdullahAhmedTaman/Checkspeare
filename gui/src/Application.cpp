@@ -12,7 +12,6 @@
 #include "ui/dialogs/GameOverModal.hpp"
 #include "ui/engine/EngineThinkingPanel.hpp"
 
-
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>
 #include <imgui.h>
@@ -196,6 +195,23 @@ void Application::processEvents()
             inputEvent->button == Gui::MouseButton::Left && !boardPanel_.contains(inputEvent->position))
         {
             controller_.cancelSelection();
+        }
+
+        if (inputEvent->kind == Gui::InputEvent::Kind::PointerPressed && inputEvent->button == Gui::MouseButton::Right &&
+            !boardPanel_.contains(inputEvent->position))
+        {
+            continue;
+        }
+
+        // A right-click outside the board should also not end an arrow
+        // mid-gesture; let releases through only when they started on
+        // the board, which the controller tracks itself. Releases outside
+        // the board are forwarded and the controller treats them as a
+        // cancel, matching a "drag off the board" gesture.
+        if (inputEvent->kind == Gui::InputEvent::Kind::PointerReleased && inputEvent->button == Gui::MouseButton::Right &&
+            controller_.arrows().empty() == false && !boardPanel_.contains(inputEvent->position))
+        {
+            // Fall through; the controller will resolve the gesture.
         }
 
         if (!shouldForwardInput(*inputEvent))
@@ -433,10 +449,10 @@ void Application::stepUi(float dtSeconds)
     Gui::beginMainDockspace();
 
     boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
-                       controller_.annotations(), animation_);
+                       controller_.annotations(), animation_, controller_.arrows());
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
-    Gui::renderStatusPanel(controller_, game_, canResign());
+    Gui::renderStatusPanel(controller_, game_, canResign(), assets_);
     Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
 
     // A side is labeled with its engine's name when an engine is running,
@@ -564,6 +580,7 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
 
     controller_.updateAnnotations();
     controller_.reopenGameOverModal();
+    controller_.clearArrows();
 }
 
 void Application::launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path)
