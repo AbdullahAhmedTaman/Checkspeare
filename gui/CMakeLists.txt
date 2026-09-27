@@ -23,14 +23,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     )
 
     if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
-        if (WIN32)
-         target_link_options(ChessGUI PRIVATE
-        -static
-        -static-libgcc
-        -static-libstdc++
-           )
+        if(WIN32)
+            target_link_options(ChessGUI PRIVATE
+                    -static
+                    -static-libgcc
+                    -static-libstdc++
+            )
         endif()
-        
     endif()
 
 elseif(MSVC)
@@ -61,7 +60,6 @@ else()
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
-
     if(WIN32)
         set_target_properties(ChessGUI PROPERTIES
                 WIN32_EXECUTABLE TRUE
@@ -71,14 +69,21 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
                 MACOSX_BUNDLE TRUE
         )
     endif()
-
 endif()
 
 if(WIN32)
     target_sources(ChessGUI PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/app.rc"
+            "${CMAKE_CURRENT_SOURCE_DIR}/app.rc"
     )
 endif()
+
+add_custom_command(TARGET ChessGUI POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+                "$<TARGET_FILE_DIR:ChessGUI>/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+                "$<TARGET_FILE_DIR:ChessGUI>/assets"
+)
 
 target_link_libraries(ChessGUI
         PRIVATE
