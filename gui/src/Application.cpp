@@ -1,10 +1,10 @@
 #include "Application.hpp"
 
-#include "CapturedPiecesPanel.hpp"
 #include "game/GameOverTransition.hpp"
 #include "game/GameResult.hpp"
 #include "input/InputEvent.hpp"
 #include "input/SfmlInputAdapter.hpp"
+#include "ui/CapturedPiecesPanel.hpp"
 #include "ui/ClockPanel.hpp"
 #include "ui/DockSpace.hpp"
 #include "ui/ImGuiTheme.hpp"
@@ -12,6 +12,7 @@
 #include "ui/StatusPanel.hpp"
 #include "ui/dialogs/GameOverModal.hpp"
 #include "ui/engine/EngineThinkingPanel.hpp"
+
 
 #include <SFML/Window/Event.hpp>
 #include <imgui-SFML.h>

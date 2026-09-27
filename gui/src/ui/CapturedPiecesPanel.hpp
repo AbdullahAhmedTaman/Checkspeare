@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Board.hpp"
 #include "assets/TextureLibrary.hpp"
+#include "game/Board.hpp"
+
 
 namespace Gui
 {
