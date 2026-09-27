@@ -161,9 +161,9 @@ namespace
                     frame.setPosition({tl.x + inset, tl.y + inset});
                     frame.setFillColor(sf::Color::Transparent);
                     frame.setOutlineThickness(geo.squareSize * 0.1f);
-                    frame.setOutlineColor(sf::Color(160, 60, 60, 120));
-                    sf::CircleShape marker(geo.squareSize * 0.22f);
-                    marker.setFillColor(sf::Color(180, 60, 60, 120));
+                    frame.setOutlineColor(sf::Color(180, 60, 60, 160));
+                    sf::CircleShape marker(geo.squareSize * 0.25f);
+                    marker.setFillColor(sf::Color(200, 60, 60, 160));
                     marker.setPosition({tl.x + (geo.squareSize / 2.0f) - marker.getRadius(),
                                         tl.y + (geo.squareSize / 2.0f) - marker.getRadius()});
                     target.draw(marker);
