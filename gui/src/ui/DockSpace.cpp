@@ -1,4 +1,4 @@
-#include "Dockspace.hpp"
+#include "DockSpace.hpp"
 
 #include <imgui.h>
 #include <imgui_internal.h> // DockBuilder*, ImGuiDockNode

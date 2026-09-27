@@ -23,11 +23,13 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     )
 
     if(CMAKE_BUILD_TYPE STREQUAL "Release" OR PRODUCTION_BUILD)
-        target_link_options(ChessGUI PRIVATE
-                -static
-                -static-libgcc
-                -static-libstdc++
-        )
+        if (WIN32)
+         target_link_options(ChessGUI PRIVATE
+        -static
+        -static-libgcc
+        -static-libstdc++
+           )
+        endif()
         
     endif()
 
