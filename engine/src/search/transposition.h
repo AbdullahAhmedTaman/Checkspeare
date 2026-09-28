@@ -27,17 +27,22 @@ namespace Search
 
     /**
      * @brief 16-byte packed Transposition Table entry.
-     *        Explicit alignment prevents memory boundary crossing in the CPU cache.
+     *
+     * Exact 16-byte layout alignment:
+     *   Offset  0: Key key             (8 bytes)
+     *   Offset  8: Move best_move      (4 bytes - 32-bit packed)
+     *   Offset 12: int16_t score       (2 bytes)
+     *   Offset 14: uint8_t depth       (1 byte: supports plies 0..255)
+     *   Offset 15: TTFlag flag         (1 byte)
+     *   Total: exactly 16 bytes.
      */
     struct alignas(16) TTEntry
     {
-        Key key = 0;                   /**< 64-bit Zobrist hash (8 bytes). */
-        Move best_move = Move::none(); /**< Best move found (2 bytes). */
-        int16_t score = 0;             /**< Evaluated score (2 bytes). */
-        int16_t depth = 0;             /**< Search depth (2 bytes). */
-
-        TTFlag flag = TT_EXACT; /**< Node evaluation type (1 byte). */
-        // 2 bytes of implicit compiler padding to reach exactly 16 bytes.
+        Key key = 0;
+        Move best_move = Move::none();
+        int16_t score = 0;
+        uint8_t depth = 0;
+        TTFlag flag = TT_EXACT;
     };
 
     static_assert(sizeof(TTEntry) == 16, "TTEntry must remain exactly 16 bytes");

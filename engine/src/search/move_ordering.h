@@ -5,14 +5,14 @@
 
 namespace MoveOrdering
 {
-    constexpr int TT_MOVE_SCORE = 10000000;
-    constexpr int PROMOTION_QUEEN = 9000000;
-    constexpr int GOOD_CAPTURE = 8000000;
-    constexpr int KILLER_SCORE_1 = 7000000;
-    constexpr int KILLER_SCORE_2 = 6900000;
-    constexpr int BAD_CAPTURE = 6000000;
-    constexpr int PROMOTION_KNIGHT = 5000000;
-    constexpr int PROMOTION_MINOR = -5000000;
+    constexpr int16_t TT_MOVE_SCORE = 32000;
+    constexpr int16_t PROMOTION_QUEEN = 30000;
+    constexpr int16_t GOOD_CAPTURE = 28000; ///< Base capture tier (+ MVV_LVA up to 55)
+    constexpr int16_t KILLER_SCORE_1 = 24000;
+    constexpr int16_t KILLER_SCORE_2 = 22000;
+    constexpr int16_t BAD_CAPTURE = 19000; ///< Base losing capture tier (+ MVV_LVA up to 55)
+    constexpr int16_t PROMOTION_KNIGHT = 17000;
+    constexpr int16_t PROMOTION_MINOR = -20000;
 
     // Values: Pawn=0, Knight=1, Bishop=2, Rook=3, Queen=4, King=5
     // clang-format off
@@ -48,20 +48,14 @@ namespace MoveOrdering
          * @brief Returns the number of moves still waiting to be selected.
          * @return Count of unselected moves.
          */
-        int remaining() const
+        [[nodiscard]] int remaining() const noexcept
         {
             return count;
         }
 
     private:
-        struct ScoredMove
-        {
-            Move move;
-            int score;
-        };
-
-        ScoredMove moves[MAX_MOVES];
-        int count;
+        Move moves[MAX_MOVES];
+        int count = 0;
         int ply = 0;
 
         /** @brief Assigns ordering scores to the copied move list. */

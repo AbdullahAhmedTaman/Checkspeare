@@ -41,8 +41,8 @@ namespace Search
             score += ply;
         else if (score <= -MATE_BOUND)
             score -= ply;
-        TTBucket& bucket = table[key & bucket_mask];
 
+        TTBucket& bucket = table[key & bucket_mask];
         int target_slot = -1;
         bool found_key = false;
 
@@ -102,9 +102,10 @@ namespace Search
         if (found_key)
             preserved_move = bucket.entries[target_slot].best_move;
 
+        move.score = 0;
         bucket.entries[target_slot].key = key;
-        bucket.entries[target_slot].depth = depth;
-        bucket.entries[target_slot].score = score;
+        bucket.entries[target_slot].depth = static_cast<uint8_t>(std::clamp(depth, 0, 255));
+        bucket.entries[target_slot].score = static_cast<int16_t>(score);
         bucket.entries[target_slot].flag = flag;
 
         // Preserve existing PV moves if the new evaluation fails low (null move).

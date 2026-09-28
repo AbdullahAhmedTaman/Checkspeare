@@ -14,7 +14,7 @@ namespace MoveOrdering
          * @param tt_move Transposition-table move receiving highest priority.
          * @return Ordering score used by MovePicker.
          */
-        int score_move(const Position& pos, Move move, Move tt_move, int ply)
+        int16_t score_move(const Position& pos, Move move, Move tt_move, int ply)
         {
             if (move == tt_move)
                 return TT_MOVE_SCORE;
@@ -27,7 +27,7 @@ namespace MoveOrdering
                     if (move.is_capture())
                     {
                         const PieceType victim = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
-                        return PROMOTION_QUEEN + MVV_LVA[victim][PAWN];
+                        return static_cast<int16_t>(PROMOTION_QUEEN + MVV_LVA[victim][PAWN]);
                     }
                     return PROMOTION_QUEEN;
                 }
@@ -36,30 +36,28 @@ namespace MoveOrdering
                     if (move.is_capture())
                     {
                         const PieceType victim = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
-                        return PROMOTION_KNIGHT + MVV_LVA[victim][PAWN];
+                        return static_cast<int16_t>(PROMOTION_KNIGHT + MVV_LVA[victim][PAWN]);
                     }
                     return PROMOTION_KNIGHT;
                 }
-
-                // Minor promotions drop straight to the bottom
                 return PROMOTION_MINOR;
             }
+
             const Piece attacker = pos.board[move.from()];
 
             if (move.is_capture())
             {
                 const PieceType attacker_type = type_of(attacker);
                 const PieceType victim_type = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
-
                 if (attacker_type != NONE && victim_type != NONE)
                 {
                     if (attacker_type <= victim_type)
                     {
-                        return GOOD_CAPTURE + MVV_LVA[victim_type][attacker_type];
+                        return static_cast<int16_t>(GOOD_CAPTURE + MVV_LVA[victim_type][attacker_type]);
                     }
                     else
                     {
-                        return BAD_CAPTURE + MVV_LVA[victim_type][attacker_type];
+                        return static_cast<int16_t>(BAD_CAPTURE + MVV_LVA[victim_type][attacker_type]);
                     }
                 }
                 return GOOD_CAPTURE;
@@ -73,8 +71,8 @@ namespace MoveOrdering
                     return KILLER_SCORE_2;
             }
 
-            // 5. Quiet Moves (History Heuristic)
-            return Search::history_score(move, attacker);
+            // History Heuristic score fits inside [0, 16384]
+            return static_cast<int16_t>(Search::history_score(move, attacker));
         }
     } // namespace
 
@@ -82,28 +80,26 @@ namespace MoveOrdering
         : count(list.size()),
           ply(ply)
     {
-        std::transform(list.begin(), list.end(), std::begin(moves),
-                       [](Move move)
-                       {
-                           return ScoredMove{move, 0};
-                       });
-        score_moves(pos, tt_move);
+        if (count > 0)
+        {
+            std::memcpy(moves, list.moves, count * sizeof(Move));
+            score_moves(pos, tt_move);
+        }
     }
 
     void MovePicker::score_moves(const Position& pos, Move tt_move)
     {
-        std::transform(std::begin(moves), std::begin(moves) + count, std::begin(moves),
-                       [this, &pos, tt_move](const ScoredMove& scored_move)
-                       {
-                           return ScoredMove{scored_move.move, score_move(pos, scored_move.move, tt_move, ply)};
-                       });
+        for (int i = 0; i < count; ++i)
+        {
+            moves[i].score = score_move(pos, moves[i], tt_move, ply);
+        }
     }
 
     Move MovePicker::next_move()
     {
         if (count == 0)
         {
-            return Move{};
+            return Move::none();
         }
 
         int best_idx = 0;
@@ -115,7 +111,7 @@ namespace MoveOrdering
             }
         }
 
-        Move best_move = moves[best_idx].move;
+        Move best_move = moves[best_idx];
 
         moves[best_idx] = moves[count - 1];
         --count;

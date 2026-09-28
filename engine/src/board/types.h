@@ -135,25 +135,60 @@ struct Score
     }
 };
 
-// 16-bit encoding:
-// bits 0-5: from square, bits 6-11: to square, bits 12-15: flag.
-struct Move
+/**
+ * @brief High-performance 32-bit packed Move structure.
+ *
+ * Memory Layout:
+ *   Bits  0 -  5: Source square (Square: 0..63)
+ *   Bits  6 - 11: Destination square (Square: 0..63)
+ *   Bits 12 - 15: Move flag / metadata (MoveFlag: 0..15)
+ *   Bits 16 - 31: Move ordering heuristic score (int16_t: -32768..32767)
+ */
+struct alignas(4) Move
 {
-    uint16_t data = 0;
+    uint16_t data = 0; ///< Bits 0-5: from, 6-11: to, 12-15: flag
+    int16_t score = 0; ///< Bits 16-31: transient search ordering score
 
     Move() = default;
 
     /**
-     * @brief Creates a packed move from its source, destination, and flag.
-     * @param from Source square.
-     * @param to Destination square.
-     * @param moveFlag Encoded move type.
+     * @brief Constructs a Move with source, target, flag, and optional ordering score.
+     * @param from Source square on the 8x8 grid.
+     * @param to Destination square on the 8x8 grid.
+     * @param moveFlag Encoded movement attribute (captures, promotions, castles).
+     * @param moveScore Initial ordering priority score (defaults to 0).
      */
-    constexpr Move(Square from, Square to, MoveFlag moveFlag)
+    constexpr Move(Square from, Square to, MoveFlag moveFlag, int16_t moveScore = 0)
         : data(static_cast<uint16_t>(static_cast<uint16_t>(from) | (static_cast<uint16_t>(to) << 6) |
-                                     (static_cast<uint16_t>(moveFlag) << 12)))
+                                     (static_cast<uint16_t>(moveFlag) << 12))),
+          score(moveScore)
     {
         assert(is_valid(from) && is_valid(to));
+    }
+
+    /**
+     * @brief Explicitly reconstructs a Move from a raw 16-bit bitmask.
+     *        Used during TT unpack and bitstream operations.
+     */
+    explicit constexpr Move(uint16_t raw_data, int16_t moveScore = 0)
+        : data(raw_data),
+          score(moveScore)
+    {
+    }
+
+    [[nodiscard]] constexpr uint16_t raw() const noexcept
+    {
+        return data;
+    }
+
+    [[nodiscard]] constexpr int16_t ordering_score() const noexcept
+    {
+        return score;
+    }
+
+    constexpr void set_score(int16_t s) noexcept
+    {
+        score = s;
     }
 
     static constexpr Move none()
@@ -163,80 +198,87 @@ struct Move
 
     static constexpr Move null()
     {
-        return Move(A1, A1, NULL_MOVE);
+        return Move(A1, A1, NULL_MOVE, 0);
     }
 
-    constexpr Square from() const
+    [[nodiscard]] constexpr Square from() const
     {
         return static_cast<Square>(data & 0x3F);
     }
 
-    constexpr Square to() const
+    [[nodiscard]] constexpr Square to() const
     {
         return static_cast<Square>((data >> 6) & 0x3F);
     }
 
-    constexpr int flag() const
+    [[nodiscard]] constexpr int flag() const
     {
         return (data >> 12) & 0xF;
     }
 
-    constexpr bool is_ok() const
+    [[nodiscard]] constexpr bool is_ok() const
     {
         return data != 0;
     }
 
-    constexpr bool is_null() const
+    [[nodiscard]] constexpr bool is_null() const
     {
         return flag() == NULL_MOVE;
     }
 
-    // Includes EP captures, whose victim is not on the destination square.
-    constexpr bool is_capture() const
+    [[nodiscard]] constexpr bool is_capture() const
     {
         return flag() != NULL_MOVE && (flag() & 4) != 0;
     }
 
-    constexpr bool is_promotion() const
+    [[nodiscard]] constexpr bool is_promotion() const
     {
         return flag() >= KNIGHT_PROMO;
     }
 
-    constexpr bool is_castle() const
+    [[nodiscard]] constexpr bool is_castle() const
     {
         return flag() == KING_CASTLE || flag() == QUEEN_CASTLE;
     }
 
-    constexpr bool is_kingside_castle() const
+    [[nodiscard]] constexpr bool is_kingside_castle() const
     {
         return flag() == KING_CASTLE;
     }
 
-    constexpr bool is_queenside_castle() const
+    [[nodiscard]] constexpr bool is_queenside_castle() const
     {
         return flag() == QUEEN_CASTLE;
     }
 
-    constexpr bool is_ep() const
+    [[nodiscard]] constexpr bool is_ep() const
     {
         return flag() == EP_CAPTURE;
     }
 
-    constexpr bool is_double_push() const
+    [[nodiscard]] constexpr bool is_double_push() const
     {
         return flag() == DOUBLE_PAWN_PUSH;
     }
 
-    inline bool operator==(const Move& m) const
+    /**
+     * @brief Strict move identity comparison.
+     * Compares ONLY the 16-bit spatial transition to ensure TT hits and killers
+     * are evaluated independently of transient score mutations.
+     */
+    inline bool operator==(const Move& m) const noexcept
     {
         return data == m.data;
     }
 
-    inline bool operator!=(const Move& m) const
+    inline bool operator!=(const Move& m) const noexcept
     {
         return data != m.data;
     }
 };
+
+static_assert(sizeof(Move) == 4, "Move struct must remain exactly 32 bits (4 bytes).");
+static_assert(alignof(Move) == 2 || alignof(Move) == 4, "Move alignment must fit register bounds.");
 
 // Precondition: m.is_promotion().
 constexpr PieceType promotion_type(const Move& m)
