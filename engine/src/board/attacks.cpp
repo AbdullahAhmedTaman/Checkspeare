@@ -97,7 +97,8 @@ namespace
         return f >= 0 && f < 8 && r >= 0 && r < 8;
     }
 
-    // Naive reference: walk each ray, stop at (and include) the first blocker.
+    // Initialization-only naive reference implementation.
+    // Never used in the search path.
     inline Bitboard slow_attacks(Square sq, Bitboard occ, const int (&dirs)[4][2])
     {
         Bitboard attacks = 0;
@@ -150,10 +151,6 @@ namespace
         }
         return result;
     }
-
-#endif // USE_PEXT
-
-#if defined(USE_PEXT)
 
     using attacks_detail::PextEntry;
 
