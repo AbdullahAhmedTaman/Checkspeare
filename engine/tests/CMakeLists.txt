@@ -5,9 +5,6 @@ add_executable(EngineTests
 
     ${CMAKE_CURRENT_SOURCE_DIR}/test-search-v3.cpp
 )
-target_link_options(EngineTests PRIVATE
-    "LINKER:--allow-multiple-definition"
-)
 
 target_link_libraries(EngineTests
     PRIVATE

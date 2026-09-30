@@ -1,3 +1,6 @@
+option(USE_PEXT "PEXT sliding attacks" ON)
+option(ROOK_COMPRESSED "16-bit compressed rook table (needs USE_PEXT)" OFF)
+
 file(GLOB_RECURSE ENGINE_SRC CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
@@ -42,6 +45,18 @@ else()
             -Wpedantic
             -Wno-unused-parameter
     )
+endif()
+
+
+# Same instruction-set baseline for HQ and PEXT builds (GCC 11+, use -march=haswell on older GCC).
+target_compile_options(EngineCore PUBLIC
+    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-march=x86-64-v3>)
+
+if(USE_PEXT)
+    target_compile_definitions(EngineCore PUBLIC USE_PEXT)
+    if(ROOK_COMPRESSED)
+        target_compile_definitions(EngineCore PUBLIC ATTACKS_ROOK_COMPRESSED)
+    endif()
 endif()
 
 configure_gnu_production_runtime(Checkspeare)
