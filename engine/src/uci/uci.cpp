@@ -2,6 +2,7 @@
 #include "board/movegen.h"
 #include "board/position.h"
 #include "board/types.h"
+#include "book/book.h"
 #include "eval/evaluate.h"
 #include "search/search.h"
 #include "search/transposition.h"
@@ -32,17 +33,13 @@ namespace UCI
         return Move::none();
     }
 
-    void send_search_info(const Search::SearchInfo& info) // NOTE: call it inside search loop!
+    void send_search_info(const Search::SearchInfo& info)
     {
         uint64_t nps = (info.time_ms > 0) ? (info.nodes * 1000) / info.time_ms : 0;
-        // clang-format off
-        std::cout << "info depth " << info.depth 
-                  << " seldepth " << info.seldepth 
-                  << " nodes " << info.nodes 
-                  << " nps " << nps
-                  << " time " << info.time_ms 
-                  << " score ";
-        // clang-format on
+
+        std::cout << "info depth " << info.depth << " seldepth " << info.seldepth << " nodes " << info.nodes << " nps " << nps
+                  << " time " << info.time_ms << " score ";
+
         if (std::abs(info.score) > VALUE_MATE - MAX_PLY)
         {
             int moves_to_mate = (VALUE_MATE - std::abs(info.score) + 1) / 2;
@@ -65,9 +62,26 @@ namespace UCI
 
     void loop()
     {
-        Position pos;
+        Position pos = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
         std::string line;
         std::thread search_thread;
+
+        Book::OpeningBook book;
+        std::string book_filename = "book.bin";
+        std::string book_mode = "Weighted";
+
+        // Try loading default opening book quietly
+        book.load(book_filename);
+
+        // Helper lambda to safely stop and join active search thread
+        auto stop_search = [&]()
+        {
+            Search::Signals_stop = true;
+            if (search_thread.joinable())
+            {
+                search_thread.join();
+            }
+        };
 
         while (std::getline(std::cin, line))
         {
@@ -79,6 +93,8 @@ namespace UCI
             {
                 std::cout << "id name Checkspeare" << std::endl;
                 std::cout << "id author Check-Mates" << std::endl;
+                std::cout << "option name BookFile type string default book.bin" << std::endl;
+                std::cout << "option name BookMode type combo default Weighted var Weighted var Best" << std::endl;
                 std::cout << "uciok" << std::endl;
             }
             else if (command == "isready")
@@ -87,18 +103,52 @@ namespace UCI
             }
             else if (command == "ucinewgame")
             {
+                stop_search();
                 Search::init();
                 Search::TT.clear();
             }
+            else if (command == "setoption")
+            {
+                stop_search();
+                std::string token, name, val_str;
+                iss >> token;
+
+                while (iss >> token && token != "value")
+                {
+                    if (!name.empty())
+                        name += " ";
+                    name += token;
+                }
+                while (iss >> token)
+                {
+                    if (!val_str.empty())
+                        val_str += " ";
+                    val_str += token;
+                }
+
+                if (name == "BookFile")
+                {
+                    book_filename = val_str;
+                    if (book.load(book_filename))
+                        std::cout << "info string Opening book loaded successfully: " << book_filename << std::endl;
+                    else
+                        std::cout << "info string FAILED to load opening book: " << book_filename << std::endl;
+                }
+                else if (name == "BookMode")
+                {
+                    book_mode = val_str;
+                }
+            }
             else if (command == "position")
             {
+                stop_search();
                 std::string token;
                 iss >> token;
 
                 if (token == "startpos")
                 {
-                    pos = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"); //
-                    iss >> token;
+                    pos = Position::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+                    iss >> token; // Attempt to read "moves" if present
                 }
                 else if (token == "fen")
                 {
@@ -127,6 +177,8 @@ namespace UCI
             }
             else if (command == "go")
             {
+                stop_search();
+
                 SearchLimits limits;
                 std::string token;
 
@@ -150,28 +202,33 @@ namespace UCI
                         limits.infinite = true;
                 }
 
-                if (search_thread.joinable())
+                // Probe opening book safely if available
+                if (book.is_loaded())
                 {
-                    search_thread.join();
+                    const int mode = (book_mode == "Best") ? 0 : 1;
+                    const Move book_move = book.probe(pos, mode);
+                    if (book_move.is_ok())
+                    {
+                        std::cout << "bestmove " << book_move << std::endl;
+                        continue;
+                    }
                 }
 
                 Search::Signals_stop = false;
-
                 search_thread = std::thread(Search::start_search, std::ref(pos), limits);
             }
             else if (command == "stop")
             {
-                Search::Signals_stop = true;
+                stop_search();
             }
             else if (command == "quit")
             {
-                Search::Signals_stop = true;
-                if (search_thread.joinable())
-                {
-                    search_thread.join();
-                }
+                stop_search();
                 break;
             }
         }
+
+        // Clean cleanup on loop exit (e.g. unexpected EOF on std::cin)
+        stop_search();
     }
 } // namespace UCI
