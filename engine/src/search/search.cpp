@@ -84,6 +84,8 @@ namespace Search
     void init()
     {
         Signals_stop.store(false, std::memory_order_relaxed);
+        std::memset(killer_moves, 0, sizeof(killer_moves));
+        std::memset(history_table, 0, sizeof(history_table));
     }
 
     /**

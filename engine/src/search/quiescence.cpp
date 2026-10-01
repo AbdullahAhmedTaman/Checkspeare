@@ -1,8 +1,9 @@
+#include "board/movegen.h"
 #include "eval/evaluate.h"
 #include "move_ordering.h"
-#include "board/movegen.h"
 #include "search.h"
 #include "transposition.h"
+
 
 namespace Search
 {
@@ -36,7 +37,21 @@ namespace Search
      */
     Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
     {
-        if (ctx.stop_flag)
+        // Telemetry and Engine Hang Prevention
+        ctx.info.nodes++;
+
+        // Poll the clock every 2048 nodes to prevent deep tactical lines from bypassing time limits
+        if ((ctx.info.nodes & 2047) == 0 && ctx.max_time_ms > 0)
+        {
+            auto now = std::chrono::steady_clock::now();
+            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
+            if (elapsed >= ctx.max_time_ms)
+            {
+                ctx.stop_flag.store(true, std::memory_order_relaxed);
+            }
+        }
+
+        if (ctx.stop_flag.load(std::memory_order_relaxed))
             return Eval::evaluate(pos);
 
         const Color us = pos.sideToMove;
@@ -45,19 +60,22 @@ namespace Search
         if (ply >= MAX_SEARCH_PLY - 1)
             return Eval::evaluate(pos);
 
-        Value stand_pat = Eval::evaluate(pos);
+        Value stand_pat = 0;
 
-        Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
         if (!in_check)
         {
+            stand_pat = Eval::evaluate(pos);
             if (stand_pat >= beta)
                 return beta;
             if (stand_pat > alpha)
                 alpha = stand_pat;
         }
 
+        Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
+
         MoveList list;
         MoveGen::generate_pseudo_legal_moves(pos, list);
+
         if (!in_check)
         {
             int tactical_count = 0;
@@ -70,6 +88,7 @@ namespace Search
             }
             list.count = tactical_count;
         }
+
         MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
         int legal_moves = 0;
 
@@ -79,14 +98,19 @@ namespace Search
             if (!move.is_ok())
                 break;
 
+            // Lazy Legality Check
+            // If a beta cutoff occurs on move 1, the engine never pays the make_move / is_square_attacked
+            // cost for the remaining 39 pseudo-legal moves.
+            // This is a performance optimization that avoids unnecessary legality checks for moves that are unlikely to be
+            // relevant.(generate_legal_moves)
             pos.make_move(move);
-
             if (pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1)))
             {
                 pos.unmake_move(move);
                 continue;
             }
             ++legal_moves;
+
             const Value score = -quiescence(pos, ply + 1, -beta, -alpha, ctx);
             pos.unmake_move(move);
 
