@@ -10,7 +10,7 @@ namespace MoveOrdering
     constexpr int16_t GOOD_CAPTURE = 28000; ///< Base capture tier (+ MVV_LVA up to 55)
     constexpr int16_t KILLER_SCORE_1 = 24000;
     constexpr int16_t KILLER_SCORE_2 = 22000;
-    constexpr int16_t BAD_CAPTURE = 19000; ///< Base losing capture tier (+ MVV_LVA up to 55)
+    constexpr int16_t BAD_CAPTURE = -10000; ///< Base losing capture tier (+ MVV_LVA up to 55)
     constexpr int16_t PROMOTION_KNIGHT = 17000;
     constexpr int16_t PROMOTION_MINOR = -20000;
 

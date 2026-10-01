@@ -26,8 +26,9 @@ namespace MoveOrdering
                 {
                     if (move.is_capture())
                     {
-                        const PieceType victim = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
-                        return static_cast<int16_t>(PROMOTION_QUEEN + MVV_LVA[victim][PAWN]);
+                        const PieceType victim = type_of(pos.board[move.to()]);
+                        const int16_t mvv_lva_bonus = (victim < PieceType::NONE) ? MVV_LVA[victim][PAWN] : 0;
+                        return static_cast<int16_t>(PROMOTION_QUEEN + mvv_lva_bonus);
                     }
                     return PROMOTION_QUEEN;
                 }
@@ -35,8 +36,9 @@ namespace MoveOrdering
                 {
                     if (move.is_capture())
                     {
-                        const PieceType victim = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
-                        return static_cast<int16_t>(PROMOTION_KNIGHT + MVV_LVA[victim][PAWN]);
+                        const PieceType victim = type_of(pos.board[move.to()]);
+                        const int16_t mvv_lva_bonus = (victim < PieceType::NONE) ? MVV_LVA[victim][PAWN] : 0;
+                        return static_cast<int16_t>(PROMOTION_KNIGHT + mvv_lva_bonus);
                     }
                     return PROMOTION_KNIGHT;
                 }
@@ -49,9 +51,11 @@ namespace MoveOrdering
             {
                 const PieceType attacker_type = type_of(attacker);
                 const PieceType victim_type = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
-                if (attacker_type != NONE && victim_type != NONE)
+                if (attacker_type < PieceType::NONE && victim_type < PieceType::NONE)
                 {
-                    if (attacker_type <= victim_type)
+                    bool is_equal_trade = (attacker_type == victim_type) || (attacker_type == BISHOP && victim_type == KNIGHT) ||
+                                          (attacker_type == KNIGHT && victim_type == BISHOP);
+                    if (attacker_type <= victim_type || is_equal_trade)
                     {
                         return static_cast<int16_t>(GOOD_CAPTURE + MVV_LVA[victim_type][attacker_type]);
                     }
