@@ -160,12 +160,19 @@ namespace Search
         }
 
         ctx.info.nodes++;
-        if ((ctx.info.nodes & 2047) == 0 && ctx.max_time_ms > 0)
+        // Poll the wall clock every 1024 nodes. Hard ceiling aborts immediately;
+        // soft target also aborts, but only below the root so that we always
+        // produce a best_move for the current depth before giving up.
+        if ((ctx.info.nodes & 1023) == 0 && ctx.opt_time_ms > 0)
         {
             auto now = std::chrono::steady_clock::now();
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
 
             if (elapsed >= ctx.max_time_ms)
+            {
+                Signals_stop.store(true, std::memory_order_relaxed);
+            }
+            else if (elapsed >= ctx.opt_time_ms && ply > 0)
             {
                 Signals_stop.store(true, std::memory_order_relaxed);
             }
@@ -350,9 +357,10 @@ namespace Search
         else if (time_left > 0)
         {
             ctx.opt_time_ms = (time_left / 40) + (inc * 3 / 4);
-            // Prevent max_time_ms from becoming 0 in extreme time trouble
-            uint64_t safe_margin = (time_left > 50) ? time_left - 50 : time_left / 2;
-            ctx.max_time_ms = std::min(time_left / 5, safe_margin);
+            // Cap the hard ceiling at ~5% of remaining time. A larger margin
+            // (100 ms) is reserved for GUI round-trip latency and clock drift.
+            uint64_t safe_margin = (time_left > 100) ? time_left - 100 : time_left / 2;
+            ctx.max_time_ms = std::min(time_left / 20, safe_margin);
 
             if (ctx.max_time_ms == 0)
                 ctx.max_time_ms = 1;
@@ -372,6 +380,9 @@ namespace Search
         MoveGen::generate_legal_moves(pos, root_moves);
         if (root_moves.count > 0)
             safe_best_move = root_moves.moves[0];
+
+        const uint64_t base_opt_time_ms = ctx.opt_time_ms;
+        double time_extension_factor = 1.0;
 
         // Iterative Deepening Loop
         Value prev_score = VALUE_ZERO;
@@ -434,9 +445,20 @@ namespace Search
             auto now = std::chrono::steady_clock::now();
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
 
-            if (current_depth > 1 && ctx.info.best_move != safe_best_move)
+            // Only extend time if we aren't on an infinite search
+            if (current_depth > 1 && base_opt_time_ms != UINT64_MAX)
             {
-                ctx.opt_time_ms = std::min(static_cast<uint64_t>(ctx.opt_time_ms * 1.5), ctx.max_time_ms);
+                bool move_changed = (ctx.info.best_move != safe_best_move);
+                bool score_volatile = (std::abs(score - prev_score) >= 50);
+
+                if (move_changed || score_volatile)
+                {
+                    // Add to the multiplier, but cap it so we don't consume the entire clock
+                    time_extension_factor = std::min(time_extension_factor + 0.5, 2.5);
+
+                    // Multiply against the unmutated base time, not the already-extended time
+                    ctx.opt_time_ms = std::min(static_cast<uint64_t>(base_opt_time_ms * time_extension_factor), ctx.max_time_ms);
+                }
             }
 
             safe_best_move = ctx.info.best_move;
@@ -448,6 +470,12 @@ namespace Search
             UCI::send_search_info(ctx.info);
 
             if (elapsed >= ctx.opt_time_ms)
+                break;
+
+            // Hard ceiling check between depths: protects against a single depth
+            // iteration running away past max_time_ms without the in-search poll
+            // catching it in time (e.g., very slow nodes on old hardware).
+            if (elapsed >= ctx.max_time_ms)
                 break;
 
             // Checkmate early exit
