@@ -4,7 +4,6 @@
 #include "search.h"
 #include "transposition.h"
 
-
 namespace Search
 {
     namespace
@@ -74,19 +73,15 @@ namespace Search
         Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
 
         MoveList list;
-        MoveGen::generate_pseudo_legal_moves(pos, list);
-
-        if (!in_check)
+        if (in_check)
         {
-            int tactical_count = 0;
-            for (int i = 0; i < list.count; ++i)
-            {
-                if (list.moves[i].is_capture() || list.moves[i].is_promotion())
-                {
-                    list.moves[tactical_count++] = list.moves[i];
-                }
-            }
-            list.count = tactical_count;
+            // When in check, all evasions (including quiet king steps) are tactical
+            MoveGen::generate_pseudo_legal_moves(pos, list);
+        }
+        else
+        {
+            // Otherwise, only generate captures and promotions natively
+            MoveGen::generate_captures(pos, list);
         }
 
         MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
