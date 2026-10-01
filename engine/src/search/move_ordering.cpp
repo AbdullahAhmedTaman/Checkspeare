@@ -1,5 +1,6 @@
 #include "move_ordering.h"
 #include "heuristics.h"
+#include "see.h"
 #include <algorithm>
 #include <iterator>
 
@@ -53,9 +54,8 @@ namespace MoveOrdering
                 const PieceType victim_type = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
                 if (attacker_type < PieceType::NONE && victim_type < PieceType::NONE)
                 {
-                    bool is_equal_trade = (attacker_type == victim_type) || (attacker_type == BISHOP && victim_type == KNIGHT) ||
-                                          (attacker_type == KNIGHT && victim_type == BISHOP);
-                    if (attacker_type <= victim_type || is_equal_trade)
+                    // Use SEE to definitively categorize the capture
+                    if (Search::see_ge(pos, move, 0))
                     {
                         return static_cast<int16_t>(GOOD_CAPTURE + MVV_LVA[victim_type][attacker_type]);
                     }
