@@ -27,17 +27,38 @@ namespace Search
 
     /**
      * @brief 16-byte packed Transposition Table entry.
-     *        Explicit alignment prevents memory boundary crossing in the CPU cache.
+     *
+     * Exact 16-byte layout alignment:
+     *   Offset  0: Key key             (8 bytes)
+     *   Offset  8: Move best_move      (4 bytes - 32-bit packed)
+     *   Offset 12: int16_t score       (2 bytes)
+     *   Offset 14: uint8_t depth       (1 byte: supports plies 0..255)
+     *   Offset 15: uint8_t gen_bound   (1 byte: Bits 0-1: TTFlag, Bits 2-7: Age)
+     *   Total: exactly 16 bytes.
      */
     struct alignas(16) TTEntry
     {
-        Key key = 0;                   /**< 64-bit Zobrist hash (8 bytes). */
-        Move best_move = Move::none(); /**< Best move found (2 bytes). */
-        int16_t score = 0;             /**< Evaluated score (2 bytes). */
-        int16_t depth = 0;             /**< Search depth (2 bytes). */
+        Key key = 0;
+        Move best_move = Move::none();
+        int16_t score = 0;
+        uint8_t depth = 0;
+        uint8_t gen_bound = 0; // Bits 0-1: TTFlag, Bits 2-7: Age
 
-        TTFlag flag = TT_EXACT; /**< Node evaluation type (1 byte). */
-        // 2 bytes of implicit compiler padding to reach exactly 16 bytes.
+        // Inline accessors for the packed byte
+        [[nodiscard]] inline TTFlag flag() const
+        {
+            return static_cast<TTFlag>(gen_bound & 0x3);
+        }
+
+        [[nodiscard]] inline uint8_t age() const
+        {
+            return gen_bound >> 2;
+        }
+
+        inline void pack_gen_bound(uint8_t global_age, TTFlag f)
+        {
+            gen_bound = static_cast<uint8_t>((global_age << 2) | (f & 0x3));
+        }
     };
 
     static_assert(sizeof(TTEntry) == 16, "TTEntry must remain exactly 16 bytes");
@@ -104,9 +125,16 @@ namespace Search
          */
         int hashfull() const;
 
+        // Bumps the generation counter (wraps at 63 since it's 6-bit)
+        void new_search()
+        {
+            global_age = (global_age + 1) & 0x3F;
+        }
+
     private:
         std::vector<TTBucket> table;
         uint64_t bucket_mask = 0; /**< Bitmask for fast O(1) index calculation. */
+        uint8_t global_age = 0;   /**< Track the current search generation. */
     };
 
     /**

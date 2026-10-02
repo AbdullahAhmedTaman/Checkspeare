@@ -84,6 +84,8 @@ namespace Search
     void init()
     {
         Signals_stop.store(false, std::memory_order_relaxed);
+        std::memset(killer_moves, 0, sizeof(killer_moves));
+        std::memset(history_table, 0, sizeof(history_table));
     }
 
     /**
@@ -192,26 +194,22 @@ namespace Search
         if (tt_hit)
         {
             tt_move = tt_entry.best_move;
-
             if (tt_entry.depth >= depth && !IsRoot)
             {
-                if (tt_entry.flag == TT_EXACT)
+                if (tt_entry.flag() == TT_EXACT)
                     return tt_entry.score;
-                if (tt_entry.flag == TT_LOWERBOUND && tt_entry.score >= beta)
+                if (tt_entry.flag() == TT_LOWERBOUND && tt_entry.score >= beta)
                     return tt_entry.score;
-                if (tt_entry.flag == TT_UPPERBOUND && tt_entry.score <= alpha)
+                if (tt_entry.flag() == TT_UPPERBOUND && tt_entry.score <= alpha)
                     return tt_entry.score;
             }
         }
 
-        // Generate pseudo-legal moves for performance (lazy king-safety filtering)
-        MoveList moves;
-        MoveGen::generate_pseudo_legal_moves(pos, moves);
-
         static const Move empty_killers[2] = {Move::none(), Move::none()};
         const Move* current_killers = (ply < MAX_PLY) ? Search::killer_moves[ply] : empty_killers;
-        // Instantiate MovePicker with TT best move hint for move ordering
-        MoveOrdering::MovePicker picker(moves, pos, tt_move, ply);
+
+        // Instantiate Lazy MovePicker with TT best move hint (qsearch = false)
+        MoveOrdering::MovePicker picker(pos, tt_move, ply, false);
 
         Value best_score = -VALUE_INFINITE;
         Move best_move = Move::none();
@@ -220,6 +218,8 @@ namespace Search
 
         const Color us = pos.sideToMove;
 
+        Move searched_quiets[MAX_MOVES];
+        int quiet_count = 0;
         // Move iteration loop driven by MovePicker
         while (true)
         {
@@ -236,6 +236,11 @@ namespace Search
             }
 
             legal_moves_count++;
+            bool is_quiet = !move.is_capture() && !move.is_promotion();
+            if (is_quiet)
+            {
+                searched_quiets[quiet_count++] = move;
+            }
             Value score = -VALUE_INFINITE;
 
             bool needs_full_search = true;
@@ -304,12 +309,17 @@ namespace Search
                     // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
-                        // Store Killer Move heuristic for non-captures
-                        if (!move.is_capture() && !move.is_promotion())
+                        if (is_quiet)
                         {
                             if (ply < MAX_PLY)
                                 Search::update_killers(move, ply);
+
                             Search::update_history(move, depth, pos.board[move.from()]);
+
+                            for (int i = 0; i < quiet_count - 1; ++i)
+                            {
+                                Search::penalize_history(searched_quiets[i], depth, pos.board[searched_quiets[i].from()]);
+                            }
                         }
                         break; // Cut off remaining move searches
                     }
@@ -337,6 +347,7 @@ namespace Search
     void start_search(Position& pos, const SearchLimits& limits)
     {
         init();
+        TT.new_search();
         SearchContext ctx(limits, Signals_stop);
 
         uint64_t time_left = (pos.sideToMove == WHITE) ? limits.wtime : limits.btime;
