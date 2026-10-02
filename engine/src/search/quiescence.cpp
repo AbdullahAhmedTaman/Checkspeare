@@ -67,11 +67,11 @@ namespace Search
         if (tt_hit)
         {
             tt_move = tt_entry.best_move;
-            if (tt_entry.flag == TT_EXACT)
+            if (tt_entry.flag() == TT_EXACT)
                 return tt_entry.score;
-            if (tt_entry.flag == TT_LOWERBOUND && tt_entry.score >= beta)
+            if (tt_entry.flag() == TT_LOWERBOUND && tt_entry.score >= beta)
                 return tt_entry.score;
-            if (tt_entry.flag == TT_UPPERBOUND && tt_entry.score <= alpha)
+            if (tt_entry.flag() == TT_UPPERBOUND && tt_entry.score <= alpha)
                 return tt_entry.score;
         }
 

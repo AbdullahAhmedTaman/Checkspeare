@@ -46,54 +46,51 @@ namespace Search
         int target_slot = -1;
         bool found_key = false;
 
-        if (bucket.entries[0].key == key)
+        for (int i = 0; i < 4; ++i)
         {
-            target_slot = 0;
-            found_key = true;
-        }
-        else if (bucket.entries[1].key == key)
-        {
-            target_slot = 1;
-            found_key = true;
-        }
-        else if (bucket.entries[2].key == key)
-        {
-            target_slot = 2;
-            found_key = true;
-        }
-        else if (bucket.entries[3].key == key)
-        {
-            target_slot = 3;
-            found_key = true;
+            if (bucket.entries[i].key == key)
+            {
+                target_slot = i;
+                found_key = true;
+                break;
+            }
         }
 
         if (!found_key)
         {
-            if (bucket.entries[0].key == 0)
-                target_slot = 0;
-            else if (bucket.entries[1].key == 0)
-                target_slot = 1;
-            else if (bucket.entries[2].key == 0)
-                target_slot = 2;
-            else if (bucket.entries[3].key == 0)
-                target_slot = 3;
-        }
-        // Collision Resolution: Two-Tier Replacement Strategy.
-        if (target_slot == -1)
-        {
-            if (depth >= bucket.entries[0].depth)
+            for (int i = 0; i < 4; ++i)
             {
-                // Claim Slot 0: The depth-preferred fortress.
-                target_slot = 0;
-            }
-            else
-            {
-                // pseudo-random slot selection (1, 2, or 3).
-                target_slot = 1 + (key & 1) + ((key >> 1) & 1);
+                if (bucket.entries[i].key == 0)
+                {
+                    target_slot = i;
+                    break;
+                }
             }
         }
 
-        if (found_key && depth < bucket.entries[target_slot].depth)
+        if (target_slot == -1)
+        {
+            int worst_score = -999999;
+            for (int i = 0; i < 4; ++i)
+            {
+                // Calculate how old the entry is (0 = current search, >0 = older searches)
+                int age_diff = (global_age - bucket.entries[i].age() + 64) & 0x3F;
+
+                // Eviction Priority:
+                // Always replace older searches before current searches (age_diff * 256).
+                // If age is tied, replace the entry with the shallowest depth (-depth).
+                int replace_score = (age_diff * 256) - bucket.entries[i].depth;
+
+                if (replace_score > worst_score)
+                {
+                    worst_score = replace_score;
+                    target_slot = i;
+                }
+            }
+        }
+
+        // Don't overwrite deeper entries from the SAME generation
+        if (found_key && bucket.entries[target_slot].age() == global_age && depth < bucket.entries[target_slot].depth)
         {
             return;
         }
@@ -102,19 +99,21 @@ namespace Search
         if (found_key)
             preserved_move = bucket.entries[target_slot].best_move;
 
-        move.score = 0;
+        move.set_score(0);
+
         bucket.entries[target_slot].key = key;
         bucket.entries[target_slot].depth = static_cast<uint8_t>(std::clamp(depth, 0, 255));
         bucket.entries[target_slot].score = static_cast<int16_t>(score);
-        bucket.entries[target_slot].flag = flag;
+        bucket.entries[target_slot].pack_gen_bound(global_age, flag);
 
-        // Preserve existing PV moves if the new evaluation fails low (null move).
         if (move.is_ok() && !move.is_null())
         {
             bucket.entries[target_slot].best_move = move;
         }
         else
-            bucket.entries[target_slot].best_move = preserved_move; // Clears the move if it's a new key eviction
+        {
+            bucket.entries[target_slot].best_move = preserved_move;
+        }
     }
 
     bool TranspositionTable::probe(Key key, int ply, TTEntry& out_entry) const
