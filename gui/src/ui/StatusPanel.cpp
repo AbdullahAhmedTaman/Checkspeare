@@ -1,6 +1,7 @@
 #include "StatusPanel.hpp"
 
 #include "../game/GameResult.hpp"
+#include "CapturedPiecesPanel.hpp"
 
 #include <imgui.h>
 
@@ -42,88 +43,24 @@ namespace Gui
 
         /// Counts of each piece type currently on the board, per color.
         /// Indexed [color][pieceType].
-        struct PieceCounts
+        void drawCapturedRow(const ChessGame& game, Color capturingSide, const Assets::TextureLibrary& assets, float iconSize)
         {
-            int per[2][6] = {};
-        };
+            constexpr float kGroupGap = 6.0f;
 
-        /// Starting complement per color, in PieceType order:
-        /// PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING.
-        constexpr int kStarting[6] = {8, 2, 2, 2, 1, 1};
-
-        /// Display order, heavy to light. Matches chess.com and Lichess.
-        constexpr PieceType kDisplayOrder[5] = {QUEEN, ROOK, BISHOP, KNIGHT, PAWN};
-
-        PieceCounts countOnBoard(const Board& board)
-        {
-            PieceCounts counts;
-
-            for (int i = 0; i < 64; ++i)
-            {
-                const Piece pc = board.pieceAt(static_cast<Square>(i));
-                if (pc == PIECE_NONE)
-                    continue;
-
-                counts.per[color_of(pc)][type_of(pc)] += 1;
-            }
-
-            return counts;
-        }
-
-        /// Draws a single piece icon using AddImage with UVs.
-        ///
-        /// ImGui::Image stretches the whole texture into the target rectangle,
-        /// which makes pieces with different amounts of transparent padding
-        /// appear at different visual sizes. AddImage with explicit UVs lets
-        /// us inset the sample region slightly, so every piece occupies the
-        /// same fraction of its cell regardless of how the source PNG was
-        /// framed.
-        void drawPieceIcon(ImDrawList* drawList, const sf::Texture& texture, ImVec2 topLeft, float size)
-        {
-            constexpr float kUvInset = 0.04f;
-
-            const ImVec2 bottomRight{topLeft.x + size, topLeft.y + size};
-
-            const auto textureId = static_cast<ImTextureID>(texture.getNativeHandle());
-
-            drawList->AddImage(textureId, topLeft, bottomRight, ImVec2(kUvInset, kUvInset),
-                               ImVec2(1.0f - kUvInset, 1.0f - kUvInset));
-        }
-
-        /// Draws one row of captured-piece icons. `capturingSide` is the side
-        /// whose captures are shown; the icons are the pieces of the *other*
-        /// side that are missing from the board.
-        void drawCapturedRow(const PieceCounts& onBoard, Color capturingSide, const Assets::TextureLibrary& assets,
-                             float iconSize)
-        {
             const Color capturedSide = (capturingSide == WHITE) ? BLACK : WHITE;
+            const std::vector<CapturedGroup> groups = capturedBy(game, capturingSide);
 
             ImDrawList* drawList = ImGui::GetWindowDrawList();
+            ImVec2 cursor = ImGui::GetCursorScreenPos();
 
-            // Icons are laid out manually rather than through ImGui::SameLine
-            // because AddImage bypasses ImGui's item system; SameLine and
-            // NewLine only advance the layout cursor for ImGui items, not
-            // for raw draw-list calls.
-            const ImVec2 rowStart = ImGui::GetCursorScreenPos();
-            ImVec2 cursor = rowStart;
-
-            for (PieceType type : kDisplayOrder)
+            for (const CapturedGroup& g : groups)
             {
-                const int missing = kStarting[type] - onBoard.per[capturedSide][type];
+                const std::string key = Assets::TextureLibrary::getPieceKey(make_piece(capturedSide, g.type));
+                const sf::Texture& texture = assets.getTexture(key);
 
-                for (int n = 0; n < missing; ++n)
-                {
-                    const std::string key = Assets::TextureLibrary::getPieceKey(make_piece(capturedSide, type));
-                    const sf::Texture& texture = assets.getTexture(key);
-
-                    drawPieceIcon(drawList, texture, cursor, iconSize);
-
-                    cursor.x += iconSize + 2.0f;
-                }
+                cursor.x += drawCapturedIcon(drawList, texture, cursor, iconSize, g.count) + kGroupGap;
             }
 
-            // Reserve the layout slot so the next widget starts on the next
-            // line. Width is the full content width; height is one icon row.
             ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, iconSize));
         }
     } // namespace
@@ -185,9 +122,9 @@ namespace Gui
         // Captured pieces: top row is White's captures (Black pieces),
         // bottom row is Black's captures (White pieces).
         constexpr float kIconSize = 22.0f;
-        const PieceCounts onBoard = countOnBoard(game.board());
-        drawCapturedRow(onBoard, WHITE, assets, kIconSize);
-        drawCapturedRow(onBoard, BLACK, assets, kIconSize);
+
+        drawCapturedRow(game, WHITE, assets, kIconSize);
+        drawCapturedRow(game, BLACK, assets, kIconSize);
 
         // Passive result banner. The modal is the active prompt; this is
         // a persistent indicator that survives after the modal is closed.
