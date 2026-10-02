@@ -59,6 +59,22 @@ namespace Search
         if (ply >= MAX_SEARCH_PLY - 1)
             return Eval::evaluate(pos);
 
+        TTEntry tt_entry;
+        Move tt_move = Move::none();
+        Value alpha_orig = alpha;
+
+        bool tt_hit = TT.probe(pos.key, ply, tt_entry);
+        if (tt_hit)
+        {
+            tt_move = tt_entry.best_move;
+            if (tt_entry.flag == TT_EXACT)
+                return tt_entry.score;
+            if (tt_entry.flag == TT_LOWERBOUND && tt_entry.score >= beta)
+                return tt_entry.score;
+            if (tt_entry.flag == TT_UPPERBOUND && tt_entry.score <= alpha)
+                return tt_entry.score;
+        }
+
         Value stand_pat = 0;
 
         if (!in_check)
@@ -68,12 +84,18 @@ namespace Search
                 return beta;
             if (stand_pat > alpha)
                 alpha = stand_pat;
+
+            constexpr Value DELTA_MARGIN = 1100;
+            if (stand_pat + DELTA_MARGIN <= alpha)
+            {
+                return alpha;
+            }
         }
 
         Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
-
+        Move best_move = Move::none();
         // Instantiate Lazy MovePicker (qsearch = true)
-        MoveOrdering::MovePicker picker(pos, Move::none(), ply, true);
+        MoveOrdering::MovePicker picker(pos, tt_move, ply, true);
         int legal_moves = 0;
 
         while (true)
@@ -99,10 +121,13 @@ namespace Search
             pos.unmake_move(move);
 
             if (score > best_score)
+            {
                 best_score = score;
+                best_move = move;
+            }
 
             if (best_score >= beta)
-                return beta;
+                break;
 
             if (best_score > alpha)
                 alpha = best_score;
@@ -111,6 +136,11 @@ namespace Search
         if (in_check && legal_moves == 0)
             return -VALUE_MATE + ply;
 
+        if (!ctx.stop_flag.load(std::memory_order_relaxed))
+        {
+            TTFlag flag = (best_score >= beta) ? TT_LOWERBOUND : (best_score > alpha_orig) ? TT_EXACT : TT_UPPERBOUND;
+            TT.store(pos.key, ply, 0, best_score, flag, best_move);
+        }
         return best_score;
     }
 } // namespace Search
