@@ -219,6 +219,8 @@ namespace Search
 
         const Color us = pos.sideToMove;
 
+        Move searched_quiets[MAX_MOVES];
+        int quiet_count = 0;
         // Move iteration loop driven by MovePicker
         while (true)
         {
@@ -235,6 +237,11 @@ namespace Search
             }
 
             legal_moves_count++;
+            bool is_quiet = !move.is_capture() && !move.is_promotion();
+            if (is_quiet)
+            {
+                searched_quiets[quiet_count++] = move;
+            }
             Value score = -VALUE_INFINITE;
 
             bool needs_full_search = true;
@@ -303,12 +310,17 @@ namespace Search
                     // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
-                        // Store Killer Move heuristic for non-captures
-                        if (!move.is_capture() && !move.is_promotion())
+                        if (is_quiet)
                         {
                             if (ply < MAX_PLY)
                                 Search::update_killers(move, ply);
+
                             Search::update_history(move, depth, pos.board[move.from()]);
+
+                            for (int i = 0; i < quiet_count - 1; ++i)
+                            {
+                                Search::penalize_history(searched_quiets[i], depth, pos.board[searched_quiets[i].from()]);
+                            }
                         }
                         break; // Cut off remaining move searches
                     }
