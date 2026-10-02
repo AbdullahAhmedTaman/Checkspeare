@@ -7,58 +7,50 @@ namespace MoveOrdering
 {
     constexpr int16_t TT_MOVE_SCORE = 32000;
     constexpr int16_t PROMOTION_QUEEN = 30000;
-    constexpr int16_t GOOD_CAPTURE = 28000; ///< Base capture tier (+ MVV_LVA up to 55)
+    constexpr int16_t GOOD_CAPTURE = 28000;
     constexpr int16_t KILLER_SCORE_1 = 24000;
     constexpr int16_t KILLER_SCORE_2 = 22000;
-    constexpr int16_t BAD_CAPTURE = -10000; ///< Base losing capture tier (+ MVV_LVA up to 55)
+    constexpr int16_t BAD_CAPTURE = -10000; ///< Demoted below history-boosted quiets
     constexpr int16_t PROMOTION_KNIGHT = 17000;
     constexpr int16_t PROMOTION_MINOR = -20000;
 
-    // Values: Pawn=0, Knight=1, Bishop=2, Rook=3, Queen=4, King=5
-    // clang-format off
- const int MVV_LVA[PieceType::NONE][PieceType::NONE] = {
-        {15, 14, 13, 12, 11, 10}, 
-        {25, 24, 23, 22, 21, 20}, 
-        {35, 34, 33, 32, 31, 30}, 
-        {45, 44, 43, 42, 41, 40}, 
-        {55, 54, 53, 52, 51, 50}, 
-        {0, 0, 0, 0, 0, 0}      
+    extern const int MVV_LVA[PieceType::NONE][PieceType::NONE];
+
+    enum PickerStage
+    {
+        STAGE_TT,
+        STAGE_GEN_TACTICAL,
+        STAGE_GOOD_CAPTURES,
+        STAGE_GEN_QUIETS,
+        STAGE_QUIETS,
+        STAGE_BAD_CAPTURES,
+        STAGE_DONE
     };
-    // clang-format on
 
     class MovePicker
     {
     public:
         /**
-         * @brief Copies and scores moves for best-first selection.
-         * @param list Candidate moves to order.
-         * @param pos Position used for capture scoring.
-         * @param tt_move Previously stored transposition-table move.
-         * @param ply Search ply used by search heuristics.
+         * @brief A lazy state-machine move picker. Generates quiet moves only when necessary.
          */
-        MovePicker(const MoveList& list, const Position& pos, Move tt_move = Move::none(), int ply = 0);
-
-        /**
-         * @brief Returns the highest-scoring remaining move.
-         * @return The next move, or Move::none() when exhausted.
-         */
+        MovePicker(const Position& pos, Move tt_move, int ply, bool qsearch = false);
         Move next_move();
 
-        /**
-         * @brief Returns the number of moves still waiting to be selected.
-         * @return Count of unselected moves.
-         */
-        [[nodiscard]] int remaining() const noexcept
-        {
-            return count;
-        }
-
     private:
-        Move moves[MAX_MOVES];
-        int count = 0;
-        int ply = 0;
+        const Position& pos;
+        Move tt_move;
+        int ply;
+        bool qsearch;
 
-        /** @brief Assigns ordering scores to the copied move list. */
-        void score_moves(const Position& pos, Move tt_move);
+        PickerStage stage;
+        MoveList list;
+
+        Move bad_captures[MAX_MOVES];
+        int bad_capture_count = 0;
+        int bad_capture_idx = 0;
+
+        Move get_best_from_list();
+        void score_captures();
+        void score_quiets();
     };
 } // namespace MoveOrdering

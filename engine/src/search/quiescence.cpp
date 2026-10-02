@@ -72,19 +72,8 @@ namespace Search
 
         Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
 
-        MoveList list;
-        if (in_check)
-        {
-            // When in check, all evasions (including quiet king steps) are tactical
-            MoveGen::generate_pseudo_legal_moves(pos, list);
-        }
-        else
-        {
-            // Otherwise, only generate captures and promotions natively
-            MoveGen::generate_captures(pos, list);
-        }
-
-        MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
+        // Instantiate Lazy MovePicker (qsearch = true)
+        MoveOrdering::MovePicker picker(pos, Move::none(), ply, true);
         int legal_moves = 0;
 
         while (true)

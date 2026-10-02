@@ -206,14 +206,11 @@ namespace Search
             }
         }
 
-        // Generate pseudo-legal moves for performance (lazy king-safety filtering)
-        MoveList moves;
-        MoveGen::generate_pseudo_legal_moves(pos, moves);
-
         static const Move empty_killers[2] = {Move::none(), Move::none()};
         const Move* current_killers = (ply < MAX_PLY) ? Search::killer_moves[ply] : empty_killers;
-        // Instantiate MovePicker with TT best move hint for move ordering
-        MoveOrdering::MovePicker picker(moves, pos, tt_move, ply);
+
+        // Instantiate Lazy MovePicker with TT best move hint (qsearch = false)
+        MoveOrdering::MovePicker picker(pos, tt_move, ply, false);
 
         Value best_score = -VALUE_INFINITE;
         Move best_move = Move::none();
