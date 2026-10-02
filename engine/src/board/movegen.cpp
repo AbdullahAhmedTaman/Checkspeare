@@ -1,6 +1,8 @@
 #include "movegen.h"
 #include "attacks.h"
 #include "bitboard.h"
+#include "board/bitboard.h"
+#include "position.h"
 #include "types.h"
 
 namespace
@@ -380,6 +382,123 @@ namespace
             }
         }
     }
+
+    void get_checkers_and_pinned(const Position& pos, Bitboard& checkers, Bitboard& pinned)
+    {
+        checkers = 0;
+        pinned = 0;
+
+        Color us = pos.sideToMove;
+        Color them = static_cast<Color>(us ^ 1);
+        Square ksq = pos.king_square(us);
+        Bitboard occ = pos.occupancy[BOTH];
+
+        checkers |= pawn_attacks(us, ksq) & pos.pieces[them][PAWN];
+        checkers |= knight_attacks(ksq) & pos.pieces[them][KNIGHT];
+        checkers |= bishop_attacks(occ, ksq) & (pos.pieces[them][BISHOP] | pos.pieces[them][QUEEN]);
+        checkers |= rook_attacks(occ, ksq) & (pos.pieces[them][ROOK] | pos.pieces[them][QUEEN]);
+
+        Bitboard enemy_occ = pos.occupancy[them] | square_bb(ksq);
+        Bitboard pinner_candidates = (bishop_attacks(enemy_occ, ksq) & (pos.pieces[them][BISHOP] | pos.pieces[them][QUEEN])) |
+                                     (rook_attacks(enemy_occ, ksq) & (pos.pieces[them][ROOK] | pos.pieces[them][QUEEN]));
+
+        while (pinner_candidates)
+        {
+            Square pinner_sq = pop_lsb(pinner_candidates);
+            Bitboard ray = 0;
+
+            if (pos.pieces[them][ROOK] & square_bb(pinner_sq) || pos.pieces[them][QUEEN] & square_bb(pinner_sq))
+            {
+                if (file_of(ksq) == file_of(pinner_sq) || rank_of(ksq) == rank_of(pinner_sq))
+                {
+                    ray = rook_attacks(square_bb(pinner_sq), ksq) & rook_attacks(square_bb(ksq), pinner_sq);
+                }
+            }
+            if (ray == 0)
+            {
+                ray = bishop_attacks(square_bb(pinner_sq), ksq) & bishop_attacks(square_bb(ksq), pinner_sq);
+            }
+
+            Bitboard blockers = ray & occ;
+
+            if (popcount(blockers) == 1)
+            {
+                Bitboard our_blocker = blockers & pos.occupancy[us];
+                if (our_blocker)
+                {
+                    pinned |= our_blocker;
+                }
+            }
+        }
+    }
+
+    bool is_legal(Position& pos, Move move, Bitboard checkers, Bitboard pinned)
+    {
+        Color us = pos.sideToMove;
+        Square from = move.from();
+        Square to = move.to();
+        PieceType pt = type_of(pos.board[from]);
+
+        if (pt == KING || move.is_ep())
+        {
+            pos.make_move(move);
+            bool legal = !pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
+            pos.unmake_move(move);
+            return legal;
+        }
+
+        if (popcount(checkers) > 1)
+        {
+            return false;
+        }
+
+        Square ksq = pos.king_square(us);
+
+        if (pinned & square_bb(from))
+        {
+            bool aligned = false;
+
+            if (file_of(from) == file_of(ksq) && file_of(to) == file_of(ksq))
+                aligned = true;
+            else if (rank_of(from) == rank_of(ksq) && rank_of(to) == rank_of(ksq))
+                aligned = true;
+            else if (diagonal_bb(from) == diagonal_bb(ksq) && diagonal_bb(to) == diagonal_bb(ksq))
+                aligned = true;
+            else if (anti_diagonal_bb(from) == anti_diagonal_bb(ksq) && anti_diagonal_bb(to) == anti_diagonal_bb(ksq))
+                aligned = true;
+
+            if (!aligned)
+                return false;
+        }
+
+        if (checkers)
+        {
+            Square checker_sq = lsb(checkers);
+            Bitboard valid_target_squares = checkers;
+            PieceType checker_pt = type_of(pos.board[checker_sq]);
+
+            if (checker_pt == BISHOP || checker_pt == ROOK || checker_pt == QUEEN)
+            {
+                Bitboard between = 0;
+                if (file_of(checker_sq) == file_of(ksq) || rank_of(checker_sq) == rank_of(ksq))
+                {
+                    between = rook_attacks(square_bb(checker_sq), ksq) & rook_attacks(square_bb(ksq), checker_sq);
+                }
+                else
+                {
+                    between = bishop_attacks(square_bb(checker_sq), ksq) & bishop_attacks(square_bb(ksq), checker_sq);
+                }
+                valid_target_squares |= between;
+            }
+
+            if (!(square_bb(to) & valid_target_squares))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 } // namespace
 
 namespace MoveGen
@@ -404,21 +523,19 @@ namespace MoveGen
     {
         MoveList pseudoLegalMoves;
         generate_pseudo_legal_moves(pos, pseudoLegalMoves);
-
         legalMoves.count = 0;
-        const Color us = pos.sideToMove;
+
+        Bitboard checkers = 0;
+        Bitboard pinned = 0;
+        get_checkers_and_pinned(pos, checkers, pinned);
 
         for (int i = 0; i < pseudoLegalMoves.count; ++i)
         {
             const Move move = pseudoLegalMoves.moves[i];
-            pos.make_move(move);
-            const Square kingSquare = pos.king_square(us);
-            const bool legal = !pos.is_square_attacked(kingSquare, static_cast<Color>(us ^ 1));
-
-            pos.unmake_move(move);
-
-            if (legal)
+            if (is_legal(pos, move, checkers, pinned))
+            {
                 legalMoves.add(move);
+            }
         }
     }
 
