@@ -3,6 +3,7 @@
 #include "InputEvent.hpp"
 
 #include <SFML/Window/Event.hpp>
+#include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Mouse.hpp>
 
 #include <optional>
@@ -25,6 +26,32 @@ namespace Gui
         }
     }
 
+    /// Maps an sf::Keyboard::Key to the controller's Key enum. Returns
+    /// nullopt for keys the controller does not act on; the caller drops
+    /// those events silently.
+    inline std::optional<Key> toKey(sf::Keyboard::Key k)
+    {
+        switch (k)
+        {
+            case sf::Keyboard::Key::Z:
+                return Key::Z;
+            case sf::Keyboard::Key::X:
+                return Key::X;
+            case sf::Keyboard::Key::Y:
+                return Key::Y;
+            case sf::Keyboard::Key::Left:
+                return Key::Left;
+            case sf::Keyboard::Key::Right:
+                return Key::Right;
+            case sf::Keyboard::Key::Home:
+                return Key::Home;
+            case sf::Keyboard::Key::End:
+                return Key::End;
+            default:
+                return std::nullopt;
+        }
+    }
+
     /// Translates an sf::Event into the InputEvent vocabulary. Returns
     /// nullopt for events the controller does not act on.
     ///
@@ -44,6 +71,15 @@ namespace Gui
         {
             return InputEvent::makePointerReleased(toMouseButton(release->button), {static_cast<float>(release->position.x),
                                                                                     static_cast<float>(release->position.y)});
+        }
+
+        if (const auto* keyEvent = event.getIf<sf::Event::KeyPressed>())
+        {
+            const auto mapped = toKey(keyEvent->code);
+            if (!mapped)
+                return std::nullopt;
+
+            return InputEvent::makeKeyPressed(*mapped, keyEvent->control, keyEvent->shift);
         }
 
         return std::nullopt;

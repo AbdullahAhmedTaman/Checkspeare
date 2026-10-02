@@ -213,6 +213,17 @@ void Application::processEvents()
         {
             // Fall through; the controller will resolve the gesture.
         }
+        if (inputEvent->kind == Gui::InputEvent::Kind::KeyPressed)
+        {
+            if (setupModalOpen_ || isGameOver())
+                continue;
+
+            if (ImGui::GetIO().WantCaptureKeyboard)
+                continue;
+
+            controller_.handleEvent(*inputEvent, geo_);
+            continue;
+        }
 
         if (!shouldForwardInput(*inputEvent))
             continue;
@@ -557,6 +568,15 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
     engineBlack_.stop();
 
     game_.reset();
+
+    const bool whiteIsHuman = (setup.whiteKind == Gui::PlayerKind::Human);
+    const bool blackIsHuman = (setup.blackKind == Gui::PlayerKind::Human);
+
+    if (whiteIsHuman != blackIsHuman)
+        geo_.flipped = !whiteIsHuman;
+    else
+        geo_.flipped = false;
+
     lastCursor_ = 0;
     gameOverWas_ = false;
     animation_.active = false;

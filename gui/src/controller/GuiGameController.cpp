@@ -34,6 +34,9 @@ namespace Gui
             case InputEvent::Kind::PointerReleased:
                 onRelease(event.button, event.position, geo);
                 return;
+            case InputEvent::Kind::KeyPressed:
+                onKeyPressed(event.key, event.ctrl);
+                return;
         }
     }
 
@@ -260,6 +263,62 @@ namespace Gui
         }
 
         return false;
+    }
+
+    void GuiGameController::onKeyPressed(Key key, bool ctrl)
+    {
+        // Modals and a finished game own the keyboard; nothing the user
+        // presses should change the cursor in either state.
+        if (isFrozen(game_))
+            return;
+
+        switch (key)
+        {
+            case Key::Z:
+                if (ctrl)
+                    requestUndo();
+                break;
+
+            case Key::X:
+                if (ctrl)
+                    requestRedo();
+                break;
+
+            case Key::Y:
+                if (ctrl)
+                    requestRedo();
+                break;
+
+            case Key::Left:
+                if (ctrl)
+                    game_.gotoStart();
+                else
+                    game_.undo();
+                break;
+
+            case Key::Right:
+                if (ctrl)
+                    game_.gotoEnd();
+                else
+                    game_.redo();
+                break;
+
+            case Key::Home:
+                game_.gotoStart();
+                break;
+
+            case Key::End:
+                game_.gotoEnd();
+                break;
+        }
+
+        // Any seek invalidates an in-flight drag or promotion: the drag
+        // may be anchored to a piece that no longer exists in the new
+        // position, and the pending promotion's from/to squares may not
+        // be legal anymore.
+        drag_ = {};
+        promo_ = {};
+        cancelSelection();
     }
 
     void GuiGameController::playMoveOrStartPromotion(Square from, Square to, bool fromDrag)
