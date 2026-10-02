@@ -1,10 +1,11 @@
 #pragma once
 
-#include "../ui/board/BoardAnnotations.hpp"
+#include "../../../engine/src/board/types.h"
 #include "../game/BoardGeometry.hpp"
 #include "../game/ChessGame.hpp"
 #include "../input/InputEvent.hpp"
-#include "../../../engine/src/board/types.h"
+#include "../ui/board/BoardAnnotations.hpp"
+
 
 #include <array>
 #include <cstddef>
@@ -155,6 +156,7 @@ namespace Gui
         void onRightPress(sf::Vector2f position, const BoardGeometry& geo);
         void onRightRelease(sf::Vector2f position, const BoardGeometry& geo);
         void playMoveOrStartPromotion(Square from, Square to, bool fromDrag);
+        void onKeyPressed(Key key, bool ctrl);
 
         /// True if from -> to is a legal promotion in the current position.
         bool isPromotionMove(Square from, Square to) const;
