@@ -9,8 +9,10 @@
 #include "uci/uci.h"
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 
 bool is_repetition(const Position& pos);
@@ -20,32 +22,124 @@ namespace Search
     Move killer_moves[MAX_PLY][2];
     int history_table[MAX_PIECES][MAX_SQUARES];
 
+    // Nodes spent below each root move during the current iteration (indexed [from][to]).
+    static uint64_t root_move_nodes[MAX_SQUARES][MAX_SQUARES];
+
+    // UCI configurable safety margin for GUI/network latency
+    int move_overhead_ms = 30;
+
+    //  Time Management
+    namespace
+    {
+        constexpr uint64_t NO_LIMIT = UINT64_MAX;
+        constexpr int DEFAULT_MOVES_TO_GO = 40;
+        constexpr int DYNAMIC_TM_MIN_DEPTH = 6;
+
+        constexpr int ASPIRATION_MIN_DEPTH = 5;
+        constexpr int ASPIRATION_FULL_DELTA = 300;
+
+        inline uint64_t elapsed_ms(const SearchContext& ctx)
+        {
+            return static_cast<uint64_t>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - ctx.start_time).count());
+        }
+
+        struct TimeBudget
+        {
+            uint64_t optimum = NO_LIMIT; // Soft limit: checked between iterations and scaled dynamically
+            uint64_t maximum = NO_LIMIT; // Hard limit: aborts search mid-iteration
+            bool dynamic = false;        // False for fixed movetime, depth, or infinite
+        };
+
+        TimeBudget allocate_time(const Position& pos, const SearchLimits& limits)
+        {
+            TimeBudget tb;
+            const int64_t overhead = std::max<int64_t>(0, move_overhead_ms);
+
+            if (limits.movetime > 0)
+            {
+                const int64_t slice = static_cast<int64_t>(limits.movetime) - overhead;
+                tb.optimum = tb.maximum = static_cast<uint64_t>(std::max<int64_t>(slice, 1));
+                return tb;
+            }
+
+            if (limits.wtime <= 0 && limits.btime <= 0)
+                return tb; // Infinite or depth-limited search
+
+            const bool white = (pos.sideToMove == WHITE);
+            const int64_t time_left = std::max<int64_t>(static_cast<int64_t>(white ? limits.wtime : limits.btime), 1);
+            const int64_t inc = std::max<int64_t>(static_cast<int64_t>(white ? limits.winc : limits.binc), 0);
+
+            // Reserve buffer so latency overhead doesn't consume all remaining time
+            const int64_t usable = std::max<int64_t>({time_left - overhead, time_left / 4, static_cast<int64_t>(1)});
+
+            const int mtg = DEFAULT_MOVES_TO_GO;
+
+            const double base = static_cast<double>(usable) / mtg + 0.75 * static_cast<double>(inc);
+            const double opt_cap = 0.50;
+
+            const double optimum = std::min(base, opt_cap * static_cast<double>(usable));
+            const double maximum = std::min(0.80 * static_cast<double>(usable), optimum * 5.0);
+
+            tb.optimum = std::max<uint64_t>(static_cast<uint64_t>(optimum), 1);
+            tb.maximum = std::max<uint64_t>(static_cast<uint64_t>(maximum), tb.optimum);
+            tb.dynamic = true;
+            return tb;
+        }
+
+        double dynamic_time_scale(int depth, int stability, Value score, Value prev_score, int fail_lows, double best_move_effort)
+        {
+            if (depth < DYNAMIC_TM_MIN_DEPTH)
+                return 1.0;
+
+            // 1) Move stability scaling
+            static constexpr double STABILITY[6] = {1.50, 1.25, 1.05, 0.92, 0.82, 0.75};
+            double scale = STABILITY[std::min(stability, 5)];
+
+            // 2) Score trend scaling (spend extra time if position evaluation is falling)
+            if (std::abs(score) < MATE_BOUND && std::abs(prev_score) < MATE_BOUND)
+            {
+                const double drop = static_cast<double>(prev_score) - static_cast<double>(score);
+                scale *= std::clamp(1.0 + 0.006 * drop, 0.85, 1.60);
+            }
+
+            // 3) Aspiration fail-low scaling
+            scale *= 1.0 + 0.12 * std::min(fail_lows, 3);
+
+            // 4) Effort scaling (easier decision if most nodes were spent on one root move)
+            scale *= std::clamp(1.65 - best_move_effort, 0.65, 1.40);
+
+            return std::clamp(scale, 0.40, 3.00);
+        }
+
+        inline int initial_aspiration_delta(Value prev_score)
+        {
+            const int64_t s = static_cast<int64_t>(prev_score);
+            return 10 + static_cast<int>((s * s) / 15000);
+        }
+    } // namespace
+
+    // =====================================================================
+    //  Pruning Helpers & Setup
+    // =====================================================================
     bool try_null_move_pruning(Position& pos, int depth, int ply, Value beta, SearchContext& ctx, Value& out_score)
     {
         Value static_eval = Eval::evaluate(pos);
         Color us = pos.sideToMove;
 
-        // Zugzwang Material Guard
         Bitboard non_pawn_material =
             pos.pieces[us][KNIGHT] | pos.pieces[us][BISHOP] | pos.pieces[us][ROOK] | pos.pieces[us][QUEEN];
 
-        // Static Evaluation Guard
         if (static_eval >= beta && non_pawn_material != 0)
         {
-            // Adaptive Reduction
             int R = 2 + (depth / 4);
 
             pos.make_move(Move::null());
-
-            // Zero-window search at reduced depth. do_null = false prevents double-nulling.
             Value null_score = -negamax<NON_PV>(pos, depth - 1 - R, ply + 1, -beta, -beta + 1, ctx, false);
-
             pos.unmake_move(Move::null());
 
-            // Beta Cutoff Evaluation
             if (null_score >= beta)
             {
-                // Safeguard against artificial mate scores
                 out_score = (null_score >= MATE_BOUND) ? beta : null_score;
                 return true;
             }
@@ -56,17 +150,12 @@ namespace Search
 
     int LMRTable[MAX_PLY][MAX_MOVES];
 
-    /**
-     * @brief Precomputes the baseline Late Move Reduction values using a logarithmic curve.
-     *        Called once during engine startup.
-     */
     void init_lmr_table()
     {
         for (int depth = 0; depth < MAX_PLY; ++depth)
         {
             for (int moves = 0; moves < MAX_MOVES; ++moves)
             {
-                // Standard LMR logarithmic scaling formula
                 if (depth > 0 && moves > 0)
                 {
                     LMRTable[depth][moves] = static_cast<int>(0.75 + std::log(depth) * std::log(moves) / 2.25);
@@ -84,45 +173,42 @@ namespace Search
     void init()
     {
         Signals_stop.store(false, std::memory_order_relaxed);
+        std::memset(killer_moves, 0, sizeof(killer_moves));
+        std::memset(history_table, 0, sizeof(history_table));
+        std::memset(root_move_nodes, 0, sizeof(root_move_nodes));
     }
 
-    /**
-     * @brief Calculates the depth reduction for Late Move Reductions (LMR).
-     *        Returns 0 if LMR should be skipped (hard filters).
-     */
     inline int calculate_lmr_reduction(bool is_pv, int depth, int moves_searched, bool in_check, const Move& move,
                                        const Move* killers)
     {
-        // Do not reduce if depth is low, it's an early move, in check, or tactical
         if (depth < 3 || moves_searched < 3 || in_check || move.is_capture() || move.is_promotion())
         {
-            return 0; // 0 means do not reduce
+            return 0;
         }
 
         int safe_depth = std::min(depth, MAX_PLY - 1);
         int safe_moves = std::min(moves_searched, MAX_MOVES - 1);
         int R = LMRTable[safe_depth][safe_moves];
+
         if (is_pv)
-        {
-            R -= 1; // Search PV nodes slightly deeper
-        }
+            R -= 1;
 
         if (move == killers[0] || move == killers[1])
-        {
             R -= 1;
-        }
 
-        // Clamp the reduction to remain within safe bounds
         return std::clamp(R, 0, depth - 1);
     }
 
+    // =====================================================================
+    //  Core Negamax Search Algorithm
+    // =====================================================================
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
         if (ply >= MAX_PLY - 1)
             return Eval::evaluate(pos);
 
-        // Mate Distance Pruning: clamp search bounds relative to distance from root
+        // Mate Distance Pruning
         alpha = std::max(alpha, -VALUE_MATE + ply);
         beta = std::min(beta, VALUE_MATE - ply - 1);
         Value alpha_orig = alpha;
@@ -130,68 +216,55 @@ namespace Search
         if (alpha >= beta)
             return alpha;
 
-        // Compile-time constant flags to optimize branch elimination
         constexpr bool IsPV = (NT != NON_PV);
         constexpr bool IsRoot = (NT == ROOT);
 
-        // Check for asynchronous interrupt signals (UCI 'stop' command or time limit breach)
         if (Signals_stop.load(std::memory_order_relaxed))
             return VALUE_ZERO;
 
-        // Draw Detection: 50-move rule and Zobrist repetition
+        // Draw Detection
         if (ply > 0 && (pos.halfmoveClock >= 100 || is_repetition(pos)))
         {
             return VALUE_ZERO;
         }
 
-        // Check detection for tactical evaluation and pruning restrictions
         bool in_check = pos.in_check();
 
-        // Check Extension: Force evasion resolution in main loop before dropping into Q-search
         if (in_check && ply < MAX_PLY - 1)
         {
-            depth++;
+            depth++; // Check extension
         }
 
-        // Leaf Node Hand-off: Transition to Quiescence Search when nominal depth expires
         if (depth <= 0)
         {
             return quiescence(pos, ply, alpha, beta, ctx);
         }
 
         ctx.info.nodes++;
-        // Poll the wall clock every 1024 nodes. Hard ceiling aborts immediately;
-        // soft target also aborts, but only below the root so that we always
-        // produce a best_move for the current depth before giving up.
-        if ((ctx.info.nodes & 1023) == 0 && ctx.opt_time_ms > 0)
-        {
-            auto now = std::chrono::steady_clock::now();
-            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
 
-            if (elapsed >= ctx.max_time_ms)
-            {
-                Signals_stop.store(true, std::memory_order_relaxed);
-            }
-            else if (elapsed >= ctx.opt_time_ms && ply > 0)
+        // Polling wall clock (hard time ceiling enforcement)
+        if ((ctx.info.nodes & 2047) == 0 && ctx.max_time_ms != NO_LIMIT)
+        {
+            if (elapsed_ms(ctx) >= ctx.max_time_ms)
             {
                 Signals_stop.store(true, std::memory_order_relaxed);
             }
         }
 
-        // Compile-time check: Stripped out completely for PV and ROOT nodes.
+        // Null Move Pruning
         if constexpr (!IsPV)
         {
-            // Only try NMP if permitted, depth is sufficient, and king is safe.
             if (do_null && depth >= 3 && !in_check)
             {
                 Value nmp_score;
                 if (try_null_move_pruning(pos, depth, ply, beta, ctx, nmp_score))
                 {
-                    return nmp_score; // Cutoff achieved, prune the subtree
+                    return nmp_score;
                 }
             }
         }
 
+        // Transposition Table Probe
         TTEntry tt_entry;
         Move tt_move = Move::none();
         bool tt_hit = TT.probe(pos.key, ply, tt_entry);
@@ -199,7 +272,6 @@ namespace Search
         if (tt_hit)
         {
             tt_move = tt_entry.best_move;
-
             if (tt_entry.depth >= depth && !IsRoot)
             {
                 if (tt_entry.flag == TT_EXACT)
@@ -211,50 +283,49 @@ namespace Search
             }
         }
 
-        // Generate pseudo-legal moves for performance (lazy king-safety filtering)
-        MoveList moves;
-        MoveGen::generate_pseudo_legal_moves(pos, moves);
-
         static const Move empty_killers[2] = {Move::none(), Move::none()};
         const Move* current_killers = (ply < MAX_PLY) ? Search::killer_moves[ply] : empty_killers;
-        // Instantiate MovePicker with TT best move hint for move ordering
+
+        // Move Generation & MovePicker Initialization
+        MoveList moves;
+        MoveGen::generate_legal_moves(pos, moves);
+
+        if (moves.count == 0)
+        {
+            return in_check ? (-VALUE_MATE + ply) : VALUE_ZERO;
+        }
+
         MoveOrdering::MovePicker picker(moves, pos, tt_move, ply);
 
         Value best_score = -VALUE_INFINITE;
         Move best_move = Move::none();
         int moves_searched = 0;
-        int legal_moves_count = 0;
 
-        const Color us = pos.sideToMove;
+        Move searched_quiets[MAX_MOVES];
+        int quiet_count = 0;
 
-        // Move iteration loop driven by MovePicker
         while (true)
         {
             const Move move = picker.next_move();
             if (!move.is_ok())
                 break;
 
-            // Lazy Legality Check: execute move and verify our King is not under attack
-            pos.make_move(move);
-            if (pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1)))
+            bool is_quiet = !move.is_capture() && !move.is_promotion();
+            if (is_quiet)
             {
-                pos.unmake_move(move);
-                continue; // Skip illegal move
+                searched_quiets[quiet_count++] = move;
             }
 
-            legal_moves_count++;
-            Value score = -VALUE_INFINITE;
+            pos.make_move(move);
 
+            Value score = -VALUE_INFINITE;
+            [[maybe_unused]] const auto nodes_before = ctx.info.nodes;
             bool needs_full_search = true;
 
             int R = calculate_lmr_reduction(IsPV, depth, moves_searched, in_check, move, current_killers);
-            // If R > 0, the helper function approved the reduction
             if (R > 0)
             {
-                // Execute Shallow Zero-Window Search
                 Value reduced_score = -negamax<NON_PV>(pos, depth - 1 - R, ply + 1, -alpha - 1, -alpha, ctx, true);
-
-                // If it fails low, the move is truly bad. Skip the full search.
                 if (reduced_score <= alpha)
                 {
                     score = reduced_score;
@@ -288,11 +359,14 @@ namespace Search
             pos.unmake_move(move);
             moves_searched++;
 
-            // Abort current move evaluation if stop signal was raised
+            if constexpr (IsRoot)
+            {
+                root_move_nodes[move.from()][move.to()] += ctx.info.nodes - nodes_before;
+            }
+
             if (Signals_stop.load(std::memory_order_relaxed))
                 return VALUE_ZERO;
 
-            // Alpha-Beta Score Update Logic
             if (score > best_score)
             {
                 best_score = score;
@@ -302,78 +376,52 @@ namespace Search
                 {
                     alpha = score;
 
-                    // Update best move at root level for UCI output
                     if constexpr (IsRoot)
                     {
                         ctx.info.best_move = move;
                     }
 
-                    // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
-                        // Store Killer Move heuristic for non-captures
-                        if (!move.is_capture() && !move.is_promotion())
+                        if (is_quiet)
                         {
                             if (ply < MAX_PLY)
                                 Search::update_killers(move, ply);
+
                             Search::update_history(move, depth, pos.board[move.from()]);
+
+                            // Apply history gravity penalties to failed quiet moves
+                            for (int i = 0; i < quiet_count - 1; ++i)
+                            {
+                                Search::penalize_history(searched_quiets[i], depth, pos.board[searched_quiets[i].from()]);
+                            }
                         }
-                        break; // Cut off remaining move searches
+                        break;
                     }
                 }
             }
         }
 
-        // Terminal Node Handling: Checkmate or Stalemate
-        if (legal_moves_count == 0)
-        {
-            // Adjust mate score by ply to prefer shorter mate paths
-            return in_check ? (-VALUE_MATE + ply) : VALUE_ZERO;
-        }
-
         if (!Signals_stop.load(std::memory_order_relaxed))
         {
             TTFlag flag = (best_score >= beta) ? TT_LOWERBOUND : (best_score > alpha_orig) ? TT_EXACT : TT_UPPERBOUND;
-
             TT.store(pos.key, ply, depth, best_score, flag, best_move);
         }
 
         return best_score;
     }
 
+    //  Iterative Deepening Control Loop
     void start_search(Position& pos, const SearchLimits& limits)
     {
         init();
+        TT.clear();
         SearchContext ctx(limits, Signals_stop);
 
-        uint64_t time_left = (pos.sideToMove == WHITE) ? limits.wtime : limits.btime;
-        uint64_t inc = (pos.sideToMove == WHITE) ? limits.winc : limits.binc;
+        const TimeBudget budget = allocate_time(pos, limits);
+        ctx.opt_time_ms = budget.optimum;
+        ctx.max_time_ms = budget.maximum;
 
-        if (limits.movetime > 0)
-        {
-            ctx.opt_time_ms = (limits.movetime > 20) ? limits.movetime - 20 : 1;
-            ctx.max_time_ms = ctx.opt_time_ms;
-        }
-        else if (time_left > 0)
-        {
-            ctx.opt_time_ms = (time_left / 40) + (inc * 3 / 4);
-            // Cap the hard ceiling at ~5% of remaining time. A larger margin
-            // (100 ms) is reserved for GUI round-trip latency and clock drift.
-            uint64_t safe_margin = (time_left > 100) ? time_left - 100 : time_left / 2;
-            ctx.max_time_ms = std::min(time_left / 20, safe_margin);
-
-            if (ctx.max_time_ms == 0)
-                ctx.max_time_ms = 1;
-
-            ctx.opt_time_ms = std::min(ctx.opt_time_ms, ctx.max_time_ms);
-        }
-        else
-        {
-            ctx.opt_time_ms = UINT64_MAX;
-            ctx.max_time_ms = UINT64_MAX;
-        }
-
-        // Retain move from the last fully completed depth iteration
         Move safe_best_move = Move::none();
 
         MoveList root_moves;
@@ -381,56 +429,77 @@ namespace Search
         if (root_moves.count > 0)
             safe_best_move = root_moves.moves[0];
 
-        const uint64_t base_opt_time_ms = ctx.opt_time_ms;
-        double time_extension_factor = 1.0;
+        // Single move safeguard
+        if (root_moves.count == 1 && budget.maximum != NO_LIMIT)
+        {
+            std::cout << "bestmove " << safe_best_move << std::endl;
+            return;
+        }
 
-        // Iterative Deepening Loop
         Value prev_score = VALUE_ZERO;
+        Move prev_best = Move::none();
+        int stability = 0;
+
         for (int current_depth = 1; current_depth <= limits.depth; ++current_depth)
         {
             if (Signals_stop.load(std::memory_order_relaxed))
                 break;
 
             ctx.info.depth = current_depth;
-            Value score = VALUE_ZERO;
+            std::memset(root_move_nodes, 0, sizeof(root_move_nodes));
+            const auto iter_start_nodes = ctx.info.nodes;
 
-            // search with a full window at low depths, as evaluation is still unstable
-            if (current_depth <= 4)
+            Value score = VALUE_ZERO;
+            int fail_lows = 0;
+            Move pending_best = Move::none();
+
+            const bool use_aspiration = current_depth >= ASPIRATION_MIN_DEPTH && std::abs(prev_score) < MATE_BOUND;
+
+            if (!use_aspiration)
             {
+                ctx.info.best_move = Move::none();
                 score = negamax<ROOT>(pos, current_depth, 0, -VALUE_INFINITE, VALUE_INFINITE, ctx, false);
             }
             else
             {
-                int delta = 25;
-                Value alpha = std::max(prev_score - delta, -VALUE_INFINITE);
-                Value beta = std::min(prev_score + delta, VALUE_INFINITE);
+                int delta = initial_aspiration_delta(prev_score);
+                int alpha = std::max<int>(static_cast<int>(prev_score) - delta, -VALUE_INFINITE);
+                int beta = std::min<int>(static_cast<int>(prev_score) + delta, VALUE_INFINITE);
 
-                while (!Signals_stop.load(std::memory_order_relaxed))
+                while (true)
                 {
-                    score = negamax<ROOT>(pos, current_depth, 0, alpha, beta, ctx, false);
+                    ctx.info.best_move = Move::none();
+                    score = negamax<ROOT>(pos, current_depth, 0, static_cast<Value>(alpha), static_cast<Value>(beta), ctx, false);
 
                     if (Signals_stop.load(std::memory_order_relaxed))
                         break;
 
+                    if (alpha <= -VALUE_INFINITE && beta >= VALUE_INFINITE)
+                        break;
+
                     if (score <= alpha)
                     {
-                        alpha = std::max(alpha - delta, -VALUE_INFINITE);
-                        delta += delta / 2;
+                        ++fail_lows;
+                        beta = (alpha + beta) / 2;
+                        alpha = std::max<int>(static_cast<int>(score) - delta, -VALUE_INFINITE);
                     }
-
                     else if (score >= beta)
                     {
-                        beta = std::min(beta + delta, VALUE_INFINITE);
-                        delta += delta / 2;
-                    }
+                        pending_best = ctx.info.best_move;
 
+                        // Soft-time check during fail-high: early exit using valid candidate
+                        if (elapsed_ms(ctx) >= ctx.opt_time_ms && pending_best != Move::none())
+                            break;
+
+                        beta = std::min<int>(static_cast<int>(score) + delta, VALUE_INFINITE);
+                    }
                     else
                     {
                         break;
                     }
 
-                    // If delta grows too wide, fall back to a full window
-                    if (delta >= 1000)
+                    delta += delta;
+                    if (delta >= ASPIRATION_FULL_DELTA)
                     {
                         alpha = -VALUE_INFINITE;
                         beta = VALUE_INFINITE;
@@ -438,56 +507,56 @@ namespace Search
                 }
             }
 
-            // Discard partial depth results if interrupted mid-search
             if (Signals_stop.load(std::memory_order_relaxed))
-                break;
-
-            auto now = std::chrono::steady_clock::now();
-            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
-
-            // Only extend time if we aren't on an infinite search
-            if (current_depth > 1 && base_opt_time_ms != UINT64_MAX)
             {
-                bool move_changed = (ctx.info.best_move != safe_best_move);
-                bool score_volatile = (std::abs(score - prev_score) >= 50);
-
-                if (move_changed || score_volatile)
-                {
-                    // Add to the multiplier, but cap it so we don't consume the entire clock
-                    time_extension_factor = std::min(time_extension_factor + 0.5, 2.5);
-
-                    // Multiply against the unmutated base time, not the already-extended time
-                    ctx.opt_time_ms = std::min(static_cast<uint64_t>(base_opt_time_ms * time_extension_factor), ctx.max_time_ms);
-                }
+                if (ctx.info.best_move != Move::none())
+                    safe_best_move = ctx.info.best_move;
+                else if (pending_best != Move::none())
+                    safe_best_move = pending_best;
+                break;
             }
 
-            safe_best_move = ctx.info.best_move;
+            const uint64_t elapsed = elapsed_ms(ctx);
+            const Move best = ctx.info.best_move;
+
+            if (best != Move::none())
+                safe_best_move = best;
+
+            stability = (current_depth > 1 && best == prev_best) ? stability + 1 : 0;
+            prev_best = best;
+
+            // Recalculate dynamic soft limit based on iteration search effort
+            if (budget.dynamic)
+            {
+                double effort = 0.5;
+                const uint64_t iter_nodes = ctx.info.nodes - iter_start_nodes;
+                if (best != Move::none() && iter_nodes > 0)
+                {
+                    effort = std::min(1.0, static_cast<double>(root_move_nodes[best.from()][best.to()]) /
+                                               static_cast<double>(iter_nodes));
+                }
+
+                const double scale = dynamic_time_scale(current_depth, stability, score, prev_score, fail_lows, effort);
+                ctx.opt_time_ms = static_cast<uint64_t>(
+                    std::min(static_cast<double>(budget.optimum) * scale, static_cast<double>(budget.maximum)));
+            }
+
             prev_score = score;
             ctx.info.score = score;
             ctx.info.time_ms = elapsed;
 
-            // Output UCI telemetry progress update
             UCI::send_search_info(ctx.info);
 
             if (elapsed >= ctx.opt_time_ms)
                 break;
 
-            // Hard ceiling check between depths: protects against a single depth
-            // iteration running away past max_time_ms without the in-search poll
-            // catching it in time (e.g., very slow nodes on old hardware).
-            if (elapsed >= ctx.max_time_ms)
-                break;
-
-            // Checkmate early exit
             if (std::abs(score) >= MATE_BOUND && current_depth >= (VALUE_MATE - std::abs(score)))
                 break;
         }
 
-        // Output final UCI choice
         std::cout << "bestmove " << safe_best_move << std::endl;
     }
 
-    // Explicit template instantiations to optimize compilation boundaries
     template Value negamax<ROOT>(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null);
     template Value negamax<PV>(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null);
     template Value negamax<NON_PV>(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null);
