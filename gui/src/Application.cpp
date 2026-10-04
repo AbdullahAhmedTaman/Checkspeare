@@ -44,7 +44,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     : conf_(conf),
       assets_(assets),
       sounds_(sounds),
-      window_(sf::VideoMode({1600, 1280}), "Chess GUI"),
+      window_(sf::VideoMode({1400, 1080}), "Chess GUI"),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets)),
       soundPlayer_(sounds)

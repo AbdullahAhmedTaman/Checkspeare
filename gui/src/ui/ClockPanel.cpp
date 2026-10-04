@@ -230,11 +230,7 @@ namespace Gui
         drawClockCard("Black", blackEngineName, clock.remainingMs(BLACK), reference, !whiteToMove, clock.flagFallen(BLACK),
                       ImVec2(cardW, cardH), clockFont, engineNameFont);
 
-        // Captured pieces sit beneath each player's clock: White's row of
-        // captured black pieces under the White clock, and Black's row of
-        // captured white pieces under the Black clock. Wrapping each row in
-        // a borderless, non-scrolling child gives clean clipping if a side
-        // ever accumulates more pieces than the width allows.
+        // Captured pieces sit beneath each player's clock.
         constexpr float kIconSize = 34.0f;
         const float rowH = kIconSize + 8.0f;
 
