@@ -166,7 +166,7 @@ namespace MoveOrdering
                         if (best == tt_move)
                             continue;
 
-                        if (best.ordering_score() >= BAD_CAPTURE)
+                        if (best.ordering_score() >= 0)
                         {
                             return best;
                         }
