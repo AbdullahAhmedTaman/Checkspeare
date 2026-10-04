@@ -1,7 +1,7 @@
+// StatusPanel.cpp
 #include "StatusPanel.hpp"
 
 #include "../game/GameResult.hpp"
-#include "CapturedPiecesPanel.hpp"
 
 #include <imgui.h>
 
@@ -40,33 +40,9 @@ namespace Gui
             }
             return {};
         }
-
-        /// Counts of each piece type currently on the board, per color.
-        /// Indexed [color][pieceType].
-        void drawCapturedRow(const ChessGame& game, Color capturingSide, const Assets::TextureLibrary& assets, float iconSize)
-        {
-            constexpr float kGroupGap = 6.0f;
-
-            const Color capturedSide = (capturingSide == WHITE) ? BLACK : WHITE;
-            const std::vector<CapturedGroup> groups = capturedBy(game, capturingSide);
-
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-            ImVec2 cursor = ImGui::GetCursorScreenPos();
-
-            for (const CapturedGroup& g : groups)
-            {
-                const std::string key = Assets::TextureLibrary::getPieceKey(make_piece(capturedSide, g.type));
-                const sf::Texture& texture = assets.getTexture(key);
-
-                cursor.x += drawCapturedIcon(drawList, texture, cursor, iconSize, g.count) + kGroupGap;
-            }
-
-            ImGui::Dummy(ImVec2(ImGui::GetContentRegionAvail().x, iconSize));
-        }
     } // namespace
 
-    void renderStatusPanel(GuiGameController& controller, const ChessGame& game, bool canResign,
-                           const Assets::TextureLibrary& assets)
+    void renderStatusPanel(GuiGameController& controller, const ChessGame& game, bool canResign)
     {
         ImGui::Begin("Game");
 
@@ -102,10 +78,6 @@ namespace Gui
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Enabled only when the human side to move can give up. In human
-        // vs engine this is the human's turn only; in engine vs engine it
-        // is never enabled; in human vs human it tracks the clock. The
-        // click resigns for the side to move, matching real chess.
         constexpr float kResignButtonWidth = 120.0f;
         const float availW = ImGui::GetContentRegionAvail().x;
 
@@ -119,15 +91,6 @@ namespace Gui
 
         ImGui::Spacing();
 
-        // Captured pieces: top row is White's captures (Black pieces),
-        // bottom row is Black's captures (White pieces).
-        constexpr float kIconSize = 22.0f;
-
-        drawCapturedRow(game, WHITE, assets, kIconSize);
-        drawCapturedRow(game, BLACK, assets, kIconSize);
-
-        // Passive result banner. The modal is the active prompt; this is
-        // a persistent indicator that survives after the modal is closed.
         const GameResult result = game.result();
         const std::string resultText = toString(result);
         if (!resultText.empty())
@@ -143,10 +106,6 @@ namespace Gui
             ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.86f, 0.42f, 0.34f, 1.0f));
             ImGui::BeginChild("##result", ImVec2(0, cardH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
 
-            // Center both axes within the child's content region. At the
-            // top of a child, GetContentRegionAvail returns the full inner
-            // rect; offsetting by half the slack places the text at the
-            // visual center regardless of the theme's WindowPadding.
             const ImVec2 avail = ImGui::GetContentRegionAvail();
             const float offsetX = (avail.x - textSize.x) * 0.5f;
             const float offsetY = (avail.y - textSize.y) * 0.5f;

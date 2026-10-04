@@ -1,4 +1,7 @@
+// ClockPanel.cpp
 #include "ClockPanel.hpp"
+
+#include "CapturedPiecesPanel.hpp"
 
 #include <imgui.h>
 
@@ -43,7 +46,6 @@ namespace Gui
 
             if (flagged)
             {
-                // Red palette: the flag fell.
                 c.bg = IM_COL32(56, 26, 24, 255);
                 c.border = IM_COL32(198, 96, 78, 255);
                 c.accent = IM_COL32(214, 112, 90, 255);
@@ -53,7 +55,6 @@ namespace Gui
             }
             else if (active)
             {
-                // Amber palette: this side is to move.
                 c.bg = IM_COL32(46, 42, 38, 255);
                 c.border = IM_COL32(232, 200, 122, 255);
                 c.accent = IM_COL32(232, 200, 122, 255);
@@ -63,7 +64,6 @@ namespace Gui
             }
             else
             {
-                // Neutral palette: waiting.
                 c.bg = IM_COL32(36, 35, 34, 255);
                 c.border = IM_COL32(74, 73, 72, 255);
                 c.accent = IM_COL32(140, 139, 138, 255);
@@ -76,19 +76,6 @@ namespace Gui
         }
 
         /// Draws a single clock card at the current cursor position.
-        ///
-        /// The card is drawn with the window draw list (background, border,
-        /// dot, big time, progress bar), then ImGui::Dummy reserves the
-        /// layout slot so the next widget lands after the card.
-
-        /// Draws a single clock card at the current cursor position.
-        ///
-        /// The card is drawn with the window draw list (background, border,
-        /// dot, big time, progress bar), then ImGui::Dummy reserves the
-        /// layout slot so the next widget lands after the card.
-        ///
-        /// `clockFont` may be null; if so, the time is drawn with the
-        /// default UI font at a larger point size.
         void drawClockCard(const char* label, const std::string& engineName, std::int64_t remainingMs, std::int64_t referenceMs,
                            bool active, bool flagged, ImVec2 size, ImFont* clockFont, ImFont* engineNameFont)
         {
@@ -101,7 +88,6 @@ namespace Gui
 
             ImDrawList* dl = ImGui::GetWindowDrawList();
 
-            // Card background + border.
             const float borderThickness = active ? 2.5f : 1.0f;
             const float rounding = 8.0f;
 
@@ -139,7 +125,6 @@ namespace Gui
                     dl->AddText(font, nameSize, ImVec2(nameX, nameY), c.accent, engineName.c_str());
             }
 
-            // Big time readout, horizontally centered.
             const std::string timeText = formatClock(remainingMs);
 
             ImFont* font = clockFont ? clockFont : ImGui::GetFont();
@@ -150,7 +135,6 @@ namespace Gui
             const ImVec2 timePos = ImVec2(p0.x + (size.x - timeSize.x) * 0.5f, p0.y + pad + 26.0f);
             dl->AddText(font, bigSize, timePos, c.text, timeText.c_str());
 
-            // Progress bar: remaining / reference, clamped to [0, 1].
             const float barH = 6.0f;
             const float barY = p1.y - pad - barH;
             const float barW = size.x - pad * 2.0f;
@@ -172,10 +156,61 @@ namespace Gui
 
             ImGui::PopID();
         }
+
+        /// Draws one row of the pieces that `capturingSide` has captured.
+        /// Each distinct piece type is rendered once with its count.
+        void drawCapturedRow(const ChessGame& game, Color capturingSide, const Assets::TextureLibrary& assets, float iconSize)
+        {
+            constexpr float kGroupGap = 8.0f;
+
+            const Color capturedSide = (capturingSide == WHITE) ? BLACK : WHITE;
+            const std::vector<CapturedGroup> groups = capturedBy(game, capturingSide);
+
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const float availW = ImGui::GetContentRegionAvail().x;
+
+            if (groups.empty())
+            {
+                // Still reserve the row height so both sides keep matching layout.
+                ImGui::Dummy(ImVec2(availW, iconSize));
+                return;
+            }
+
+            // Resolve each group's texture once so both passes agree.
+            std::vector<std::pair<const sf::Texture*, int>> resolved;
+            resolved.reserve(groups.size());
+            for (const CapturedGroup& g : groups)
+            {
+                const std::string key = Assets::TextureLibrary::getPieceKey(make_piece(capturedSide, g.type));
+                resolved.emplace_back(&assets.getTexture(key), g.count);
+            }
+
+            // Measure pass. drawCapturedIcon always draws, so the first pass is
+            // issued far off-screen; the child's clip rect discards its pixels.
+            // (A measure-only entry point would be cleaner, but this avoids
+            // touching CapturedPiecesPanel.hpp.)
+            float totalW = 0.0f;
+            {
+                const ImVec2 probe(-100000.0f, -100000.0f);
+                for (const auto& [texture, count] : resolved)
+                    totalW += drawCapturedIcon(drawList, *texture, probe, iconSize, count) + kGroupGap;
+                totalW -= kGroupGap;
+            }
+
+            // Draw pass, centered horizontally inside the child.
+            ImVec2 cursor = ImGui::GetCursorScreenPos();
+            if (availW > totalW)
+                cursor.x += (availW - totalW) * 0.5f;
+
+            for (const auto& [texture, count] : resolved)
+                cursor.x += drawCapturedIcon(drawList, *texture, cursor, iconSize, count) + kGroupGap;
+
+            ImGui::Dummy(ImVec2(availW, iconSize));
+        }
     } // namespace
 
-    void renderClockPanel(const ChessClock& clock, const ChessGame& game, ImFont* clockFont, ImFont* engineNameFont,
-                          const std::string& whiteEngineName, const std::string& blackEngineName)
+    void renderClockPanel(const ChessClock& clock, const ChessGame& game, const Assets::TextureLibrary& assets, ImFont* clockFont,
+                          ImFont* engineNameFont, const std::string& whiteEngineName, const std::string& blackEngineName)
     {
         ImGui::Begin("Clock");
 
@@ -185,7 +220,6 @@ namespace Gui
         const float cardH = 100.0f;
 
         const std::int64_t reference = clock.timeControl().initialMs;
-
         const bool whiteToMove = (game.sideToMove() == WHITE);
 
         drawClockCard("White", whiteEngineName, clock.remainingMs(WHITE), reference, whiteToMove, clock.flagFallen(WHITE),
@@ -195,6 +229,32 @@ namespace Gui
 
         drawClockCard("Black", blackEngineName, clock.remainingMs(BLACK), reference, !whiteToMove, clock.flagFallen(BLACK),
                       ImVec2(cardW, cardH), clockFont, engineNameFont);
+
+        // Captured pieces sit beneath each player's clock: White's row of
+        // captured black pieces under the White clock, and Black's row of
+        // captured white pieces under the Black clock. Wrapping each row in
+        // a borderless, non-scrolling child gives clean clipping if a side
+        // ever accumulates more pieces than the width allows.
+        constexpr float kIconSize = 34.0f;
+        const float rowH = kIconSize + 8.0f;
+
+        ImGui::Spacing();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(4.0f, 2.0f));
+
+        ImGui::BeginChild("##whiteCaptures", ImVec2(cardW, rowH), ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        drawCapturedRow(game, WHITE, assets, kIconSize);
+        ImGui::EndChild();
+
+        ImGui::SameLine(0.0f, gap);
+
+        ImGui::BeginChild("##blackCaptures", ImVec2(cardW, rowH), ImGuiChildFlags_None,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        drawCapturedRow(game, BLACK, assets, kIconSize);
+        ImGui::EndChild();
+
+        ImGui::PopStyleVar();
 
         ImGui::End();
     }

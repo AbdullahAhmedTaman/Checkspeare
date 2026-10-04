@@ -185,6 +185,9 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
     if (!poll.infos.empty())
         lastInfo_ = poll.infos.back();
 
+    if (poll.bestMove)
+        pendingBestMove_ = poll.bestMove;
+
     EnginePlayerInputs in;
     in.thinking = thinking_;
     in.thinkStartPly = thinkStartPly_;
@@ -193,14 +196,11 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
     in.sideToMove = game.sideToMove();
     in.sideControlled = controlled_[static_cast<int>(game.sideToMove())];
 
-    // gameOver includes both terminal positions (mate, stalemate, draws)
-    // and clock flag fall. Game and clock are separate sources of truth;
-    // this is the one place that combines them.
     in.gameOver = (game.result().kind != GameResultKind::Ongoing) || clock.flagFallen(WHITE) || clock.flagFallen(BLACK);
 
     in.engineReady = engine_.isReady();
     in.engineAlive = engine_.isRunning();
-    in.bestMoveArrived = poll.bestMove.has_value();
+    in.bestMoveArrived = pendingBestMove_.has_value();
 
     switch (decideEngineAction(in))
     {
@@ -216,30 +216,42 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
                 thinkStartPly_ = game.cursor();
                 lastInfo_.reset();
                 lastInfoSide_ = game.sideToMove();
+                pendingBestMove_.reset();
+                thinkStartTime_ = std::chrono::steady_clock::now();
                 return std::nullopt;
             }
 
         case EnginePlayerAction::AbortSearch:
             engine_.stopSearch();
             thinking_ = false;
+            pendingBestMove_.reset();
             return std::nullopt;
 
         case EnginePlayerAction::FinishSearch:
             {
-                thinking_ = false;
-
-                if (!poll.bestMove)
+                // Enforce a floor on how quickly an engine move can land.
+                // A book move returns in a few milliseconds, which makes
+                // the opponent feel mechanical; holding until at least
+                // kMinThinkTime has elapsed since the search began lets
+                // the move read as a decision. Searches that already took
+                // longer than the floor pass through with no extra wait.
+                constexpr auto kMinThinkTime = std::chrono::milliseconds(500);
+                if (std::chrono::steady_clock::now() - thinkStartTime_ < kMinThinkTime)
                     return std::nullopt;
 
-                const auto m = parseUciMove(game.board(), *poll.bestMove);
+                thinking_ = false;
+
+                if (!pendingBestMove_)
+                    return std::nullopt;
+
+                const auto m = parseUciMove(game.board(), *pendingBestMove_);
+                pendingBestMove_.reset();
 
                 if (!m)
                     return std::nullopt;
 
                 const PieceType promo = m->is_promotion() ? promotion_type(*m) : QUEEN;
-                auto played = game.play(m->from(), m->to(), promo);
-
-                return played;
+                return game.play(m->from(), m->to(), promo);
             }
     }
 

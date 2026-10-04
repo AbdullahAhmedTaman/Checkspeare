@@ -1,7 +1,9 @@
 #pragma once
 
+#include "../assets/TextureLibrary.hpp"
 #include "../game/ChessClock.hpp"
 #include "../game/ChessGame.hpp"
+
 
 #include <string>
 
@@ -19,7 +21,7 @@ namespace Gui
     /// card's label when non-empty. Empty strings mean "no engine on that
     /// side" or "engine has not yet reported its name," and the card
     /// renders without the extra text.
-    void renderClockPanel(const ChessClock& clock, const ChessGame& game, ImFont* clockFont, ImFont* engineNameFont,
-                          const std::string& whiteEngineName, const std::string& blackEngineName);
+    void renderClockPanel(const ChessClock& clock, const ChessGame& game, const Assets::TextureLibrary& assets, ImFont* clockFont,
+                          ImFont* engineNameFont, const std::string& whiteEngineName, const std::string& blackEngineName);
 
 } // namespace Gui

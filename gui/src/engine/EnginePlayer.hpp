@@ -1,13 +1,16 @@
 #pragma once
 
+#include "../../../engine/src/board/types.h"
 #include "../game/ChessClock.hpp"
 #include "../game/ChessGame.hpp"
 #include "UciEngine.hpp"
-#include "../../../engine/src/board/types.h"
 
+
+#include <chrono>
 #include <cstddef>
 #include <optional>
 #include <string_view>
+
 
 enum class EnginePlayerAction
 {
@@ -80,4 +83,6 @@ private:
     std::size_t thinkStartPly_ = 0;
     std::optional<UciInfo> lastInfo_;
     Color lastInfoSide_ = WHITE;
+    std::optional<std::string> pendingBestMove_;
+    std::chrono::steady_clock::time_point thinkStartTime_{};
 };

@@ -1,7 +1,8 @@
 #include "ChessGame.hpp"
-#include "GameResult.hpp"
 #include "../audio/MoveSound.hpp"
+#include "GameResult.hpp"
 #include "San.hpp"
+
 
 namespace
 {
@@ -17,14 +18,14 @@ namespace
     /// "something happened" category.
     MoveSound classifyMoveSound(const Board& after, Move m)
     {
+        if (after.inCheck())
+            return MoveSound::Check;
         if (m.is_promotion())
             return MoveSound::Promotion;
         if (m.is_castle())
             return MoveSound::Castle;
         if (m.is_capture())
             return MoveSound::Capture;
-        if (after.inCheck())
-            return MoveSound::Check;
         if (m.is_ep())
             return MoveSound::Capture;
         return MoveSound::QuietMove;

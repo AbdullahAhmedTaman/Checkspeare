@@ -44,7 +44,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     : conf_(conf),
       assets_(assets),
       sounds_(sounds),
-      window_(sf::VideoMode({1280, 800}), "Chess GUI"),
+      window_(sf::VideoMode({1600, 1280}), "Chess GUI"),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets)),
       soundPlayer_(sounds)
@@ -463,7 +463,7 @@ void Application::stepUi(float dtSeconds)
                        controller_.annotations(), animation_, controller_.arrows());
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
-    Gui::renderStatusPanel(controller_, game_, canResign(), assets_);
+    Gui::renderStatusPanel(controller_, game_, canResign());
     Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
 
     // A side is labeled with its engine's name when an engine is running,
@@ -477,7 +477,8 @@ void Application::stepUi(float dtSeconds)
         return n.empty() ? "Engine" : n;
     };
 
-    Gui::renderClockPanel(clock_, game_, clockFont_, engineNameFont_, displayName(engineWhite_), displayName(engineBlack_));
+    Gui::renderClockPanel(clock_, game_, assets_, clockFont_, engineNameFont_, displayName(engineWhite_),
+                          displayName(engineBlack_));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
 
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
