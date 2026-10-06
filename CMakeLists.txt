@@ -107,13 +107,6 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ipo_ok OUTPUT ipo_msg)
-if(ipo_ok)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-endif()
-
 enable_testing()
 
 add_subdirectory(engine)

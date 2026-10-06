@@ -3,6 +3,8 @@
 #include "BoardAnnotations.hpp"
 
 #include <SFML/Graphics.hpp>
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 namespace
@@ -59,6 +61,49 @@ namespace
         target.draw(sprite);
     }
 
+    // Draws a square outline that sits *entirely inside* a board square.
+    void drawSquareOutline(sf::RenderTarget& target, const Gui::BoardGeometry& geo, Square sq, float thickness, sf::Color color)
+    {
+        sf::RectangleShape outline({geo.squareSize - 2.0f * thickness, geo.squareSize - 2.0f * thickness});
+        outline.setPosition(geo.topLeft(sq) + sf::Vector2f(thickness, thickness));
+        outline.setFillColor(sf::Color::Transparent);
+        outline.setOutlineThickness(thickness);
+        outline.setOutlineColor(color);
+        target.draw(outline);
+    }
+
+    // Draws four L-shaped corner brackets just inside a square's border.
+    // Used as a capture indicator: it reads instantly as "capture target"
+    // without covering the piece underneath the way a filled circle would.
+    void drawSquareCorners(sf::RenderTarget& target, const Gui::BoardGeometry& geo, Square sq, float thickness, float length,
+                           sf::Color color)
+    {
+        const sf::Vector2f tl = geo.topLeft(sq);
+        const float s = geo.squareSize;
+        const float pad = s * 0.08f; // sits fully inside the square
+
+        auto bar = [&](float x, float y, float w, float h)
+        {
+            sf::RectangleShape r({w, h});
+            r.setPosition({tl.x + x, tl.y + y});
+            r.setFillColor(color);
+            target.draw(r);
+        };
+
+        // Top-left
+        bar(pad, pad, length, thickness);
+        bar(pad, pad, thickness, length);
+        // Top-right
+        bar(s - pad - length, pad, length, thickness);
+        bar(s - pad - thickness, pad, thickness, length);
+        // Bottom-left
+        bar(pad, s - pad - thickness, length, thickness);
+        bar(pad, s - pad - length, thickness, length);
+        // Bottom-right
+        bar(s - pad - length, s - pad - thickness, length, thickness);
+        bar(s - pad - thickness, s - pad - length, thickness, length);
+    }
+
     void drawPromotionPicker(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Assets::TextureLibrary& assets,
                              const Gui::PendingPromotion& promo)
     {
@@ -90,9 +135,9 @@ namespace
             sf::RectangleShape cell({geo.squareSize, geo.squareSize});
             cell.setPosition(geo.topLeft(sq));
             cell.setFillColor(sf::Color(245, 245, 245, 230));
-            cell.setOutlineThickness(2.0f);
-            cell.setOutlineColor(sf::Color(40, 40, 40));
             target.draw(cell);
+
+            drawSquareOutline(target, geo, sq, 2.0f, sf::Color(40, 40, 40));
 
             const Piece pc = make_piece(promo.side, order[i]);
             const sf::Vector2f tl = geo.topLeft(sq);
@@ -105,7 +150,7 @@ namespace
     {
         // Last move: soft yellow on origin, stronger on destination, plus border.
         const sf::Color fromColor(180, 200, 60, 70);
-        const sf::Color toColor(180, 200, 60, 110);
+        const sf::Color toColor(180, 200, 60, 120);
         const sf::Color toBorder(150, 170, 40, 200);
 
         if (annotations.lastMoveFrom.has_value())
@@ -125,22 +170,17 @@ namespace
             hl.setFillColor(toColor);
             target.draw(hl);
 
-            sf::RectangleShape border({geo.squareSize - 4.0f, geo.squareSize - 4.0f});
-            border.setPosition({tl.x + 2.0f, tl.y + 2.0f});
-            border.setFillColor(sf::Color::Transparent);
-            border.setOutlineThickness(2.0f);
-            border.setOutlineColor(toBorder);
-            target.draw(border);
+            drawSquareOutline(target, geo, *annotations.lastMoveTo, 3.0f, toBorder);
         }
 
         if (annotations.selected.has_value())
         {
-            sf::RectangleShape sel({geo.squareSize, geo.squareSize});
-            sel.setPosition(geo.topLeft(*annotations.selected));
-            sel.setFillColor(sf::Color(20, 85, 30, 100));
-            sel.setOutlineThickness(3.0f);
-            sel.setOutlineColor(sf::Color(20, 85, 30, 200));
-            target.draw(sel);
+            sf::RectangleShape selFill({geo.squareSize, geo.squareSize});
+            selFill.setPosition(geo.topLeft(*annotations.selected));
+            selFill.setFillColor(sf::Color(20, 85, 30, 100));
+            target.draw(selFill);
+
+            drawSquareOutline(target, geo, *annotations.selected, 4.0f, sf::Color(20, 85, 30, 200));
         }
 
         if (annotations.selected.has_value() || drag.active)
@@ -155,19 +195,8 @@ namespace
 
                 if (isCapture)
                 {
-                    const float inset = geo.squareSize * 0.1f;
-
-                    sf::RectangleShape frame({geo.squareSize - inset * 2.0f, geo.squareSize - inset * 2.0f});
-                    frame.setPosition({tl.x + inset, tl.y + inset});
-                    frame.setFillColor(sf::Color::Transparent);
-                    frame.setOutlineThickness(geo.squareSize * 0.1f);
-                    frame.setOutlineColor(sf::Color(180, 60, 60, 160));
-                    sf::CircleShape marker(geo.squareSize * 0.25f);
-                    marker.setFillColor(sf::Color(200, 60, 60, 160));
-                    marker.setPosition({tl.x + (geo.squareSize / 2.0f) - marker.getRadius(),
-                                        tl.y + (geo.squareSize / 2.0f) - marker.getRadius()});
-                    target.draw(marker);
-                    target.draw(frame);
+                    drawSquareCorners(target, geo, sq, geo.squareSize * 0.06f, geo.squareSize * 0.22f,
+                                      sf::Color(200, 60, 60, 200));
                 }
                 else
                 {
@@ -189,12 +218,31 @@ namespace
         }
     }
 
+    // While a piece is being dragged, outline the square under the pointer
+    // so the player can see where it would be dropped.
+    void drawDragTargetHighlight(sf::RenderTarget& target, const Gui::BoardGeometry& geo, sf::Vector2f pixelPos)
+    {
+        const sf::Vector2f local = pixelPos - geo.boardOrigin;
+        const int gridX = static_cast<int>(std::floor(local.x / geo.squareSize));
+        const int gridY = static_cast<int>(std::floor(local.y / geo.squareSize));
+
+        if (gridX < 0 || gridX >= 8 || gridY < 0 || gridY >= 8)
+            return;
+
+        const Square sq = Gui::BoardGeometry::gridToSquare(gridX, gridY, geo.flipped);
+        if (sq == SQ_NONE)
+            return;
+
+        const float thickness = std::max(1.0f, geo.squareSize * 0.06f);
+        drawSquareOutline(target, geo, sq, thickness, sf::Color(255, 255, 255, 160));
+    }
+
     // Draws a–h and 1–8 labels along bottom and left edges.
     // Contrast chosen per-square: light labels on dark squares, dark on light.
     void drawCoordinateLabels(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const sf::Font& font)
     {
         const float fontSize = geo.squareSize * 0.18f;
-        const float pad = geo.squareSize * 0.05f;
+        const float pad = geo.squareSize * 0.04f;
 
         sf::Text text(font);
         text.setCharacterSize(static_cast<unsigned>(fontSize));
@@ -224,7 +272,7 @@ namespace
 
             const sf::Vector2f tl(geo.boardOrigin.x + gridX * geo.squareSize, geo.boardOrigin.y + gridY * geo.squareSize);
 
-            text.setString(std::string(1, static_cast<char>('A' + f)));
+            text.setString(std::string(1, static_cast<char>('a' + f)));
             text.setFillColor(colorAtGrid(gridX, gridY));
 
             const sf::FloatRect b = text.getLocalBounds();
@@ -387,6 +435,11 @@ namespace Gui
         }
         drawAnnotations(target, geo, annotations, drag, board);
 
+        if (drag.active)
+            drawDragTargetHighlight(target, geo, dragPixelPos);
+
+        drawCoordinateLabels(target, geo, coordinateFont);
+
         // Static pieces. Skip dragged piece and in-flight destination.
         for (int i = 0; i < 64; ++i)
         {
@@ -430,7 +483,6 @@ namespace Gui
         }
 
         drawPromotionPicker(target, geo, assets, promo);
-        drawCoordinateLabels(target, geo, coordinateFont);
         drawArrows(target, geo, arrows);
     }
 } // namespace Gui

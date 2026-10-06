@@ -59,6 +59,28 @@ if(USE_PEXT)
     endif()
 endif()
 
+message(STATUS "PEXT sliding attacks: ${USE_PEXT}")
+message(STATUS "Compressed rook table: ${ROOK_COMPRESSED}")
+
+
+include(CheckIPOSupported)
+
+check_ipo_supported(
+    RESULT ipo_ok
+    OUTPUT ipo_msg
+    LANGUAGES CXX
+)
+
+if(ipo_ok)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON)
+    message(STATUS "IPO/LTO: ENABLED")
+else()
+    message(STATUS "IPO/LTO: NOT SUPPORTED")
+    message(STATUS "IPO/LTO reason: ${ipo_msg}")
+endif()
+
 configure_gnu_production_runtime(Checkspeare)
 
 add_subdirectory(tests)

@@ -49,7 +49,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
       theme_(Gui::getBoardTheme("Default", assets)),
       soundPlayer_(sounds)
 {
-    window_.setFramerateLimit(60);
+    window_.setFramerateLimit(144);
 
     // Clock is configured but not started. It stays stopped until a setup
     // is committed, so no time is lost while the user reads the modal.
