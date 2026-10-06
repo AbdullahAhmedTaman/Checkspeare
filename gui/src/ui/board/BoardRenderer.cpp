@@ -200,7 +200,7 @@ namespace
                 if (isCapture)
                 {
                     drawSquareCorners(target, geo, sq, geo.squareSize * 0.035f, geo.squareSize * 0.19f,
-                                      sf::Color(210, 10, 10, 220));
+                                      sf::Color(200, 10, 10, 220));
                 }
                 else
                 {
@@ -222,38 +222,62 @@ namespace
         }
     }
 
-    // While a piece is being dragged, outline the square under the pointer
-    // so the player can see where it would be dropped.
-    void drawDragTargetHighlight(sf::RenderTarget& target, const Gui::BoardGeometry& geo, sf::Vector2f pixelPos)
+    // Resolves a pixel position to a board square, or SQ_NONE if outside.
+    Square squareAtPixel(const Gui::BoardGeometry& geo, sf::Vector2f pixelPos)
     {
         const sf::Vector2f local = pixelPos - geo.boardOrigin;
         const int gridX = static_cast<int>(std::floor(local.x / geo.squareSize));
         const int gridY = static_cast<int>(std::floor(local.y / geo.squareSize));
 
         if (gridX < 0 || gridX >= 8 || gridY < 0 || gridY >= 8)
+            return SQ_NONE;
+
+        return Gui::BoardGeometry::gridToSquare(gridX, gridY, geo.flipped);
+    }
+
+    // Draws a highlight over the square the pointer is on, when that square
+    // is a meaningful destination:
+    //   - mid-drag: any square under the cursor (controller validates on release)
+    //   - selected piece: only squares that are legal destinations for it
+    void drawHoverTargetHighlight(sf::RenderTarget& target, const Gui::BoardGeometry& geo,
+                                  const Gui::BoardAnnotations& annotations, const Gui::DragState& drag, sf::Vector2f pixelPos)
+    {
+        const Square hovered = squareAtPixel(geo, pixelPos);
+        if (hovered == SQ_NONE)
             return;
 
-        const Square sq = Gui::BoardGeometry::gridToSquare(gridX, gridY, geo.flipped);
-        if (sq == SQ_NONE)
+        bool isTarget = false;
+
+        if (drag.active)
+        {
+            isTarget = true;
+        }
+        else if (annotations.selected.has_value())
+        {
+            const auto& targets = annotations.legalTargets;
+            isTarget = std::find(targets.begin(), targets.end(), hovered) != targets.end();
+        }
+
+        if (!isTarget)
             return;
 
         const float thickness = std::max(0.8f, geo.squareSize * 0.04f);
-        drawSquareOutline(target, geo, sq, thickness, sf::Color(255, 255, 255, 160));
+        drawSquareOutline(target, geo, hovered, thickness, sf::Color(255, 255, 255, 160));
     }
 
     // Draws a–h and 1–8 labels along bottom and left edges.
     // Contrast chosen per-square: light labels on dark squares, dark on light.
     void drawCoordinateLabels(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const sf::Font& font)
     {
-        const float fontSize = geo.squareSize * 0.18f;
+        const float fontSize = geo.squareSize * 0.15f;
         const float pad = geo.squareSize * 0.04f;
 
         sf::Text text(font);
         text.setCharacterSize(static_cast<unsigned>(fontSize));
         text.setStyle(sf::Text::Style::Bold);
 
-        const sf::Color lightText(245, 245, 245, 230);
-        const sf::Color darkText(30, 30, 30, 230);
+        const sf::Color lightText(216, 193, 153, 250);
+        const sf::Color darkText(87, 54, 21, 250);
 
         auto colorAtGrid = [&](int gridX, int gridY) -> sf::Color
         {
@@ -439,8 +463,7 @@ namespace Gui
         }
         drawAnnotations(target, geo, annotations, drag, board);
 
-        if (drag.active)
-            drawDragTargetHighlight(target, geo, dragPixelPos);
+        drawHoverTargetHighlight(target, geo, annotations, drag, dragPixelPos);
 
         drawCoordinateLabels(target, geo, coordinateFont);
 
