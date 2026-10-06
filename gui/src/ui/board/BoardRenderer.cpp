@@ -73,35 +73,39 @@ namespace
     }
 
     // Draws four L-shaped corner brackets just inside a square's border.
-    // Used as a capture indicator: it reads instantly as "capture target"
-    // without covering the piece underneath the way a filled circle would.
     void drawSquareCorners(sf::RenderTarget& target, const Gui::BoardGeometry& geo, Square sq, float thickness, float length,
                            sf::Color color)
     {
-        const sf::Vector2f tl = geo.topLeft(sq);
-        const float s = geo.squareSize;
-        const float pad = s * 0.08f; // sits fully inside the square
+        const sf::Vector2f tlRaw = geo.topLeft(sq);
+        const float tlX = std::round(tlRaw.x);
+        const float tlY = std::round(tlRaw.y);
+        const float s = std::round(geo.squareSize);
+        const float pad = std::round(s * 0.08f);
+        const float th = std::round(thickness);
+        const float len = std::round(length);
 
         auto bar = [&](float x, float y, float w, float h)
         {
             sf::RectangleShape r({w, h});
-            r.setPosition({tl.x + x, tl.y + y});
+            r.setPosition({tlX + x, tlY + y});
             r.setFillColor(color);
             target.draw(r);
         };
 
+        const float arm = len - th;
+
         // Top-left
-        bar(pad, pad, length, thickness);
-        bar(pad, pad, thickness, length);
+        bar(pad, pad, th, len);
+        bar(pad + th, pad, arm, th);
         // Top-right
-        bar(s - pad - length, pad, length, thickness);
-        bar(s - pad - thickness, pad, thickness, length);
+        bar(s - pad - th, pad, th, len);
+        bar(s - pad - len, pad, arm, th);
         // Bottom-left
-        bar(pad, s - pad - thickness, length, thickness);
-        bar(pad, s - pad - length, thickness, length);
+        bar(pad, s - pad - len, th, len);
+        bar(pad + th, s - pad - th, arm, th);
         // Bottom-right
-        bar(s - pad - length, s - pad - thickness, length, thickness);
-        bar(s - pad - thickness, s - pad - length, thickness, length);
+        bar(s - pad - th, s - pad - len, th, len);
+        bar(s - pad - len, s - pad - th, arm, th);
     }
 
     void drawPromotionPicker(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Assets::TextureLibrary& assets,
@@ -195,13 +199,13 @@ namespace
 
                 if (isCapture)
                 {
-                    drawSquareCorners(target, geo, sq, geo.squareSize * 0.06f, geo.squareSize * 0.22f,
-                                      sf::Color(200, 60, 60, 200));
+                    drawSquareCorners(target, geo, sq, geo.squareSize * 0.035f, geo.squareSize * 0.19f,
+                                      sf::Color(210, 10, 10, 220));
                 }
                 else
                 {
-                    sf::CircleShape marker(geo.squareSize * 0.17f);
-                    marker.setFillColor(sf::Color(0, 0, 0, 90));
+                    sf::CircleShape marker(geo.squareSize * 0.16f);
+                    marker.setFillColor(sf::Color(0, 0, 0, 100));
                     marker.setPosition({tl.x + (geo.squareSize / 2.0f) - marker.getRadius(),
                                         tl.y + (geo.squareSize / 2.0f) - marker.getRadius()});
                     target.draw(marker);
@@ -233,7 +237,7 @@ namespace
         if (sq == SQ_NONE)
             return;
 
-        const float thickness = std::max(1.0f, geo.squareSize * 0.06f);
+        const float thickness = std::max(0.8f, geo.squareSize * 0.04f);
         drawSquareOutline(target, geo, sq, thickness, sf::Color(255, 255, 255, 160));
     }
 

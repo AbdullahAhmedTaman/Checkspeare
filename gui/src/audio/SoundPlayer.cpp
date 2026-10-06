@@ -23,9 +23,6 @@ sf::Sound& SoundPlayer::acquireSlot(const sf::SoundBuffer& buffer)
     {
         if (slot->getStatus() != sf::SoundSource::Status::Playing)
         {
-            // Reused slot: swap in the new buffer. SFML 3 holds a reference
-            // to the buffer rather than copying it, so this is cheap and the
-            // buffer lives in the library for the whole program.
             slot->setBuffer(buffer);
             return *slot;
         }

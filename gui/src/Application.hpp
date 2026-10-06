@@ -1,21 +1,22 @@
 #pragma once
 
-#include "game/BoardGeometry.hpp"
-#include "ui/board/BoardPanel.hpp"
-#include "game/ChessClock.hpp"
-#include "game/ChessGame.hpp"
 #include "Config.hpp"
-#include "engine/EnginePlayer.hpp"
-#include "ui/EvalBar.hpp"
-#include "ui/dialogs/GameSetupPanel.hpp"
-#include "controller/GuiGameController.hpp"
-#include "game/MoveAnimation.hpp"
+#include "assets/TextureLibrary.hpp"
 #include "audio/MoveSound.hpp"
 #include "audio/SoundLibrary.hpp"
 #include "audio/SoundPlayer.hpp"
-#include "assets/TextureLibrary.hpp"
-#include "ui/Theme.hpp"
+#include "controller/GuiGameController.hpp"
+#include "engine/EnginePlayer.hpp"
 #include "engine/UciEngine.hpp"
+#include "game/BoardGeometry.hpp"
+#include "game/ChessClock.hpp"
+#include "game/ChessGame.hpp"
+#include "game/MoveAnimation.hpp"
+#include "ui/EvalBar.hpp"
+#include "ui/Theme.hpp"
+#include "ui/board/BoardPanel.hpp"
+#include "ui/dialogs/GameSetupPanel.hpp"
+
 
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>

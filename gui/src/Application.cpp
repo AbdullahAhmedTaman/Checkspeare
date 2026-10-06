@@ -38,18 +38,25 @@ namespace
         }
         return Assets::SoundKey::Move;
     }
+
+    sf::ContextSettings makeWindowSettings()
+    {
+        sf::ContextSettings s;
+        s.antiAliasingLevel = 8;
+        return s;
+    }
 } // namespace
 
 Application::Application(Config& conf, const Assets::TextureLibrary& assets, const Assets::SoundLibrary& sounds)
     : conf_(conf),
       assets_(assets),
       sounds_(sounds),
-      window_(sf::VideoMode({1400, 1080}), "Chess GUI"),
+      window_(sf::VideoMode({1400, 1080}), "Chess GUI", sf::Style::Default, sf::State::Windowed, makeWindowSettings()),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets)),
       soundPlayer_(sounds)
 {
-    window_.setFramerateLimit(144);
+    window_.setVerticalSyncEnabled(true);
 
     // Clock is configured but not started. It stays stopped until a setup
     // is committed, so no time is lost while the user reads the modal.

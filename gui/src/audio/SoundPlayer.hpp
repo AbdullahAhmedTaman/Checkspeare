@@ -40,5 +40,5 @@ private:
 
     const Assets::SoundLibrary& library_;
     std::vector<std::unique_ptr<sf::Sound>> pool_;
-    float volume_ = 70.0f;
+    float volume_ = 90.0f;
 };
