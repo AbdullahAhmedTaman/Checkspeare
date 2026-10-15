@@ -39,6 +39,7 @@ struct Position
 
     // Construct a position from a standard FEN string
     static Position from_fen(const std::string& fen);
+    [[nodiscard]] std::string to_fen() const;
 
     Position() noexcept;
 

@@ -392,27 +392,24 @@ namespace
             return;
         }
 
-        const int fx = static_cast<int>(a.from) % 8;
-        const int fy = static_cast<int>(a.from) / 8;
-        const int tx = static_cast<int>(a.to) % 8;
-        const int ty = static_cast<int>(a.to) / 8;
+        // Screen-space deltas. Screen Y grows downward; a positive dyScreen
+        // means the destination is *below* the origin, regardless of whether
+        // the board is flipped.
+        const float dxScreen = toCenter.x - fromCenter.x;
+        const float dyScreen = toCenter.y - fromCenter.y;
 
-        const int dx = tx - fx;
-        const int dy = ty - fy;
+        const float stepX = (dxScreen >= 0.0f) ? geo.squareSize : -geo.squareSize;
+        const float stepY = (dyScreen >= 0.0f) ? geo.squareSize : -geo.squareSize;
 
-        // The corner is the intersection of (from + full long axis) with
-        // (from + full short axis). The long axis is whichever of |dx| or
-        // |dy| equals 2. Draw long-leg first, then short-leg with the head.
-        const int longDx = (std::abs(dx) == 2) ? dx : 0;
-        const int longDy = (std::abs(dy) == 2) ? dy : 0;
+        // The long leg runs along whichever axis has the larger screen
+        // magnitude. For a knight move that's always 2 squares on one axis
+        // and 1 square on the other, so this is unambiguous.
+        const bool horizontalIsLong = std::abs(dxScreen) > std::abs(dyScreen);
 
-        const sf::Vector2f fromTL = geo.topLeft(a.from);
-        const sf::Vector2f corner{
-            fromTL.x + geo.squareSize * (0.5f + static_cast<float>(longDx)),
-            fromTL.y + geo.squareSize * (0.5f + static_cast<float>(longDy)),
-        };
+        const sf::Vector2f corner = horizontalIsLong ? sf::Vector2f{fromCenter.x + 2.0f * stepX, fromCenter.y}
+                                                     : sf::Vector2f{fromCenter.x, fromCenter.y + 2.0f * stepY};
 
-        // Shaft-only first segment: no head at the corner.
+        // First leg: shaft-only, from the origin to the corner.
         const float shaftWidth = geo.squareSize * 0.13f;
         const sf::Vector2f delta1 = corner - fromCenter;
         const float length1 = std::sqrt(delta1.x * delta1.x + delta1.y * delta1.y);
@@ -432,7 +429,7 @@ namespace
             target.draw(shaft1);
         }
 
-        // Second segment: shaft plus head into the destination.
+        // Second leg: shaft plus head into the destination.
         drawStraightArrow(target, corner, toCenter, fill, geo.squareSize);
     }
 
