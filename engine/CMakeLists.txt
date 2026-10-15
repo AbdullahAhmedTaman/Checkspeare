@@ -49,8 +49,11 @@ endif()
 
 
 # Same instruction-set baseline for HQ and PEXT builds (GCC 11+, use -march=haswell on older GCC).
-target_compile_options(EngineCore PUBLIC
-    $<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-march=x86-64-v3>)
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_options(EngineCore PUBLIC /arch:AVX2)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(EngineCore PUBLIC -march=x86-64-v3)
+endif()
 
 if(USE_PEXT)
     target_compile_definitions(EngineCore PUBLIC USE_PEXT)

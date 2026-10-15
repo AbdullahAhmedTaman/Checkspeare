@@ -13,6 +13,7 @@ namespace MoveOrdering
           tt_move(tt),
           ply(pl),
           qsearch(qs),
+          in_check(qs && p.in_check()),
           stage(STAGE_TT)
     {
     }
@@ -42,25 +43,27 @@ namespace MoveOrdering
         for (int i = 0; i < list.count; ++i)
         {
             Move& move = list.moves[i];
+
             if (move == tt_move)
             {
-                move.set_score(TT_MOVE_SCORE);
+                list.moves[i] = list.moves[--list.count];
+                --i;
                 continue;
             }
 
             if (move.is_promotion())
             {
-                PieceType pt = promotion_type(move);
+                const PieceType pt = promotion_type(move);
+                const PieceType victim = type_of(pos.board[move.to()]);
+                const int16_t mvv_lva_bonus =
+                    (victim < PieceType::NONE) ? static_cast<int16_t>(MVV_LVA[victim][PAWN]) : 0;
+
                 if (pt == QUEEN)
                 {
-                    const PieceType victim = type_of(pos.board[move.to()]);
-                    const int16_t mvv_lva_bonus = (victim < PieceType::NONE) ? MVV_LVA[victim][PAWN] : 0;
                     move.set_score(static_cast<int16_t>(PROMOTION_QUEEN + mvv_lva_bonus));
                 }
                 else if (pt == KNIGHT)
                 {
-                    const PieceType victim = type_of(pos.board[move.to()]);
-                    const int16_t mvv_lva_bonus = (victim < PieceType::NONE) ? MVV_LVA[victim][PAWN] : 0;
                     move.set_score(static_cast<int16_t>(PROMOTION_KNIGHT + mvv_lva_bonus));
                 }
                 else
@@ -74,16 +77,10 @@ namespace MoveOrdering
             const PieceType attacker_type = type_of(attacker);
             const PieceType victim_type = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
 
+            // Order captures strictly by MVV-LVA; defer SEE until the move is actually picked.
             if (attacker_type < PieceType::NONE && victim_type < PieceType::NONE)
             {
-                if (Search::see_ge(pos, move, 0))
-                {
-                    move.set_score(static_cast<int16_t>(GOOD_CAPTURE + MVV_LVA[victim_type][attacker_type]));
-                }
-                else
-                {
-                    move.set_score(static_cast<int16_t>(BAD_CAPTURE + MVV_LVA[victim_type][attacker_type]));
-                }
+                move.set_score(static_cast<int16_t>(GOOD_CAPTURE + MVV_LVA[victim_type][attacker_type]));
             }
             else
             {
@@ -92,18 +89,16 @@ namespace MoveOrdering
         }
     }
 
-    void MovePicker::score_quiets()
+   void MovePicker::score_quiets()
     {
         for (int i = 0; i < list.count; ++i)
         {
             Move& move = list.moves[i];
 
-            if (move.is_capture() || move.is_promotion() || move == tt_move)
+            if (move == tt_move)
             {
-                if (!pos.in_check())
-                {
-                    move.set_score(-32000);
-                }
+                list.moves[i] = list.moves[--list.count];
+                --i;
                 continue;
             }
 
@@ -134,68 +129,65 @@ namespace MoveOrdering
             {
                 case STAGE_TT:
                     stage = STAGE_GEN_TACTICAL;
-                    if (tt_move.is_ok())
+                    if (tt_move.is_ok() && (!qsearch || in_check || tt_move.is_capture() || tt_move.is_promotion()))
+                    {
                         return tt_move;
+                    }
                     break;
 
                 case STAGE_GEN_TACTICAL:
-                    list.count = 0;
-                    if (pos.in_check())
-                    {
-                        MoveGen::generate_pseudo_legal_moves(pos, list);
-                        score_captures();
-                        score_quiets();
-                        stage = STAGE_QUIETS;
-                    }
-                    else
-                    {
-                        MoveGen::generate_captures(pos, list);
-                        score_captures();
-                        stage = STAGE_GOOD_CAPTURES;
-                    }
+                    MoveGen::generate_captures(pos, list);
+                    score_captures();
+                    stage = STAGE_GOOD_CAPTURES;
                     break;
 
                 case STAGE_GOOD_CAPTURES:
+                    while (list.count > 0)
                     {
-                        Move best = get_best_from_list();
-                        if (!best.is_ok())
-                        {
-                            stage = qsearch ? STAGE_DONE : STAGE_GEN_QUIETS;
-                            break;
-                        }
-                        if (best == tt_move)
-                            continue;
+                        const Move best = get_best_from_list();
 
-                        if (best.ordering_score() >= 0)
+                        if (best.is_promotion())
+                        {
+                            
+                            if (best.ordering_score() >= 0)
+                            {
+                                return best;
+                            }
+                            if (!qsearch || in_check)
+                            {
+                                bad_captures[bad_capture_count++] = best;
+                            }
+                            continue;
+                        }
+
+                        if (Search::see_ge(pos, best, 0))
                         {
                             return best;
                         }
-                        else
+
+                        
+                        if (!qsearch || in_check)
                         {
                             bad_captures[bad_capture_count++] = best;
                         }
-                        break;
                     }
 
+                    stage = (qsearch && !in_check) ? STAGE_DONE : STAGE_GEN_QUIETS;
+                    break;
+
                 case STAGE_GEN_QUIETS:
-                    list.count = 0;
-                    MoveGen::generate_pseudo_legal_moves(pos, list);
+                    MoveGen::generate_quiets(pos, list);
                     score_quiets();
                     stage = STAGE_QUIETS;
                     break;
 
                 case STAGE_QUIETS:
+                    if (list.count > 0)
                     {
-                        Move best = get_best_from_list();
-                        if (!best.is_ok() || best.ordering_score() == -32000)
-                        {
-                            stage = STAGE_BAD_CAPTURES;
-                            break;
-                        }
-                        if (best == tt_move)
-                            continue;
-                        return best;
+                        return get_best_from_list();
                     }
+                    stage = STAGE_BAD_CAPTURES;
+                    break;
 
                 case STAGE_BAD_CAPTURES:
                     if (bad_capture_idx < bad_capture_count)

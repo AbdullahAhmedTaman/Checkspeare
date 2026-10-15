@@ -2,7 +2,7 @@
 #include <cassert>
 #include <cstdint>
 #include <iosfwd>
-
+#include <type_traits>
 using Bitboard = uint64_t;
 using Key = uint64_t;
 using Value = int;
@@ -146,11 +146,10 @@ struct Score
  */
 struct alignas(4) Move
 {
-    uint16_t data = 0; ///< Bits 0-5: from, 6-11: to, 12-15: flag
-    int16_t score = 0; ///< Bits 16-31: transient search ordering score
+    uint16_t data; ///< Bits 0-5: from, 6-11: to, 12-15: flag
+    int16_t score; ///< Bits 16-31: transient search ordering score
 
-    Move() = default;
-
+    Move() noexcept = default;
     /**
      * @brief Constructs a Move with source, target, flag, and optional ordering score.
      * @param from Source square on the 8x8 grid.
@@ -193,7 +192,7 @@ struct alignas(4) Move
 
     static constexpr Move none()
     {
-        return Move();
+        return Move(0,0);
     }
 
     static constexpr Move null()
@@ -279,7 +278,8 @@ struct alignas(4) Move
 
 static_assert(sizeof(Move) == 4, "Move struct must remain exactly 32 bits (4 bytes).");
 static_assert(alignof(Move) == 2 || alignof(Move) == 4, "Move alignment must fit register bounds.");
-
+static_assert(std::is_trivially_default_constructible_v<Move>,
+              "Move must be trivially default-constructible to avoid per-node array zeroing.");
 // Precondition: m.is_promotion().
 constexpr PieceType promotion_type(const Move& m)
 {

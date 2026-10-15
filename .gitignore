@@ -19,3 +19,7 @@ venv/
 
 # OS files
 .DS_Store
+
+# Visual Studio Open-Folder CMake outputs
+.vs/
+out/

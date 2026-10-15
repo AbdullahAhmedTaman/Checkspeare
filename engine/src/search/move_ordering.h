@@ -41,7 +41,7 @@ namespace MoveOrdering
         Move tt_move;
         int ply;
         bool qsearch;
-
+        bool in_check;
         PickerStage stage;
         MoveList list;
 

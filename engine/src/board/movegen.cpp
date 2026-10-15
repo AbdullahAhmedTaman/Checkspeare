@@ -383,6 +383,58 @@ namespace
         }
     }
 
+    /**
+     * @brief Adds only quiet (non-capture) moves for a non-pawn piece from its attack mask.
+     */
+    inline void add_piece_quiets(Bitboard attacks, Square from, Bitboard occupancy, MoveList& list)
+    {
+        Bitboard quiets = attacks & ~occupancy;
+        while (quiets)
+        {
+            const Square to = pop_lsb(quiets);
+            list.add(Move(from, to, QUIET_MOVE));
+        }
+    }
+
+    /**
+     * @brief Generates only non-promoting single pawn pushes and double pawn pushes.
+     */
+    template <Color Us>
+    void add_pawn_quiets_impl(const Position& pos, MoveList& list)
+    {
+        constexpr int PushDir = (Us == WHITE) ? 8 : -8;
+        constexpr Bitboard StartRank = (Us == WHITE) ? RANK_2 : RANK_7;
+        constexpr Bitboard PromoFrom = (Us == WHITE) ? RANK_7 : RANK_2;
+        constexpr auto shiftUp = (Us == WHITE) ? shift_north : shift_south;
+
+        const Bitboard pawns = pos.pieces[Us][PAWN];
+        const Bitboard empty = ~pos.occupancy[BOTH];
+        const Bitboard regularPawns = pawns & ~PromoFrom;
+
+        
+        {
+            Bitboard bb = shiftUp(regularPawns) & empty;
+            while (bb)
+            {
+                const Square to = pop_lsb(bb);
+                const Square from = static_cast<Square>(to - PushDir);
+                list.add(Move(from, to, QUIET_MOVE));
+            }
+        }
+
+        {
+            const Bitboard fromStart = pawns & StartRank;
+            const Bitboard mid = shiftUp(fromStart) & empty;
+            Bitboard dest = shiftUp(mid) & empty;
+            while (dest)
+            {
+                const Square to = pop_lsb(dest);
+                const Square from = static_cast<Square>(to - 2 * PushDir);
+                list.add(Move(from, to, DOUBLE_PAWN_PUSH));
+            }
+        }
+    }
+
     void get_checkers_and_pinned(const Position& pos, Bitboard& checkers, Bitboard& pinned)
     {
         checkers = 0;
@@ -574,4 +626,43 @@ namespace MoveGen
         const Square ksq = pos.king_square(us);
         add_piece_captures(king_attacks(ksq), ksq, enemies, list);
     }
+
+    void generate_quiets(const Position& pos, MoveList& list)
+    {
+        list.count = 0;
+
+        const Color us = pos.sideToMove;
+        const Bitboard occupancy = pos.occupancy[BOTH];
+
+        if (us == WHITE)
+            add_pawn_quiets_impl<WHITE>(pos, list);
+        else
+            add_pawn_quiets_impl<BLACK>(pos, list);
+
+        Bitboard knights = pos.pieces[us][KNIGHT];
+        while (knights)
+        {
+            const Square from = pop_lsb(knights);
+            add_piece_quiets(knight_attacks(from), from, occupancy, list);
+        }
+
+        auto add_slider_quiets = [&](Bitboard pieces, auto attackFn)
+        {
+            while (pieces)
+            {
+                const Square from = pop_lsb(pieces);
+                add_piece_quiets(attackFn(occupancy, from), from, occupancy, list);
+            }
+        };
+
+        add_slider_quiets(pos.pieces[us][ROOK], rook_attacks);
+        add_slider_quiets(pos.pieces[us][BISHOP], bishop_attacks);
+        add_slider_quiets(pos.pieces[us][QUEEN], queen_attacks);
+
+        const Square ksq = pos.king_square(us);
+        add_piece_quiets(king_attacks(ksq), ksq, occupancy, list);
+
+        add_castling_moves(pos, list);
+    }
+    
 } // namespace MoveGen

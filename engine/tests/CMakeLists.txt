@@ -1,6 +1,6 @@
 add_executable(EngineTests
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/test_search_32bit.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bitboard_tests.cpp
 )
 
 target_link_libraries(EngineTests

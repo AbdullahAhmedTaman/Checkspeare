@@ -61,4 +61,10 @@ namespace MoveGen
     void generate_pseudo_legal_moves(const Position& pos, MoveList& list);
     void generate_legal_moves(Position& pos, MoveList& legalMoves);
     void generate_captures(const Position& pos, MoveList& list);
+    /**
+     * @brief Generates only pseudo-legal quiet moves (non-captures and non-promotions).
+     *
+     * Used by MovePicker in STAGE_GEN_QUIETS to avoid re-generating tactical moves.
+     */
+    void generate_quiets(const Position& pos, MoveList& list);
 } // namespace MoveGen
