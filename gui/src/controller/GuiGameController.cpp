@@ -190,16 +190,13 @@ namespace Gui
 
         if (!sqOpt)
         {
-            // Right-click outside the board clears every arrow.
             clearArrows();
             return;
         }
 
         rightPressActive_ = true;
-
         const Square sq = *sqOpt;
 
-        // A two-click chain is in progress: this click completes it.
         if (arrowAnchor_.has_value())
         {
             const Square from = *arrowAnchor_;
@@ -211,8 +208,6 @@ namespace Gui
             return;
         }
 
-        // Otherwise, start a new chain. Whether this turns out to be a
-        // click-click chain or a drag is decided on release.
         arrowAnchor_ = sq;
     }
 
@@ -231,19 +226,13 @@ namespace Gui
             return;
 
         const Square from = *arrowAnchor_;
-
-        // Press and release on the same square = "erase arrows from here".
-        // A drag to a different square = "draw an arrow".
-        if (*sqOpt == from)
-        {
-            eraseArrowFrom(from);
-            arrowAnchor_.reset();
-            return;
-        }
-
-        const Square to = *sqOpt;
         arrowAnchor_.reset();
-        addOrReplaceArrow(from, to);
+
+        // Press and release on the same square: cancel, no arrow.
+        if (*sqOpt == from)
+            return;
+
+        addOrReplaceArrow(from, *sqOpt);
     }
 
     bool GuiGameController::isPromotionMove(Square from, Square to) const
