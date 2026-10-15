@@ -43,24 +43,24 @@ namespace Gui
             {
                 ImGuiID root = dockspaceId;
 
+                // 1. FEN across the full top of the dockspace.
+                ImGuiID fenCell = ImGui::DockBuilderSplitNode(root, ImGuiDir_Up, 0.06f, nullptr, &root);
+
+                // 2. Right column: full height of the region below FEN.
                 ImGuiID rightColumn = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.22f, nullptr, &root);
                 ImGuiID movesCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.65f, nullptr, &rightColumn);
-                // ImGuiID settingsCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.50f, nullptr, &rightColumn);
 
-                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.18f, nullptr, &root);
+                // 3. Clock: bottom of the left region.
+                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.192f, nullptr, &root);
 
+                // 4. Engine: left of the region above Clock.
                 ImGuiID engineCol = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.13f, nullptr, &root);
-
-                ImGuiID emptyCorner = ImGui::DockBuilderSplitNode(bottomStrip, ImGuiDir_Right, 0.22f, nullptr, &bottomStrip);
-
-                ImGuiID fenCell = ImGui::DockBuilderSplitNode(root, ImGuiDir_Up, 0.065f, nullptr, &root);
 
                 ImGui::DockBuilderDockWindow("FEN", fenCell);
                 ImGui::DockBuilderDockWindow("Engine", engineCol);
                 ImGui::DockBuilderDockWindow("Board", root);
                 ImGui::DockBuilderDockWindow("Clock", bottomStrip);
                 ImGui::DockBuilderDockWindow("Game", rightColumn);
-                // ImGui::DockBuilderDockWindow("Engine Settings", settingsCell);
                 ImGui::DockBuilderDockWindow("Moves", movesCell);
                 ImGui::DockBuilderFinish(dockspaceId);
             }

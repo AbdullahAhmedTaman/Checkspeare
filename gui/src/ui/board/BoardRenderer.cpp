@@ -262,7 +262,7 @@ namespace
             return;
 
         const float thickness = std::max(0.8f, geo.squareSize * 0.04f);
-        drawSquareOutline(target, geo, hovered, thickness, sf::Color(255, 255, 255, 160));
+        drawSquareOutline(target, geo, hovered, thickness, sf::Color(255, 255, 255, 190));
     }
 
     // Draws a–h and 1–8 labels along bottom and left edges.

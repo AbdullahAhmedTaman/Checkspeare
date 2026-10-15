@@ -134,17 +134,30 @@ namespace Gui
             syncBufferFromGame(game);
         }
 
+        // Persisted across frames. Declared up here so the input-width
+        // calculation below can reserve room for it when present.
+        static std::string lastError;
+
         const float applyW = buttonWidth("Apply");
         const float refreshW = buttonWidth("Refresh");
         const float copyW = buttonWidth("Copy");
         const float spacing = ImGui::GetStyle().ItemSpacing.x;
 
-        // [label] [input] [Apply] [Refresh] [Copy]
+        // Reserve room on the right for the error text so the input can
+        // expand to fill the rest of the row without ever underlapping it.
+        // Width is 0 when there's nothing to show, so the input takes the
+        // full available space in the common (no-error) case.
+        const float errorW = lastError.empty() ? 0.0f : ImGui::CalcTextSize(lastError.c_str()).x + spacing;
+
+        // [label] [input] [Apply] [Refresh] [Copy] [error]
         ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("FEN");
         ImGui::SameLine();
 
-        const float inputWidth = ImGui::GetContentRegionAvail().x - (applyW + refreshW + copyW) - (spacing * 4.0f);
+        // Input fills whatever's left after the three buttons, the four
+        // inter-item gaps, and the error slot. Recomputes every frame, so it
+        // tracks panel resizes (and error appearance/disappearance) exactly.
+        const float inputWidth = ImGui::GetContentRegionAvail().x - (applyW + refreshW + copyW) - (spacing * 4.0f) - errorW;
 
         ImGui::SetNextItemWidth(inputWidth);
         ImGui::InputText("##fen", fenBuffer, kBufferSize);
@@ -159,8 +172,6 @@ namespace Gui
 
         ImGui::SameLine();
         const bool copy = ImGui::Button("Copy", ImVec2(copyW, 0.0f));
-
-        static std::string lastError;
 
         if (apply)
         {
@@ -199,7 +210,9 @@ namespace Gui
 
         if (!lastError.empty())
         {
-            ImGui::SameLine();
+            const float textWidth = ImGui::CalcTextSize(lastError.c_str()).x;
+            const float targetX = ImGui::GetWindowContentRegionMax().x - textWidth;
+            ImGui::SameLine(targetX);
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.55f, 0.55f, 1.0f));
             ImGui::TextUnformatted(lastError.c_str());
             ImGui::PopStyleColor();
