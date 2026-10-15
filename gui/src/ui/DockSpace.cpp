@@ -43,17 +43,17 @@ namespace Gui
             {
                 ImGuiID root = dockspaceId;
 
-                ImGuiID rightColumn = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.18f, nullptr, &root);
+                ImGuiID rightColumn = ImGui::DockBuilderSplitNode(root, ImGuiDir_Right, 0.22f, nullptr, &root);
                 ImGuiID movesCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.65f, nullptr, &rightColumn);
                 // ImGuiID settingsCell = ImGui::DockBuilderSplitNode(rightColumn, ImGuiDir_Down, 0.50f, nullptr, &rightColumn);
 
-                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.167f, nullptr, &root);
+                ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.18f, nullptr, &root);
 
                 ImGuiID engineCol = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.13f, nullptr, &root);
 
                 ImGuiID emptyCorner = ImGui::DockBuilderSplitNode(bottomStrip, ImGuiDir_Right, 0.22f, nullptr, &bottomStrip);
 
-                ImGuiID fenCell = ImGui::DockBuilderSplitNode(bottomStrip, ImGuiDir_Right, 0.4f, nullptr, &bottomStrip);
+                ImGuiID fenCell = ImGui::DockBuilderSplitNode(root, ImGuiDir_Up, 0.065f, nullptr, &root);
 
                 ImGui::DockBuilderDockWindow("FEN", fenCell);
                 ImGui::DockBuilderDockWindow("Engine", engineCol);

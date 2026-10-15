@@ -18,6 +18,7 @@
 #include "ui/dialogs/GameSetupPanel.hpp"
 
 #include <SFML/Graphics/Font.hpp>
+#include <SFML/Graphics/Image.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Clock.hpp>
 

@@ -376,6 +376,89 @@ namespace
         target.draw(head);
     }
 
+    /// Draws an L-shaped knight shaft from `fromPt` through `corner` to
+    /// `shaftEnd`, then a triangular head from `shaftEnd` to `tip`.
+    ///
+    /// The two legs are drawn as overlapping axis-aligned rectangles: each
+    /// leg is extended *past* the corner by half the shaft width, so the
+    /// flat end of one rectangle sits inside the body of the other and the
+    /// corner appears solid — no gap, no visible seam.
+    void drawBentArrow(sf::RenderTarget& target, sf::Vector2f fromPt, sf::Vector2f corner, sf::Vector2f tip, sf::Color fill,
+                       float squareSize)
+    {
+        const float shaftWidth = squareSize * 0.13f;
+        const float headLength = squareSize * 0.34f;
+        const float headWidth = squareSize * 0.34f;
+        const float half = shaftWidth * 0.5f;
+
+        // Direction of the final leg determines where the head base sits.
+        const sf::Vector2f delta2 = tip - corner;
+        const float length2 = std::sqrt(delta2.x * delta2.x + delta2.y * delta2.y);
+        if (length2 < 1.0f)
+            return;
+        const sf::Vector2f dir2 = delta2 / length2;
+        const sf::Vector2f shaftEnd = tip - dir2 * headLength;
+
+        // --- Leg 1: from fromPt to corner (axis-aligned for knight moves). ---
+        // Extend the rectangle past the corner by `half` so its flat end
+        // is buried inside leg 2.
+        const bool leg1Horizontal = std::abs(corner.x - fromPt.x) > std::abs(corner.y - fromPt.y);
+
+        if (leg1Horizontal)
+        {
+            const float x0 = std::min(fromPt.x, corner.x) - (corner.x < fromPt.x ? half : -half);
+            // Simpler: just take min/max of the two x's and pad both ends.
+            const float left = std::min(fromPt.x, corner.x);
+            const float right = std::max(fromPt.x, corner.x);
+            sf::RectangleShape leg({right - left + shaftWidth, shaftWidth});
+            leg.setPosition({left - half, fromPt.y - half});
+            leg.setFillColor(fill);
+            target.draw(leg);
+        }
+        else
+        {
+            const float top = std::min(fromPt.y, corner.y);
+            const float bottom = std::max(fromPt.y, corner.y);
+            sf::RectangleShape leg({shaftWidth, bottom - top + shaftWidth});
+            leg.setPosition({fromPt.x - half, top - half});
+            leg.setFillColor(fill);
+            target.draw(leg);
+        }
+
+        // --- Leg 2: from corner to shaftEnd (perpendicular axis). ---
+        const bool leg2Horizontal = std::abs(dir2.x) > std::abs(dir2.y);
+
+        if (leg2Horizontal)
+        {
+            const float left = std::min(corner.x, shaftEnd.x);
+            const float right = std::max(corner.x, shaftEnd.x);
+            sf::RectangleShape leg({right - left + shaftWidth, shaftWidth});
+            leg.setPosition({left - half, corner.y - half});
+            leg.setFillColor(fill);
+            target.draw(leg);
+        }
+        else
+        {
+            const float top = std::min(corner.y, shaftEnd.y);
+            const float bottom = std::max(corner.y, shaftEnd.y);
+            sf::RectangleShape leg({shaftWidth, bottom - top + shaftWidth});
+            leg.setPosition({corner.x - half, top - half});
+            leg.setFillColor(fill);
+            target.draw(leg);
+        }
+
+        // --- Head on the final leg. ---
+        const sf::Vector2f perp2(-dir2.y, dir2.x);
+        const sf::Vector2f headHalf = perp2 * (headWidth * 0.5f);
+
+        sf::ConvexShape head(3);
+        head.setPoint(0, tip);
+        head.setPoint(1, shaftEnd + headHalf);
+        head.setPoint(2, shaftEnd - headHalf);
+        head.setFillColor(fill);
+        target.draw(head);
+    }
+
     void drawArrow(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const Gui::Arrow& a)
     {
         if (a.from == SQ_NONE || a.to == SQ_NONE || a.from == a.to)
@@ -386,51 +469,25 @@ namespace
         const sf::Vector2f fromCenter = geo.topLeft(a.from) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
         const sf::Vector2f toCenter = geo.topLeft(a.to) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
 
-        if (!isKnightOffset(a.from, a.to))
+        // Knight: an L-shaped shaft plus a head on the final leg.
+        if (isKnightOffset(a.from, a.to))
         {
-            drawStraightArrow(target, fromCenter, toCenter, fill, geo.squareSize);
+            const float dxScreen = toCenter.x - fromCenter.x;
+            const float dyScreen = toCenter.y - fromCenter.y;
+
+            const float stepX = (dxScreen >= 0.0f) ? geo.squareSize : -geo.squareSize;
+            const float stepY = (dyScreen >= 0.0f) ? geo.squareSize : -geo.squareSize;
+
+            const bool horizontalIsLong = std::abs(dxScreen) > std::abs(dyScreen);
+
+            const sf::Vector2f corner = horizontalIsLong ? sf::Vector2f{fromCenter.x + 2.0f * stepX, fromCenter.y}
+                                                         : sf::Vector2f{fromCenter.x, fromCenter.y + 2.0f * stepY};
+
+            drawBentArrow(target, fromCenter, corner, toCenter, fill, geo.squareSize);
             return;
         }
 
-        // Screen-space deltas. Screen Y grows downward; a positive dyScreen
-        // means the destination is *below* the origin, regardless of whether
-        // the board is flipped.
-        const float dxScreen = toCenter.x - fromCenter.x;
-        const float dyScreen = toCenter.y - fromCenter.y;
-
-        const float stepX = (dxScreen >= 0.0f) ? geo.squareSize : -geo.squareSize;
-        const float stepY = (dyScreen >= 0.0f) ? geo.squareSize : -geo.squareSize;
-
-        // The long leg runs along whichever axis has the larger screen
-        // magnitude. For a knight move that's always 2 squares on one axis
-        // and 1 square on the other, so this is unambiguous.
-        const bool horizontalIsLong = std::abs(dxScreen) > std::abs(dyScreen);
-
-        const sf::Vector2f corner = horizontalIsLong ? sf::Vector2f{fromCenter.x + 2.0f * stepX, fromCenter.y}
-                                                     : sf::Vector2f{fromCenter.x, fromCenter.y + 2.0f * stepY};
-
-        // First leg: shaft-only, from the origin to the corner.
-        const float shaftWidth = geo.squareSize * 0.13f;
-        const sf::Vector2f delta1 = corner - fromCenter;
-        const float length1 = std::sqrt(delta1.x * delta1.x + delta1.y * delta1.y);
-
-        if (length1 > 1.0f)
-        {
-            const sf::Vector2f dir1 = delta1 / length1;
-            const sf::Vector2f perp1(-dir1.y, dir1.x);
-            const sf::Vector2f half1 = perp1 * (shaftWidth * 0.5f);
-
-            sf::ConvexShape shaft1(4);
-            shaft1.setPoint(0, fromCenter + half1);
-            shaft1.setPoint(1, corner + half1);
-            shaft1.setPoint(2, corner - half1);
-            shaft1.setPoint(3, fromCenter - half1);
-            shaft1.setFillColor(fill);
-            target.draw(shaft1);
-        }
-
-        // Second leg: shaft plus head into the destination.
-        drawStraightArrow(target, corner, toCenter, fill, geo.squareSize);
+        drawStraightArrow(target, fromCenter, toCenter, fill, geo.squareSize);
     }
 
     void drawArrows(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const std::vector<Gui::Arrow>& arrows)

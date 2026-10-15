@@ -32,28 +32,39 @@ namespace
 } // namespace
 
 ChessGame::ChessGame()
+    : rootFen_(START_FEN)
 {
-    board_.loadFEN(START_FEN);
+    board_.loadFEN(rootFen_);
 }
 
 void ChessGame::loadFEN(const std::string& fen)
 {
+    // Prepare and validate the new position before modifying the game.
     Board scratch;
     scratch.loadFEN(fen);
 
+    std::string newRootFen = fen;
+
+    // Commit the new position and establish a new history root.
     board_ = std::move(scratch);
+    rootFen_ = std::move(newRootFen);
+
     moves_.clear();
     cursor_ = 0;
     resigned_.reset();
+
     syncClockToCursor();
 }
 
 void ChessGame::reset()
 {
     board_.reset();
+    rootFen_ = START_FEN;
+
     moves_.clear();
     cursor_ = 0;
     resigned_.reset();
+
     syncClockToCursor();
 }
 

@@ -190,8 +190,7 @@ namespace Gui
 
         if (!sqOpt)
         {
-            // Right-click outside the board clears every arrow. Matches
-            // chess.com and lichess; useful as a single-gesture reset.
+            // Right-click outside the board clears every arrow.
             clearArrows();
             return;
         }
@@ -206,23 +205,14 @@ namespace Gui
             const Square from = *arrowAnchor_;
             arrowAnchor_.reset();
 
-            if (from == sq)
-            {
-                // Same square twice: no arrow.
-                return;
-            }
+            if (from != sq)
+                addOrReplaceArrow(from, sq);
 
-            addOrReplaceArrow(from, sq);
             return;
         }
 
-        // An arrow already starts on this square: erase it and consume
-        // the click. This is the single-right-click erase gesture.
-        if (eraseArrowFrom(sq))
-            return;
-
-        // Otherwise, start a new chain. The arrow materializes on either
-        // the second click (click-click gesture) or the release (drag).
+        // Otherwise, start a new chain. Whether this turns out to be a
+        // click-click chain or a drag is decided on release.
         arrowAnchor_ = sq;
     }
 
@@ -233,8 +223,6 @@ namespace Gui
 
         rightPressActive_ = false;
 
-        // No pending anchor means the press was an erase or a clear;
-        // nothing for the release to complete.
         if (!arrowAnchor_.has_value())
             return;
 
@@ -242,13 +230,19 @@ namespace Gui
         if (!sqOpt)
             return;
 
-        if (*sqOpt == *arrowAnchor_)
-            return; // no drag; wait for the second click
-
         const Square from = *arrowAnchor_;
+
+        // Press and release on the same square = "erase arrows from here".
+        // A drag to a different square = "draw an arrow".
+        if (*sqOpt == from)
+        {
+            eraseArrowFrom(from);
+            arrowAnchor_.reset();
+            return;
+        }
+
         const Square to = *sqOpt;
         arrowAnchor_.reset();
-
         addOrReplaceArrow(from, to);
     }
 
@@ -510,17 +504,6 @@ namespace Gui
             }
         }
 
-        // One arrow per tail: a new arrow from the same source replaces
-        // the existing one rather than stacking. Keeps the board readable.
-        for (auto it = arrows_.begin(); it != arrows_.end(); ++it)
-        {
-            if (it->from == from)
-            {
-                it->to = to;
-                return;
-            }
-        }
-
         // Soft cap. Oldest arrow drops off to make room, matching the
         // way a single-finger drawing app behaves.
         constexpr std::size_t kMaxArrows = 8;
@@ -532,16 +515,14 @@ namespace Gui
 
     bool GuiGameController::eraseArrowFrom(Square from)
     {
-        for (auto it = arrows_.begin(); it != arrows_.end(); ++it)
-        {
-            if (it->from == from)
-            {
-                arrows_.erase(it);
-                return true;
-            }
-        }
-
-        return false;
+        const auto oldSize = arrows_.size();
+        arrows_.erase(std::remove_if(arrows_.begin(), arrows_.end(),
+                                     [from](const Arrow& a)
+                                     {
+                                         return a.from == from;
+                                     }),
+                      arrows_.end());
+        return arrows_.size() != oldSize;
     }
 
 } // namespace Gui

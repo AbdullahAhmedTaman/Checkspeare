@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <functional>
 #include <optional>
+#include <string>
 #include <vector>
 
 /// A chess game: a Board plus the sequence of moves that produced it.
@@ -18,8 +19,8 @@
 /// live position is always the result of walking `moves_` up to `cursor_`.
 ///
 /// Invariant:
-///     cursor_ == 0  -> board_ equals the start position
-///     cursor_ == n  -> board_ equals start position + moves_[0..n-1]
+///     cursor_ == 0 -> board_ equals the root FEN position
+///     cursor_ == n -> board_ equals root FEN + moves_[0..n-1]
 ///
 /// The game also carries a clock snapshot per ply so that undo/redo can
 /// restore the clock exactly. The game never owns the clock; Application
@@ -92,6 +93,11 @@ public:
         return cursor_;
     }
 
+    const std::string& rootFEN() const noexcept
+    {
+        return rootFen_;
+    }
+
     const std::vector<MoveRecord>& history() const
     {
         return moves_;
@@ -132,6 +138,7 @@ private:
     std::optional<Move> findLegalMove(Square from, Square to, PieceType promo) const;
     bool isInsufficientMaterial() const;
 
+    std::string rootFen_;
     Board board_;
     std::vector<MoveRecord> moves_;
     std::size_t cursor_ = 0;

@@ -112,11 +112,21 @@ namespace Gui
 
             return true;
         }
+
+        /// Width of a button sized to its label plus frame padding.
+        float buttonWidth(const char* label)
+        {
+            return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        }
     } // namespace
 
     void renderFenPanel(ChessGame& game, GuiGameController& controller)
     {
         ImGui::Begin("FEN");
+
+        // Tighten the layout so the whole panel fits on a single row.
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 4.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 2.0f));
 
         if (!bufferInitialized)
         {
@@ -124,17 +134,31 @@ namespace Gui
             syncBufferFromGame(game);
         }
 
-        ImGui::TextDisabled("Position FEN");
-        ImGui::SetNextItemWidth(-FLT_MIN);
+        const float applyW = buttonWidth("Apply");
+        const float refreshW = buttonWidth("Refresh");
+        const float copyW = buttonWidth("Copy");
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+
+        // [label] [input] [Apply] [Refresh] [Copy]
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("FEN");
+        ImGui::SameLine();
+
+        const float inputWidth = ImGui::GetContentRegionAvail().x - (applyW + refreshW + copyW) - (spacing * 4.0f);
+
+        ImGui::SetNextItemWidth(inputWidth);
         ImGui::InputText("##fen", fenBuffer, kBufferSize);
 
-        ImGui::Spacing();
+        ImGui::SameLine();
+        const bool apply = ImGui::Button("Apply", ImVec2(applyW, 0.0f));
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Apply replaces the current game and clears undo history.");
 
-        const bool apply = ImGui::Button("Apply");
         ImGui::SameLine();
-        const bool refresh = ImGui::Button("Refresh");
+        const bool refresh = ImGui::Button("Refresh", ImVec2(refreshW, 0.0f));
+
         ImGui::SameLine();
-        const bool copy = ImGui::Button("Copy");
+        const bool copy = ImGui::Button("Copy", ImVec2(copyW, 0.0f));
 
         static std::string lastError;
 
@@ -145,7 +169,7 @@ namespace Gui
 
             if (!looksLikeFen(candidate))
             {
-                lastError = "This is not a valid FEN string.";
+                lastError = "Not a valid FEN.";
             }
             else
             {
@@ -175,16 +199,13 @@ namespace Gui
 
         if (!lastError.empty())
         {
-            ImGui::Spacing();
+            ImGui::SameLine();
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.55f, 0.55f, 1.0f));
-            ImGui::TextWrapped("%s", lastError.c_str());
+            ImGui::TextUnformatted(lastError.c_str());
             ImGui::PopStyleColor();
         }
 
-        ImGui::Spacing();
-        ImGui::Separator();
-        ImGui::Spacing();
-        ImGui::TextDisabled("Apply replaces the current game and clears undo history.");
+        ImGui::PopStyleVar(2);
 
         ImGui::End();
     }

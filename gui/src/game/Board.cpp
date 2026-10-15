@@ -37,12 +37,17 @@ Board::Board()
 
 void Board::loadFEN(const std::string& fen)
 {
-    // Parse into a local first so a rejection does not corrupt live state.
+    // Parse and validate without modifying the live position.
     Position candidate = Position::from_fen(fen);
     validateParsedPosition(candidate, fen);
 
+    // Generate the new legal moves before committing the position.
+    MoveList candidateMoves{};
+    MoveGen::generate_legal_moves(candidate, candidateMoves);
+
+    // Commit the new state.
     pos_ = std::move(candidate);
-    refreshLegalMoves();
+    legalMoves_ = candidateMoves;
 }
 
 void Board::reset()

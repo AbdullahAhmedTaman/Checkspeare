@@ -53,12 +53,22 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     : conf_(conf),
       assets_(assets),
       sounds_(sounds),
-      window_(sf::VideoMode({1400, 1080}), "Chess GUI", sf::Style::Default, sf::State::Windowed, makeWindowSettings()),
+      window_(sf::VideoMode({1150, 1000}), "Chess GUI", sf::Style::Default, sf::State::Windowed, makeWindowSettings()),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets)),
       soundPlayer_(sounds)
 {
     window_.setVerticalSyncEnabled(true);
+    sf::Image icon;
+
+    if (!icon.loadFromFile(RESOURCES_PATH "/chess.png"))
+    {
+        throw std::runtime_error("Failed to load application icon\n");
+    }
+    else
+    {
+        window_.setIcon(icon);
+    }
 
     // Clock is configured but not started. It stays stopped until a setup
     // is committed, so no time is lost while the user reads the modal.

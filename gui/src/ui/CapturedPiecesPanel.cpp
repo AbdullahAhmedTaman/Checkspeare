@@ -29,11 +29,13 @@ namespace Gui
         /// square, so we read its type directly.
         void accumulateCaptures(const ChessGame& game, int out[2][6])
         {
+            // Replay from the position that started this game's history,
+            // not necessarily the standard starting position.
             Board scratch;
-            scratch.reset();
+            scratch.loadFEN(game.rootFEN());
 
             const auto& history = game.history();
-            const std::size_t cursor = game.cursor();
+            const std::size_t cursor = std::min(game.cursor(), history.size());
 
             for (std::size_t i = 0; i < cursor; ++i)
             {
@@ -49,9 +51,11 @@ namespace Gui
                     else
                     {
                         const Piece victimPiece = scratch.pieceAt(m.to());
+
                         if (victimPiece != PIECE_NONE)
                         {
                             const Color mover = color_of(scratch.pieceAt(m.from()));
+
                             const PieceType victimType = type_of(victimPiece);
 
                             if (isCapturable(victimType))
