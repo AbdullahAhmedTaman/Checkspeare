@@ -6,9 +6,11 @@
 #include "input/SfmlInputAdapter.hpp"
 #include "ui/ClockPanel.hpp"
 #include "ui/DockSpace.hpp"
+#include "ui/FenPanel.hpp"
 #include "ui/ImGuiTheme.hpp"
 #include "ui/MoveListPanel.hpp"
 #include "ui/StatusPanel.hpp"
+#include "ui/dialogs/EngineErrorPopup.hpp"
 #include "ui/dialogs/GameOverModal.hpp"
 #include "ui/engine/EngineThinkingPanel.hpp"
 
@@ -487,6 +489,8 @@ void Application::stepUi(float dtSeconds)
     Gui::renderClockPanel(clock_, game_, assets_, clockFont_, engineNameFont_, displayName(engineWhite_),
                           displayName(engineBlack_));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
+    Gui::renderFenPanel(game_, controller_);
+    Gui::renderEngineErrorPopup(engineError_);
 
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
     {
@@ -623,9 +627,11 @@ void Application::launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, co
     {
         engine.start(path);
     }
-    catch (const std::exception&)
+    catch (const std::exception& e)
     {
-        // A bad path or failed spawn leaves the engine stopped. The setup
-        // panel can retry without restarting the GUI.
+        // Store the message so the popup can show it. The game continues
+        // with the engine stopped; the user can fix the path from the
+        // Engine Settings panel and try again.
+        engineError_ = e.what();
     }
 }

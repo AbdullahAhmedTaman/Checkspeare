@@ -53,6 +53,9 @@ namespace Gui
 
                 ImGuiID emptyCorner = ImGui::DockBuilderSplitNode(bottomStrip, ImGuiDir_Right, 0.22f, nullptr, &bottomStrip);
 
+                ImGuiID fenCell = ImGui::DockBuilderSplitNode(bottomStrip, ImGuiDir_Right, 0.4f, nullptr, &bottomStrip);
+
+                ImGui::DockBuilderDockWindow("FEN", fenCell);
                 ImGui::DockBuilderDockWindow("Engine", engineCol);
                 ImGui::DockBuilderDockWindow("Board", root);
                 ImGui::DockBuilderDockWindow("Clock", bottomStrip);

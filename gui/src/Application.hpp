@@ -17,7 +17,6 @@
 #include "ui/board/BoardPanel.hpp"
 #include "ui/dialogs/GameSetupPanel.hpp"
 
-
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/System/Clock.hpp>
@@ -93,7 +92,7 @@ private:
     /// Starts `engine` with `path` when `kind == Engine`, stops it
     /// otherwise. Swallows start failures; a bad path leaves the engine
     /// stopped and the setup panel can retry.
-    static void launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path);
+    void launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path);
 
     Gui::EngineThinkingSnapshot buildThinkingSnapshot() const;
 
@@ -143,6 +142,8 @@ private:
     /// Tracks the game cursor across frames so Application can detect when
     /// a move was committed and notify the clock.
     std::size_t lastCursor_ = 0;
+
+    std::string engineError_;
 
     /// True on frames where game_.result() reports a terminal state. Used
     /// to fire one-shot reactions (engine abort) on the transition into

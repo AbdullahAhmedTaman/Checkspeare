@@ -3,7 +3,6 @@
 #include "GameResult.hpp"
 #include "San.hpp"
 
-
 namespace
 {
     constexpr const char* START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
@@ -39,7 +38,10 @@ ChessGame::ChessGame()
 
 void ChessGame::loadFEN(const std::string& fen)
 {
-    board_.loadFEN(fen);
+    Board scratch;
+    scratch.loadFEN(fen);
+
+    board_ = std::move(scratch);
     moves_.clear();
     cursor_ = 0;
     resigned_.reset();

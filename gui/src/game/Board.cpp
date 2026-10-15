@@ -15,7 +15,10 @@ namespace
     /// MoveGen::generate_legal_moves misbehave.
     void validateParsedPosition(const Position& p, const std::string& fen)
     {
-        if (p.king_square(WHITE) == SQ_NONE || p.king_square(BLACK) == SQ_NONE)
+        const Bitboard whiteKings = p.pieces[WHITE][KING];
+        const Bitboard blackKings = p.pieces[BLACK][KING];
+
+        if (whiteKings == 0 || blackKings == 0)
             throw std::invalid_argument("[Board] FEN is missing a king: " + fen);
 
         // The side not to move must not be in check, otherwise the side to

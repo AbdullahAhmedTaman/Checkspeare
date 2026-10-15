@@ -543,6 +543,118 @@ Position Position::from_fen(const std::string& fen)
     return pos;
 }
 
+std::string Position::to_fen() const
+{
+    std::string fen;
+    fen.reserve(90);
+
+    // Piece placement, rank 8 down to rank 1.
+    for (int rank = 7; rank >= 0; --rank)
+    {
+        int empty = 0;
+
+        for (int file = 0; file < 8; ++file)
+        {
+            const Square sq = static_cast<Square>(rank * 8 + file);
+            const Piece pc = board[sq];
+
+            if (pc == PIECE_NONE)
+            {
+                ++empty;
+                continue;
+            }
+
+            if (empty > 0)
+            {
+                fen += static_cast<char>('0' + empty);
+                empty = 0;
+            }
+
+            char c = '?';
+            switch (type_of(pc))
+            {
+                case PAWN:
+                    c = 'p';
+                    break;
+                case KNIGHT:
+                    c = 'n';
+                    break;
+                case BISHOP:
+                    c = 'b';
+                    break;
+                case ROOK:
+                    c = 'r';
+                    break;
+                case QUEEN:
+                    c = 'q';
+                    break;
+                case KING:
+                    c = 'k';
+                    break;
+                default:
+                    break;
+            }
+
+            if (color_of(pc) == WHITE)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+
+            fen += c;
+        }
+
+        if (empty > 0)
+            fen += static_cast<char>('0' + empty);
+
+        if (rank > 0)
+            fen += '/';
+    }
+
+    // Side to move.
+    fen += ' ';
+    fen += (sideToMove == WHITE) ? 'w' : 'b';
+
+    // Castling rights.
+    fen += ' ';
+    if (castlingRights == 0)
+    {
+        fen += '-';
+    }
+    else
+    {
+        if (castlingRights & 1)
+            fen += 'K';
+        if (castlingRights & 2)
+            fen += 'Q';
+        if (castlingRights & 4)
+            fen += 'k';
+        if (castlingRights & 8)
+            fen += 'q';
+    }
+
+    // En passant target square.
+    fen += ' ';
+    if (enPassantSquare == SQ_NONE)
+    {
+        fen += '-';
+    }
+    else
+    {
+        const int f = static_cast<int>(enPassantSquare) % 8;
+        const int r = static_cast<int>(enPassantSquare) / 8;
+        fen += static_cast<char>('a' + f);
+        fen += static_cast<char>('1' + r);
+    }
+
+    // Halfmove clock.
+    fen += ' ';
+    fen += std::to_string(halfmoveClock);
+
+    // Fullmove number. Always 1: the engine does not track the actual
+    // move number, and any consumer that needs it can count plies.
+    fen += " 1";
+
+    return fen;
+}
+
 bool Position::in_check() const
 {
     const Square ksq = king_square(sideToMove);
