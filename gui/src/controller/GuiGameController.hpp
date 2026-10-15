@@ -6,9 +6,9 @@
 #include "../input/InputEvent.hpp"
 #include "../ui/board/BoardAnnotations.hpp"
 
-
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <optional>
 
 #include <SFML/System/Vector2.hpp>
@@ -67,6 +67,16 @@ namespace Gui
         explicit GuiGameController(ChessGame& game)
             : game_(game)
         {
+        }
+
+        /// Installs the predicate the controller consults before allowing
+        /// a human-originated mutation (move, promotion commit). Returns
+        /// true when `side` is allowed to be moved by a human in the
+        /// current setup. Defaults to "always allowed" so the controller
+        /// works standalone in tests or other front-ends.
+        void setHumanMayMove(std::function<bool(Color)> pred)
+        {
+            humanMayMove_ = std::move(pred);
         }
 
         void handleEvent(const InputEvent& event, const BoardGeometry& geo);
@@ -181,6 +191,13 @@ namespace Gui
         bool newGameRequested_ = false;
         bool gameOverModalDismissed_ = false;
         bool quitRequested_ = false;
+
+        /// Authority gate for human-originated mutations. Consulted at the
+        /// point a move is about to be committed, not in input routing.
+        std::function<bool(Color)> humanMayMove_ = [](Color)
+        {
+            return true;
+        };
     };
 
 } // namespace Gui

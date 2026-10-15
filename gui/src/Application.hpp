@@ -62,8 +62,9 @@ private:
 
     /// Decides whether an input event reaches the controller. True for
     /// FocusLost and drag-ending releases unconditionally; otherwise
-    /// false when the engine controls the side to move, and gated by
-    /// board-panel containment and ImGui mouse capture.
+    /// gated by board-panel containment and ImGui mouse capture. Modals
+    /// block everything else. Move authority is enforced inside the
+    /// controller, not here.
     bool shouldForwardInput(const Gui::InputEvent& ev) const;
 
     /// True when the game is over for any reason: game.result() is

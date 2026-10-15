@@ -1,6 +1,5 @@
 #include "Application.hpp"
 
-#include "game/GameOverTransition.hpp"
 #include "game/GameResult.hpp"
 #include "input/InputEvent.hpp"
 #include "input/SfmlInputAdapter.hpp"
@@ -76,6 +75,19 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     clock_.stop();
 
     wireClockCallbacks();
+
+    // Move authority lives in the controller, at the point a move is about
+    // to be committed. Everything upstream (input routing in
+    // processEvents/shouldForwardInput) is now free to deliver events to
+    // the board even while an engine controls the side to move; non-mutating
+    // gestures (arrows, clear-arrows on empty-square click, hover) work
+    // during engine thinking, and the controller itself rejects a move
+    // attempt from the wrong side.
+    controller_.setHumanMayMove(
+        [this](Color side)
+        {
+            return !sideIsEngineControlled(side);
+        });
 
     if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
@@ -277,10 +289,12 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     // Modals gate everything else. ImGui's WantCaptureMouse alone is not
     // enough: the board is itself an ImGui panel, so a click over its
     // rectangle would otherwise be forwarded regardless of what is on top.
+    //
+    // Move authority is intentionally *not* checked here. The controller
+    // consults humanMayMove_ at the point a move is committed, which lets
+    // non-mutating gestures (arrows, clear-arrows, hover) reach the board
+    // even while an engine controls the side to move.
     if (setupModalOpen_ || isGameOver())
-        return false;
-
-    if (sideIsEngineControlled(game_.sideToMove()))
         return false;
 
     if (boardPanel_.contains(ev.position))

@@ -122,7 +122,7 @@ namespace Gui
             return;
         }
 
-        if (color_of(pc) != game_.sideToMove())
+        if (color_of(pc) != game_.sideToMove() || !humanMayMove_(color_of(pc)))
         {
             result_ = {ActionResult::Kind::NotYourTurn};
             cancelSelection();
@@ -321,6 +321,13 @@ namespace Gui
         if (isFrozen(game_))
             return;
 
+        if (!humanMayMove_(game_.sideToMove()))
+        {
+            result_ = {ActionResult::Kind::NotYourTurn, from, to};
+            cancelSelection();
+            return;
+        }
+
         if (isPromotionMove(from, to))
         {
             lastMoveWasDrag_ = fromDrag;
@@ -367,6 +374,14 @@ namespace Gui
         if (isFrozen(game_))
         {
             promo_ = {};
+            return;
+        }
+
+        if (!humanMayMove_(game_.sideToMove()))
+        {
+            promo_ = {};
+            result_ = {ActionResult::Kind::NotYourTurn};
+            cancelSelection();
             return;
         }
 
