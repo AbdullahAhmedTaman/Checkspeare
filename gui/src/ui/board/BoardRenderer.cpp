@@ -386,45 +386,54 @@ namespace
         const sf::Vector2f fromCenter = geo.topLeft(a.from) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
         const sf::Vector2f toCenter = geo.topLeft(a.to) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
 
-        // Knight moves are drawn as an L: first the long leg (2 squares along
-        // one axis), then the short leg (1 square along the other). The
-        // arrowhead sits at the end of the short leg. Any other move is drawn
-        // straight.
-        if (isKnightOffset(a.from, a.to))
-        {
-            const int fx = static_cast<int>(a.from) % 8;
-            const int fy = static_cast<int>(a.from) / 8;
-            const int tx = static_cast<int>(a.to) % 8;
-            const int ty = static_cast<int>(a.to) / 8;
-
-            const int dx = tx - fx;
-            const int dy = ty - fy;
-
-            // The long leg runs along whichever axis has magnitude 2. The
-            // corner sits at the intersection of that axis with the other.
-            sf::Vector2f corner;
-            if (std::abs(dx) == 2)
-            {
-                // Horizontal long leg first, then vertical short leg.
-                corner = geo.topLeft(a.from) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
-                corner.x += static_cast<float>(dx) * geo.squareSize;
-            }
-            else
-            {
-                // Vertical long leg first, then horizontal short leg.
-                corner = geo.topLeft(a.from) + sf::Vector2f(geo.squareSize * 0.5f, geo.squareSize * 0.5f);
-                corner.y += static_cast<float>(dy) * geo.squareSize;
-            }
-
-            // Two straight segments. The first has no head (it stops at the
-            // corner), the second carries the arrowhead into the destination.
-            drawStraightArrow(target, fromCenter, corner, fill, geo.squareSize);
-            drawStraightArrow(target, corner, toCenter, fill, geo.squareSize);
-        }
-        else
+        if (!isKnightOffset(a.from, a.to))
         {
             drawStraightArrow(target, fromCenter, toCenter, fill, geo.squareSize);
+            return;
         }
+
+        const int fx = static_cast<int>(a.from) % 8;
+        const int fy = static_cast<int>(a.from) / 8;
+        const int tx = static_cast<int>(a.to) % 8;
+        const int ty = static_cast<int>(a.to) / 8;
+
+        const int dx = tx - fx;
+        const int dy = ty - fy;
+
+        // The corner is the intersection of (from + full long axis) with
+        // (from + full short axis). The long axis is whichever of |dx| or
+        // |dy| equals 2. Draw long-leg first, then short-leg with the head.
+        const int longDx = (std::abs(dx) == 2) ? dx : 0;
+        const int longDy = (std::abs(dy) == 2) ? dy : 0;
+
+        const sf::Vector2f fromTL = geo.topLeft(a.from);
+        const sf::Vector2f corner{
+            fromTL.x + geo.squareSize * (0.5f + static_cast<float>(longDx)),
+            fromTL.y + geo.squareSize * (0.5f + static_cast<float>(longDy)),
+        };
+
+        // Shaft-only first segment: no head at the corner.
+        const float shaftWidth = geo.squareSize * 0.13f;
+        const sf::Vector2f delta1 = corner - fromCenter;
+        const float length1 = std::sqrt(delta1.x * delta1.x + delta1.y * delta1.y);
+
+        if (length1 > 1.0f)
+        {
+            const sf::Vector2f dir1 = delta1 / length1;
+            const sf::Vector2f perp1(-dir1.y, dir1.x);
+            const sf::Vector2f half1 = perp1 * (shaftWidth * 0.5f);
+
+            sf::ConvexShape shaft1(4);
+            shaft1.setPoint(0, fromCenter + half1);
+            shaft1.setPoint(1, corner + half1);
+            shaft1.setPoint(2, corner - half1);
+            shaft1.setPoint(3, fromCenter - half1);
+            shaft1.setFillColor(fill);
+            target.draw(shaft1);
+        }
+
+        // Second segment: shaft plus head into the destination.
+        drawStraightArrow(target, corner, toCenter, fill, geo.squareSize);
     }
 
     void drawArrows(sf::RenderTarget& target, const Gui::BoardGeometry& geo, const std::vector<Gui::Arrow>& arrows)

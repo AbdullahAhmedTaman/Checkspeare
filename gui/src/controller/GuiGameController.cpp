@@ -118,6 +118,7 @@ namespace Gui
         if (pc == PIECE_NONE)
         {
             cancelSelection();
+            clearArrows();
             return;
         }
 
