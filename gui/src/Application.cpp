@@ -22,24 +22,6 @@
 
 namespace
 {
-    const char* soundKeyFor(MoveSound s)
-    {
-        switch (s)
-        {
-            case MoveSound::QuietMove:
-                return Assets::SoundKey::Move;
-            case MoveSound::Capture:
-                return Assets::SoundKey::Capture;
-            case MoveSound::Check:
-                return Assets::SoundKey::Check;
-            case MoveSound::Castle:
-                return Assets::SoundKey::Castle;
-            case MoveSound::Promotion:
-                return Assets::SoundKey::Promote;
-        }
-        return Assets::SoundKey::Move;
-    }
-
     sf::ContextSettings makeWindowSettings()
     {
         sf::ContextSettings s;
@@ -49,13 +31,14 @@ namespace
 } // namespace
 
 Application::Application(Config& conf, const Assets::TextureLibrary& assets, const Assets::SoundLibrary& sounds)
-    : conf_(conf),
-      assets_(assets),
+    : assets_(assets),
       sounds_(sounds),
       window_(sf::VideoMode({1150, 1000}), "Chess GUI", sf::Style::Default, sf::State::Windowed, makeWindowSettings()),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets)),
-      soundPlayer_(sounds)
+      soundPlayer_(sounds),
+      soundDirector_(soundPlayer_),
+      setupFlow_(conf, game_, clock_, engines_, controller_, geo_)
 {
     window_.setVerticalSyncEnabled(true);
     sf::Image icon;
@@ -71,7 +54,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
 
     // Clock is configured but not started. It stays stopped until a setup
     // is committed, so no time is lost while the user reads the modal.
-    clock_.configure(conf_.timeControl);
+    clock_.configure(conf.timeControl);
     clock_.stop();
 
     wireClockCallbacks();
@@ -86,7 +69,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     controller_.setHumanMayMove(
         [this](Color side)
         {
-            return !sideIsEngineControlled(side);
+            return !engines_.sideIsEngineControlled(side);
         });
 
     // Engine ownership is a query over the engine players, which only
@@ -95,7 +78,23 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     controller_.setSideIsEngineControlled(
         [this](Color side)
         {
-            return sideIsEngineControlled(side);
+            return engines_.sideIsEngineControlled(side);
+        });
+
+    soundDirector_.setSideIsHuman(
+        [this](Color side)
+        {
+            return sideIsHuman(side);
+        });
+
+    // Application's per-frame bookkeeping is reset whenever a setup is
+    // committed: the new game starts at ply 0, and any previous game-over
+    // latch must be cleared so the transition detector can fire again.
+    setupFlow_.setOnApplied(
+        [this]
+        {
+            moveAnimator_.reset(0);
+            gameOverWas_ = false;
         });
 
     if (!ImGui::SFML::Init(window_, false))
@@ -113,7 +112,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     if (!coordinateFont_.openFromFile(RESOURCES_PATH "fonts/Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
-    seedSetupModalFromConfig();
+    setupFlow_.seedFromConfig();
 }
 
 Application::~Application()
@@ -145,7 +144,7 @@ void Application::wireClockCallbacks()
             // Sound category was classified at commit time and stored in
             // the record. Playing here catches both human and engine moves,
             // since every commit routes through ChessGame::play.
-            soundPlayer_.play(soundKeyFor(game_.history()[ply].sound));
+            soundDirector_.playMoveSound(game_.history()[ply].sound);
         });
 }
 
@@ -167,23 +166,6 @@ void Application::loadFonts()
     moveListFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 20.0f);
     if (moveListFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load move list font!");
-}
-
-void Application::seedSetupModalFromConfig()
-{
-    // Committed values are written back into Config by applyGameSetup, so
-    // this seed gives the next session the last-used settings.
-    pendingSetup_.timeControl = conf_.timeControl;
-
-    // Guard against a stored zero from an earlier session: a clock with
-    // zero time falls on the first tick, before either side can move.
-    if (pendingSetup_.timeControl.initialMs < 60 * 1000)
-        pendingSetup_.timeControl.initialMs = 60 * 1000;
-
-    pendingSetup_.whiteKind = Gui::PlayerKind::Human;
-    pendingSetup_.blackKind = Gui::PlayerKind::Engine;
-    pendingSetup_.whiteEnginePath = conf_.whiteEnginePath;
-    pendingSetup_.blackEnginePath = conf_.blackEnginePath;
 }
 
 void Application::run()
@@ -213,6 +195,12 @@ void Application::render()
 
 void Application::processEvents()
 {
+    // Read the two gate conditions once per frame. Nothing inside the loop
+    // mutates them, so this is equivalent to checking per event and avoids
+    // repeated game_.result() / clock_.flagFallen(...) calls.
+    const bool setupOpen = setupFlow_.isOpen();
+    const bool gameOver = isGameOver();
+
     while (const std::optional event = window_.pollEvent())
     {
         ImGui::SFML::ProcessEvent(window_, *event);
@@ -233,7 +221,7 @@ void Application::processEvents()
         // Runs before shouldForwardInput because ImGui-captured panel
         // clicks are otherwise not forwarded. Skipped while a modal is
         // open: the modal owns every click.
-        if (!setupModalOpen_ && !isGameOver() && inputEvent->kind == Gui::InputEvent::Kind::PointerPressed &&
+        if (!setupOpen && !gameOver && inputEvent->kind == Gui::InputEvent::Kind::PointerPressed &&
             inputEvent->button == Gui::MouseButton::Left && !insideBoard)
         {
             controller_.cancelSelection();
@@ -247,7 +235,7 @@ void Application::processEvents()
 
         if (inputEvent->kind == Gui::InputEvent::Kind::KeyPressed)
         {
-            if (setupModalOpen_ || isGameOver())
+            if (setupOpen || gameOver)
                 continue;
 
             if (ImGui::GetIO().WantCaptureKeyboard)
@@ -257,7 +245,7 @@ void Application::processEvents()
             continue;
         }
 
-        if (!shouldForwardInput(*inputEvent))
+        if (!shouldForwardInput(*inputEvent, setupOpen, gameOver))
             continue;
 
         Gui::InputEvent forwarded = *inputEvent;
@@ -268,7 +256,7 @@ void Application::processEvents()
     }
 }
 
-bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
+bool Application::shouldForwardInput(const Gui::InputEvent& ev, bool setupOpen, bool gameOver) const
 {
     if (ev.kind == Gui::InputEvent::Kind::FocusLost)
         return true;
@@ -285,7 +273,7 @@ bool Application::shouldForwardInput(const Gui::InputEvent& ev) const
     // consults humanMayMove_ at the point a move is committed, which lets
     // non-mutating gestures (arrows, clear-arrows, hover) reach the board
     // even while an engine controls the side to move.
-    if (setupModalOpen_ || isGameOver())
+    if (setupOpen || gameOver)
         return false;
 
     if (boardPanel_.contains(ev.position))
@@ -311,76 +299,18 @@ bool Application::sideIsHuman(Color side) const
     return controller_.sideIsHuman(side);
 }
 
-std::string Application::gameOverSoundKey() const
-{
-    // Time loss beats anything the board says: the flag decides the game.
-    const auto outcomeFor = [this](Color loser)
-    {
-        const Color winner = (loser == WHITE) ? BLACK : WHITE;
-        const bool loserHuman = sideIsHuman(loser);
-        const bool winnerHuman = sideIsHuman(winner);
-
-        if (loserHuman && !winnerHuman)
-            return std::string(Assets::SoundKey::Defeat);
-        if (winnerHuman && !loserHuman)
-            return std::string(Assets::SoundKey::Victory);
-
-        // Both sides human (hotseat) or both engines (spectating): play
-        // the victory cue for whoever won.
-        return std::string(Assets::SoundKey::Victory);
-    };
-
-    if (clock_.flagFallen(WHITE))
-        return outcomeFor(WHITE);
-    if (clock_.flagFallen(BLACK))
-        return outcomeFor(BLACK);
-
-    const GameResult result = game_.result();
-
-    switch (result.kind)
-    {
-        case GameResultKind::Checkmate:
-        case GameResultKind::Resignation:
-            {
-                const Color loser = (result.winner == WHITE) ? BLACK : WHITE;
-                return outcomeFor(loser);
-            }
-
-        case GameResultKind::Stalemate:
-        case GameResultKind::FiftyMove:
-        case GameResultKind::Threefold:
-        case GameResultKind::InsufficientMaterial:
-            return std::string(Assets::SoundKey::Draw);
-
-        case GameResultKind::Ongoing:
-            return {};
-    }
-    return {};
-}
-
-bool Application::sideIsEngineControlled(Color side) const
-{
-    // A side is blocked from human input only when an engine is actually
-    // running and configured to play it. Configuration alone is a
-    // preference; starting an engine is what makes it take effect.
-    const bool whiteWouldPlay = playerWhite_.isSideControlled(side) && engineWhite_.isRunning();
-    const bool blackWouldPlay = playerBlack_.isSideControlled(side) && engineBlack_.isRunning();
-    return whiteWouldPlay || blackWouldPlay;
-}
-
 std::string Application::applyLoadFen(const std::string& fen)
 {
     // Abort both engines. An engine mid-search is analyzing a position
     // that is about to stop existing; its next "bestmove" would be
     // applied to the new board and either be illegal or be played in a
-    // position it never saw. abort() clears the search identity
+    // position it never saw. abortAll clears the search identity
     // (thinkStartPly_, lastInfo_, pendingBestMove_), so a late bestmove
     // cannot be mistaken for a result on the new position.
     //
     // The next tick will re-evaluate from scratch and, if it's still the
     // engine's turn, start a fresh search on the loaded position.
-    playerWhite_.abort();
-    playerBlack_.abort();
+    engines_.abortAll();
 
     try
     {
@@ -391,8 +321,7 @@ std::string Application::applyLoadFen(const std::string& fen)
         return e.what();
     }
 
-    lastCursor_ = game_.cursor();
-    animation_.active = false;
+    moveAnimator_.reset(game_.cursor());
 
     controller_.clearArrows();
     controller_.cancelSelection();
@@ -420,12 +349,12 @@ void Application::stepSimulation(float dtSeconds)
     }
 
     if (controller_.consumeNewGameRequest())
-        newGame();
+        setupFlow_.requestNewGame();
 
     if (auto fen = controller_.consumeLoadFenRequest())
     {
         // applyLoadFen aborts both engines, so this must run before the
-        // player ticks below: they should see the new position and the
+        // engine tick below: they should see the new position and the
         // aborted (not-thinking) state on the same frame.
         fenLoadError_ = applyLoadFen(*fen);
     }
@@ -437,81 +366,28 @@ void Application::stepSimulation(float dtSeconds)
 
     // Input-feedback sounds. These outcomes have no MoveRecord counterpart
     // (a rejected or abandoned move is never committed), so they are keyed
-    // off the controller's ActionResult instead. The kind comparison against
-    // the previous frame prevents the sound from re-firing every frame the
-    // outcome remains current.
-    const Gui::ActionResult::Kind currentKind = controller_.result().kind;
-    if (currentKind != lastResultKind_)
-    {
-        switch (currentKind)
-        {
-            case Gui::ActionResult::Kind::IllegalMove:
-                soundPlayer_.play(Assets::SoundKey::Illegal);
-                break;
-            default:
-                break;
-        }
-        lastResultKind_ = currentKind;
-    }
+    // off the controller's ActionResult instead. SoundDirector latches the
+    // kind against the previous frame to avoid re-firing every frame.
+    soundDirector_.onActionResult(controller_.result().kind);
 
-    const bool setupOpen = setupModalOpen_;
+    const bool setupOpen = setupFlow_.isOpen();
 
     if (!setupOpen)
-    {
-        playerWhite_.tick(game_, clock_);
-        playerBlack_.tick(game_, clock_);
-    }
+        engines_.tick(game_, clock_);
 
     controller_.updateAnnotations();
 
     const bool gameOver = isGameOver();
     const std::size_t curr = game_.cursor();
 
-    // Animation: a single forward step is a real commit; a single backward
-    // step is an undo. Multi-ply jumps snap. A forward step whose commit
-    // came from a drag is suppressed: the dragged piece is already under
-    // the cursor, and sliding it again would look like a double move. The
-    // controller records drag-vs-click on every commit (lastMoveWasDrag_),
-    // so no per-frame bookkeeping is needed here.
-    if (curr == lastCursor_ + 1)
-    {
-        if (!controller_.lastMoveWasDrag())
-        {
-            const MoveRecord& rec = game_.history()[curr - 1];
-            animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
-        }
-    }
-    else if (curr + 1 == lastCursor_ && curr < game_.history().size())
-    {
-        const MoveRecord& rec = game_.history()[curr];
-        animation_.start(rec.move.to(), rec.move.from(), game_.pieceAt(rec.move.from()));
-    }
-    else if (curr != lastCursor_)
-    {
-        animation_.active = false;
-    }
-
-    animation_.tick(dtSeconds);
-
-    // Cursor bookkeeping.
-    //
-    // The clock is advanced only by moveCommitted_, which fires from
-    // ChessGame::play. Every other cursor change already pushed the
-    // matching snapshot through clockSync_, which *restores* it. Treating
-    // a redo as a commit here would re-apply increments on top of the
-    // restored snapshot and flip the active side twice.
-    lastCursor_ = curr;
+    moveAnimator_.update(game_, curr, controller_.lastMoveWasDrag(), dtSeconds);
 
     if (gameOver && !gameOverWas_)
     {
-        playerWhite_.abort();
-        playerBlack_.abort();
+        engines_.abortAll();
         controller_.cancelSelection();
         controller_.reopenGameOverModal();
-
-        const std::string outcome = gameOverSoundKey();
-        if (!outcome.empty())
-            soundPlayer_.play(outcome);
+        soundDirector_.playGameOverSound(game_, clock_);
     }
     gameOverWas_ = gameOver;
 
@@ -521,7 +397,7 @@ void Application::stepSimulation(float dtSeconds)
 
 void Application::stepUi(float dtSeconds)
 {
-    const Gui::EngineThinkingSnapshot snap = buildThinkingSnapshot();
+    const Gui::EngineThinkingSnapshot snap = engines_.buildThinkingSnapshot(game_);
 
     if (snap.scoreMate)
         evalBar_.setTarget(0, *snap.scoreMate);
@@ -533,11 +409,11 @@ void Application::stepUi(float dtSeconds)
     Gui::beginMainDockspace();
 
     boardPanel_.render(geo_, theme_, game_.board(), assets_, coordinateFont_, controller_.drag(), controller_.pendingPromotion(),
-                       controller_.annotations(), animation_, controller_.arrows());
+                       controller_.annotations(), moveAnimator_.animation(), controller_.arrows());
 
     Gui::renderEngineThinkingPanel(snap, evalBar_);
     Gui::renderStatusPanel(controller_, game_, canResign());
-    Gui::renderGameOverModal(controller_, game_, clock_, setupModalOpen_);
+    Gui::renderGameOverModal(controller_, game_, clock_, setupFlow_.isOpen());
 
     // A side is labeled with its engine's name when an engine is running,
     // and "Human" otherwise. During the handshake window the name is still
@@ -550,151 +426,14 @@ void Application::stepUi(float dtSeconds)
         return n.empty() ? "Engine" : n;
     };
 
-    Gui::renderClockPanel(clock_, game_, assets_, clockFont_, engineNameFont_, displayName(engineWhite_),
-                          displayName(engineBlack_));
+    Gui::renderClockPanel(clock_, game_, assets_, clockFont_, engineNameFont_, displayName(engines_.whiteEngine()),
+                          displayName(engines_.blackEngine()));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
     Gui::renderFenPanel(game_, controller_, fenLoadError_);
-    Gui::renderEngineErrorPopup(engineError_);
+    Gui::renderEngineErrorPopup(engines_.error());
 
-    if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
-    {
-        applyGameSetup(*committed);
-        setupModalOpen_ = false;
-    }
-}
-
-Gui::EngineThinkingSnapshot Application::buildThinkingSnapshot() const
-{
-    Gui::EngineThinkingSnapshot snap;
-
-    const bool whiteActive = engineWhite_.isRunning() && playerWhite_.isSideControlled(WHITE);
-    const bool blackActive = engineBlack_.isRunning() && playerBlack_.isSideControlled(BLACK);
-
-    const EnginePlayer* active = nullptr;
-    const UciEngine* activeEngine = nullptr;
-
-    if (whiteActive && blackActive)
-    {
-        if (game_.sideToMove() == WHITE)
-        {
-            active = &playerWhite_;
-            activeEngine = &engineWhite_;
-        }
-        else
-        {
-            active = &playerBlack_;
-            activeEngine = &engineBlack_;
-        }
-    }
-    else if (whiteActive)
-    {
-        active = &playerWhite_;
-        activeEngine = &engineWhite_;
-    }
-    else if (blackActive)
-    {
-        active = &playerBlack_;
-        activeEngine = &engineBlack_;
-    }
-
-    if (active == nullptr)
-        return snap;
-
-    snap.activeSide = (active == &playerWhite_) ? "White" : "Black";
-    snap.engineName = activeEngine->name();
-    snap.thinking = active->thinking();
-
-    if (const auto& info = active->lastInfo())
-    {
-        snap.depth = info->depth;
-        snap.seldepth = info->seldepth;
-        snap.nodes = info->nodes;
-        snap.nps = info->nps;
-
-        // UCI reports from the engine's own point of view; normalize to
-        // White's perspective for display.
-        const bool fromBlack = (active->lastInfoSide() == BLACK);
-        if (info->scoreCp)
-            snap.scoreCp = fromBlack ? -(*info->scoreCp) : *info->scoreCp;
-        if (info->scoreMate)
-            snap.scoreMate = fromBlack ? -(*info->scoreMate) : *info->scoreMate;
-    }
-
-    return snap;
-}
-
-void Application::newGame()
-{
-    // Defer the reset to applyGameSetup. The modal needs the old game to
-    // still be alive while it is on screen, and nothing changes until the
-    // user commits a fresh setup.
-    setupModalOpen_ = true;
-    controller_.updateAnnotations();
-}
-
-void Application::applyGameSetup(const Gui::GameSetup& setup)
-{
-    conf_.timeControl = setup.timeControl;
-    conf_.whiteEnginePath = setup.whiteEnginePath;
-    conf_.blackEnginePath = setup.blackEnginePath;
-
-    playerWhite_.abort();
-    playerBlack_.abort();
-    engineWhite_.stop();
-    engineBlack_.stop();
-
-    game_.reset();
-
-    const bool whiteIsHuman = (setup.whiteKind == Gui::PlayerKind::Human);
-    const bool blackIsHuman = (setup.blackKind == Gui::PlayerKind::Human);
-
-    if (whiteIsHuman != blackIsHuman)
-        geo_.flipped = !whiteIsHuman;
-    else
-        geo_.flipped = false;
-
-    lastCursor_ = 0;
-    gameOverWas_ = false;
-    animation_.active = false;
-
-    // Clamp the initial time to one minute: zero would make the flag fall
-    // on the first tick, before either side can move.
-    ChessClock::TimeControl tc = setup.timeControl;
-    if (tc.initialMs < 60 * 1000)
-        tc.initialMs = 60 * 1000;
-
-    clock_.configure(tc);
-    clock_.start();
-    game_.setInitialClockSnapshot(clock_.snapshot());
-
-    playerWhite_.setSideControlled(WHITE, setup.whiteKind == Gui::PlayerKind::Engine);
-    playerBlack_.setSideControlled(BLACK, setup.blackKind == Gui::PlayerKind::Engine);
-
-    launchOrStopEngine(engineWhite_, setup.whiteKind, setup.whiteEnginePath);
-    launchOrStopEngine(engineBlack_, setup.blackKind, setup.blackEnginePath);
-
-    controller_.updateAnnotations();
-    controller_.reopenGameOverModal();
-    controller_.clearArrows();
-}
-
-void Application::launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path)
-{
-    if (kind != Gui::PlayerKind::Engine)
-    {
-        engine.stop();
-        return;
-    }
-
-    try
-    {
-        engine.start(path);
-    }
-    catch (const std::exception& e)
-    {
-        // Store the message so the popup can show it. The game continues
-        // with the engine stopped; the user can fix the path from the
-        // Engine Settings panel and try again.
-        engineError_ = e.what();
-    }
+    // Renders the setup modal and, on commit, applies the setup through
+    // SetupFlow. Application's bookkeeping reset rides on the onApplied
+    // callback registered in the constructor.
+    setupFlow_.render();
 }

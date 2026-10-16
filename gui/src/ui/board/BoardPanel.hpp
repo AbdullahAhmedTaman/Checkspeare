@@ -1,12 +1,12 @@
 #pragma once
 
-#include "../../game/Board.hpp"
+#include "game/Board.hpp"
 #include "BoardAnnotations.hpp"
-#include "../../game/BoardGeometry.hpp"
-#include "../../controller/GuiGameController.hpp"
-#include "../../game/MoveAnimation.hpp"
-#include "../../assets/TextureLibrary.hpp"
-#include "../Theme.hpp"
+#include "game/BoardGeometry.hpp"
+#include "controller/GuiGameController.hpp"
+#include "game/MoveAnimation.hpp"
+#include "assets/TextureLibrary.hpp"
+#include "ui/Theme.hpp"
 
 #include <SFML/Graphics/Font.hpp>
 #include <SFML/Graphics/RenderTexture.hpp>

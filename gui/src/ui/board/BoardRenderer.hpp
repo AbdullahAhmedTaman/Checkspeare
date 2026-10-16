@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../../assets/TextureLibrary.hpp"
-#include "../../controller/GuiGameController.hpp"
-#include "../../game/Board.hpp"
-#include "../../game/BoardGeometry.hpp"
-#include "../../game/MoveAnimation.hpp"
-#include "../Theme.hpp"
+#include "assets/TextureLibrary.hpp"
+#include "controller/GuiGameController.hpp"
+#include "game/Board.hpp"
+#include "game/BoardGeometry.hpp"
+#include "game/MoveAnimation.hpp"
+#include "ui/Theme.hpp"
 #include "BoardAnnotations.hpp"
 
 #include <SFML/Graphics/Font.hpp>

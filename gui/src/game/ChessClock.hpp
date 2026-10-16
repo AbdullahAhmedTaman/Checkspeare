@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ClockSnapshot.hpp"
-#include "../../../engine/src/board/types.h"
+#include "board/types.h"
 
 #include <cstdint>
 #include <optional>

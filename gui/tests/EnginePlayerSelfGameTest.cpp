@@ -2,12 +2,12 @@
 //
 // Usage: engine_player_self_game <path-to-uci-engine>
 
-#include "../src/game/ChessClock.hpp"
-#include "../src/game/ChessGame.hpp"
-#include "../src/engine/EnginePlayer.hpp"
-#include "../src/engine/UciEngine.hpp"
-#include "../../engine/src/board/attacks.h"
-#include "../../engine/src/board/zobrist.h"
+#include "game/ChessClock.hpp"
+#include "game/ChessGame.hpp"
+#include "engine/EnginePlayer.hpp"
+#include "engine/UciEngine.hpp"
+#include "board/attacks.h"
+#include "board/zobrist.h"
 
 #include <chrono>
 #include <cstdlib>

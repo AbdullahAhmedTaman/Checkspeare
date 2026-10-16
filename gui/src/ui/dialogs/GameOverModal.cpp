@@ -1,7 +1,7 @@
 #include "GameOverModal.hpp"
 
-#include "../../game/ChessClock.hpp"
-#include "../../game/GameResult.hpp"
+#include "game/ChessClock.hpp"
+#include "game/GameResult.hpp"
 
 #include <imgui.h>
 

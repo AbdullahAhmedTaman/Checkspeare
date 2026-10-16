@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../audio/MoveSound.hpp"
+#include "audio/MoveSound.hpp"
 #include "ClockSnapshot.hpp"
 #include "board/types.h"
 

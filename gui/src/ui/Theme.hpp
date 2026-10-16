@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../assets/TextureLibrary.hpp"
+#include "assets/TextureLibrary.hpp"
 
 #include <string>
 

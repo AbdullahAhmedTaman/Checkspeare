@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../game/ChessClock.hpp"
-#include "../../game/ChessGame.hpp"
-#include "../../controller/GuiGameController.hpp"
+#include "game/ChessClock.hpp"
+#include "game/ChessGame.hpp"
+#include "controller/GuiGameController.hpp"
 
 namespace Gui
 {

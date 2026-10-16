@@ -1,5 +1,5 @@
 #include "GuiGameController.hpp"
-#include "../game/GameResult.hpp"
+#include "game/GameResult.hpp"
 
 #include <algorithm>
 

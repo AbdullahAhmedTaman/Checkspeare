@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../game/ChessGame.hpp"
-#include "../controller/GuiGameController.hpp"
+#include "game/ChessGame.hpp"
+#include "controller/GuiGameController.hpp"
 
 struct ImFont;
 

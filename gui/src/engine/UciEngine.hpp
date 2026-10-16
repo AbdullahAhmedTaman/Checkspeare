@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../../engine/src/board/types.h"
+#include "board/types.h"
 
 #include <cstdint>
 #include <filesystem>

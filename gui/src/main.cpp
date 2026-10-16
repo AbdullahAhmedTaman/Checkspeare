@@ -1,7 +1,7 @@
 #include "Application.hpp"
 #include "Config.hpp"
+#include "assets/SoundLibrary.hpp"
 #include "assets/TextureLibrary.hpp"
-#include "audio/SoundLibrary.hpp"
 #include "board/attacks.h"
 #include "board/zobrist.h"
 #include <iostream>

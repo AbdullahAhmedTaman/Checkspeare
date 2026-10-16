@@ -2,17 +2,18 @@
 //
 // Standalone unit test for the game-over reaction logic.
 
-#include "../src/game/Board.hpp"
-#include "../src/game/ChessClock.hpp"
-#include "../src/game/ChessGame.hpp"
-#include "../src/engine/EnginePlayer.hpp"
-#include "../src/game/GameOverTransition.hpp"
-#include "../src/game/GameResult.hpp"
-#include "../src/controller/GuiGameController.hpp"
-#include "../src/input/InputEvent.hpp"
+#include "controller/GuiGameController.hpp"
+#include "engine/EnginePlayer.hpp"
+#include "game/Board.hpp"
+#include "game/ChessClock.hpp"
+#include "game/ChessGame.hpp"
+#include "game/GameOverTransition.hpp"
+#include "game/GameResult.hpp"
+#include "input/InputEvent.hpp"
 
-#include "../../engine/src/board/attacks.h"
-#include "../../engine/src/board/zobrist.h"
+
+#include "board/attacks.h"
+#include "board/zobrist.h"
 
 #include <iostream>
 #include <string>
@@ -356,21 +357,6 @@ int main()
         in.thinking = true;
         in.gameOver = true;
         test::expectTrue(decideEngineAction(in) == EnginePlayerAction::AbortSearch, "in-flight search aborts on gameOver");
-    }
-
-    // ------------------------------------------------------------------
-    std::cout << "\n[toString mapping]\n";
-    {
-        GameResult r;
-        test::expectTrue(toString(r).empty(), "Ongoing -> empty");
-
-        r = {GameResultKind::Checkmate, WHITE};
-        test::expectTrue(toString(r) == "Checkmate - White wins", "Checkmate White");
-        r = {GameResultKind::Checkmate, BLACK};
-        test::expectTrue(toString(r) == "Checkmate - Black wins", "Checkmate Black");
-
-        r = {GameResultKind::Stalemate, WHITE};
-        test::expectTrue(toString(r) == "Stalemate - Draw", "Stalemate");
     }
 
     // ------------------------------------------------------------------

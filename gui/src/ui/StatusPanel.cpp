@@ -1,7 +1,7 @@
 // StatusPanel.cpp
 #include "StatusPanel.hpp"
 
-#include "../game/GameResult.hpp"
+#include "game/GameResult.hpp"
 
 #include <imgui.h>
 

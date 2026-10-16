@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../game/ChessGame.hpp"
-#include "../../../../engine/src/board/types.h"
+#include "game/ChessGame.hpp"
+#include "board/types.h"
 
 #include <optional>
 #include <vector>

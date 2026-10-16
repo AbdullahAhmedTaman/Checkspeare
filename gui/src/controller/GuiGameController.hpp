@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../../engine/src/board/types.h"
-#include "../game/BoardGeometry.hpp"
-#include "../game/ChessGame.hpp"
-#include "../input/InputEvent.hpp"
-#include "../ui/board/BoardAnnotations.hpp"
+#include "board/types.h"
+#include "game/BoardGeometry.hpp"
+#include "game/ChessGame.hpp"
+#include "input/InputEvent.hpp"
+#include "ui/board/BoardAnnotations.hpp"
 
 #include <array>
 #include <cstddef>

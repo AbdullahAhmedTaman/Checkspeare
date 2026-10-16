@@ -69,3 +69,14 @@ add_executable(GameOverTest
 )
 target_link_libraries(GameOverTest PRIVATE EngineCore SFML::System)
 add_test(NAME GameOverTest COMMAND GameOverTest)
+
+foreach(GUI_TEST_TARGET IN ITEMS
+        ChessClockTest
+        ChessGameTest
+        SanTest
+        EnginePlayerDecideActionsTest
+        EnginePlayerSelfGameTest
+        GameOverTest
+)
+    target_include_directories(${GUI_TEST_TARGET} PRIVATE "${GUI_SRC_DIR}")
+endforeach()

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../EvalBar.hpp"
+#include "ui/EvalBar.hpp"
 
 #include <cstdint>
 #include <optional>

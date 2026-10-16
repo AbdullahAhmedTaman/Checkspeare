@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../game/ChessClock.hpp"
+#include "game/ChessClock.hpp"
 
 #include <optional>
 #include <string>

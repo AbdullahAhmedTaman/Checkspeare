@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SoundLibrary.hpp"
+#include "assets/SoundLibrary.hpp"
 
 #include <memory>
 #include <string>

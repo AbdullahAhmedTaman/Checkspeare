@@ -1,6 +1,6 @@
 #include "MoveListPanel.hpp"
-#include "../game/ChessGame.hpp"
-#include "../controller/GuiGameController.hpp"
+#include "game/ChessGame.hpp"
+#include "controller/GuiGameController.hpp"
 
 #include <imgui.h>
 

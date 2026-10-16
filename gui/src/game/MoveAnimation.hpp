@@ -15,7 +15,7 @@ namespace Gui
         Square to = SQ_NONE;
         Piece piece = PIECE_NONE;
         float elapsed = 0.0f;
-        float duration = 0.23f;
+        float duration = 0.25f;
 
         /// `movedPiece` is the piece at `toSq` in the post-move position,
         /// so a promotion animates as the promoted piece.

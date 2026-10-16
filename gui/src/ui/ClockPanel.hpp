@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../assets/TextureLibrary.hpp"
-#include "../game/ChessClock.hpp"
-#include "../game/ChessGame.hpp"
+#include "assets/TextureLibrary.hpp"
+#include "game/ChessClock.hpp"
+#include "game/ChessGame.hpp"
 
 
 #include <string>

@@ -1,7 +1,8 @@
 #include "ChessGame.hpp"
-#include "../audio/MoveSound.hpp"
 #include "GameResult.hpp"
 #include "San.hpp"
+#include "audio/MoveSound.hpp"
+
 
 namespace
 {

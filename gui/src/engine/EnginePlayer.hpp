@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../../engine/src/board/types.h"
-#include "../game/ChessClock.hpp"
-#include "../game/ChessGame.hpp"
+#include "board/types.h"
+#include "game/ChessClock.hpp"
+#include "game/ChessGame.hpp"
 #include "UciEngine.hpp"
 
 

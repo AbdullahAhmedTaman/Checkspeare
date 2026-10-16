@@ -1,5 +1,5 @@
 #include "BoardRenderer.hpp"
-#include "../../assets/TextureLibrary.hpp"
+#include "assets/TextureLibrary.hpp"
 #include "BoardAnnotations.hpp"
 
 #include <SFML/Graphics.hpp>
