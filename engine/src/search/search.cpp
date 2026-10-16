@@ -156,7 +156,6 @@ namespace Search
         return std::clamp(R, 0, depth - 1);
     }
 
-    
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
@@ -202,6 +201,14 @@ namespace Search
         }
 
         ctx.info.nodes++;
+
+        // Enforce max_nodes check during search traversal
+        if (ctx.limits.max_nodes != UINT64_MAX && ctx.info.nodes >= ctx.limits.max_nodes)
+        {
+            Signals_stop.store(true, std::memory_order_relaxed);
+            return VALUE_ZERO;
+        }
+
         if ((ctx.info.nodes & 2047) == 0 && ctx.max_time_ms > 0)
         {
             auto now = std::chrono::steady_clock::now();
@@ -279,9 +286,8 @@ namespace Search
             }
         }
 
-        const bool futility_prunable =
-            (!IsPV && is_null_window && !in_check && depth <= 4 && std::abs(alpha) < MATE_BOUND &&
-             static_eval + 120 + 100 * depth <= alpha);
+        const bool futility_prunable = (!IsPV && is_null_window && !in_check && depth <= 4 && std::abs(alpha) < MATE_BOUND &&
+                                        static_eval + 120 + 100 * depth <= alpha);
 
         // Instantiate Lazy MovePicker with TT best move hint (qsearch = false)
         MoveOrdering::MovePicker picker(pos, tt_move, ply, false);
@@ -316,13 +322,12 @@ namespace Search
                             continue;
 
                         // 2. Futility Pruning (FP): skip non-refutation quiet moves when static_eval is far below alpha
-                        if (futility_prunable && move != current_killers[0] && move != current_killers[1] &&
-                            move != counter)
+                        if (futility_prunable && move != current_killers[0] && move != current_killers[1] && move != counter)
                         {
                             continue;
                         }
                     }
-                    else if (depth <= 3 && move.ordering_score() == MoveOrdering::BAD_CAPTURE)
+                    else if (depth <= 3 && move.flag() >= CAPTURE)
                     {
                         // 3. Main-Search Bad Capture SEE Pruning:
                         //    MovePicker already verified see_ge(pos, move, 0) == false and tagged
@@ -480,6 +485,7 @@ namespace Search
 
         return best_score;
     }
+
     void start_search(Position& pos, const SearchLimits& limits)
     {
         Signals_stop.store(false, std::memory_order_relaxed);
@@ -487,11 +493,17 @@ namespace Search
         std::memset(path_moves, 0, sizeof(path_moves));
         std::memset(path_pieces, 0, sizeof(path_pieces));
         age_history();
-        TT.new_search();
+        TT.clear();
         SearchContext ctx(limits, Signals_stop);
 
-        uint64_t time_left = (pos.sideToMove == WHITE) ? limits.wtime : limits.btime;
-        uint64_t inc = (pos.sideToMove == WHITE) ? limits.winc : limits.binc;
+        // Clamp negative time values to prevent signed-to-unsigned underflow wrapping
+        int64_t raw_wtime = limits.wtime;
+        int64_t raw_btime = limits.btime;
+        int64_t raw_winc = limits.winc;
+        int64_t raw_binc = limits.binc;
+
+        uint64_t time_left = (pos.sideToMove == WHITE) ? (raw_wtime > 0 ? raw_wtime : 0) : (raw_btime > 0 ? raw_btime : 0);
+        uint64_t inc = (pos.sideToMove == WHITE) ? (raw_winc > 0 ? raw_winc : 0) : (raw_binc > 0 ? raw_binc : 0);
 
         if (limits.movetime > 0)
         {
@@ -501,9 +513,13 @@ namespace Search
         else if (time_left > 0)
         {
             ctx.opt_time_ms = (time_left / 40) + (inc * 3 / 4);
-            // Prevent max_time_ms from becoming 0 in extreme time trouble
-            uint64_t safe_margin = (time_left > 50) ? time_left - 50 : time_left / 2;
-            ctx.max_time_ms = std::min(time_left / 5, safe_margin);
+
+            // Avoid sudden cliff jumps in safety margin calculations
+            uint64_t safe_margin = std::min(time_left / 4, static_cast<uint64_t>(50));
+
+            // Cap max_time_ms closer to opt_time_ms instead of allowing an 8x gap
+            ctx.max_time_ms = std::min(
+                {time_left / 8, ctx.opt_time_ms * 3, (time_left > safe_margin ? time_left - safe_margin : time_left / 2)});
 
             if (ctx.max_time_ms == 0)
                 ctx.max_time_ms = 1;
@@ -523,6 +539,10 @@ namespace Search
         MoveGen::generate_legal_moves(pos, root_moves);
         if (root_moves.count > 0)
             safe_best_move = root_moves.moves[0];
+
+        // Track base opt time and instability factor
+        const uint64_t base_opt_time_ms = ctx.opt_time_ms;
+        double time_extension_factor = 1.0;
 
         // Iterative Deepening Loop
         Value prev_score = VALUE_ZERO;
@@ -585,9 +605,18 @@ namespace Search
             auto now = std::chrono::steady_clock::now();
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
 
-            if (current_depth > 1 && ctx.info.best_move != safe_best_move)
+            // Decay or compound opt_time_ms dynamically based on move stability at depth >= 5
+            if (current_depth >= 5 && base_opt_time_ms != UINT64_MAX)
             {
-                ctx.opt_time_ms = std::min(static_cast<uint64_t>(ctx.opt_time_ms * 1.5), ctx.max_time_ms);
+                if (ctx.info.best_move == safe_best_move)
+                {
+                    time_extension_factor = std::max(1.0, time_extension_factor * 0.9); // Decay
+                }
+                else
+                {
+                    time_extension_factor = std::min(2.5, time_extension_factor + 0.5); // Compound
+                }
+                ctx.opt_time_ms = std::min(static_cast<uint64_t>(base_opt_time_ms * time_extension_factor), ctx.max_time_ms);
             }
 
             safe_best_move = ctx.info.best_move;
@@ -598,7 +627,9 @@ namespace Search
             // Output UCI telemetry progress update
             UCI::send_search_info(ctx.info);
 
-            if (elapsed >= ctx.opt_time_ms)
+            // Check soft limit and do not start next depth if past 65% of opt_time_ms
+            if (elapsed >= ctx.opt_time_ms ||
+                (base_opt_time_ms != UINT64_MAX && elapsed >= static_cast<uint64_t>(ctx.opt_time_ms * 0.65)))
                 break;
 
             // Checkmate early exit
