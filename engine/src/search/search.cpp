@@ -25,6 +25,12 @@ namespace Search
     Move counter_moves[MAX_PIECES][MAX_SQUARES];
     int16_t cont_history[MAX_PIECES][MAX_SQUARES][PieceType::NONE][MAX_SQUARES];
 
+    // >>> [EDIT START: Add Triangular PV Table for UCI PV line tracking]
+    /** @brief Triangular Principal Variation table populated only at PV/ROOT nodes. */
+    Move pv_table[MAX_PLY][MAX_PLY];
+    int pv_length[MAX_PLY];
+    // <<< [EDIT END]
+
     namespace
     {
         /**
@@ -119,6 +125,8 @@ namespace Search
         std::memset(path_pieces, 0, sizeof(path_pieces));
         std::memset(counter_moves, 0, sizeof(counter_moves));
         std::memset(cont_history, 0, sizeof(cont_history));
+        std::memset(pv_table, 0, sizeof(pv_table));
+        std::memset(pv_length, 0, sizeof(pv_length));
     }
 
     /**
@@ -159,6 +167,16 @@ namespace Search
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
+        // Compile-time constant flags to optimize branch elimination
+        constexpr bool IsPV = (NT != NON_PV);
+        constexpr bool IsRoot = (NT == ROOT);
+
+        if constexpr (IsPV)
+        {
+            if (ply < MAX_PLY)
+                pv_length[ply] = ply;
+        }
+
         if (ply >= MAX_PLY - 1)
             return Eval::evaluate(pos);
 
@@ -168,10 +186,6 @@ namespace Search
         Value alpha_orig = alpha;
         if (alpha >= beta)
             return alpha;
-
-        // Compile-time constant flags to optimize branch elimination
-        constexpr bool IsPV = (NT != NON_PV);
-        constexpr bool IsRoot = (NT == ROOT);
 
         // Check for asynchronous interrupt signals (UCI 'stop' command or time limit breach)
         if (Signals_stop.load(std::memory_order_relaxed))
@@ -232,7 +246,17 @@ namespace Search
             if (tt_entry.depth >= depth && !IsRoot)
             {
                 if (tt_entry.flag() == TT_EXACT)
+                {
+                    if constexpr (IsPV)
+                    {
+                        if (ply < MAX_PLY && tt_move.is_ok())
+                        {
+                            pv_table[ply][ply] = tt_move;
+                            pv_length[ply] = ply + 1;
+                        }
+                    }
                     return tt_entry.score;
+                }
                 if (tt_entry.flag() == TT_LOWERBOUND && tt_entry.score >= beta)
                     return tt_entry.score;
                 if (tt_entry.flag() == TT_UPPERBOUND && tt_entry.score <= alpha)
@@ -316,23 +340,18 @@ namespace Search
                 {
                     if (is_quiet)
                     {
-                        // 1. Late Move Pruning (LMP): skip late quiet moves at shallow depths
-                        //    Thresholds: depth 1 -> 8, depth 2 -> 14, depth 3 -> 22, depth 4 -> 32
+                       
                         if (depth <= 4 && quiet_count >= (6 + 2 * depth * depth))
                             continue;
 
-                        // 2. Futility Pruning (FP): skip non-refutation quiet moves when static_eval is far below alpha
                         if (futility_prunable && move != current_killers[0] && move != current_killers[1] && move != counter)
                         {
                             continue;
                         }
                     }
-                    else if (depth <= 3 && move.flag() >= CAPTURE)
+                    else if (depth <= 3 && move.ordering_score() == MoveOrdering::BAD_CAPTURE)
                     {
-                        // 3. Main-Search Bad Capture SEE Pruning:
-                        //    MovePicker already verified see_ge(pos, move, 0) == false and tagged
-                        //    the move with BAD_CAPTURE. Prune it at shallow non-PV depths without
-                        //    calling see_ge() a second time.
+                       
                         continue;
                     }
                 }
@@ -436,6 +455,20 @@ namespace Search
                         ctx.info.best_move = move;
                     }
 
+                    if constexpr (IsPV)
+                    {
+                        if (ply < MAX_PLY)
+                        {
+                            pv_table[ply][ply] = move;
+                            const int child_len = (ply + 1 < MAX_PLY) ? pv_length[ply + 1] : (ply + 1);
+                            for (int next_ply = ply + 1; next_ply < child_len; ++next_ply)
+                            {
+                                pv_table[ply][next_ply] = pv_table[ply + 1][next_ply];
+                            }
+                            pv_length[ply] = child_len;
+                        }
+                    }
+
                     // Beta Cutoff (Fail-High)
                     if (alpha >= beta)
                     {
@@ -492,30 +525,32 @@ namespace Search
         std::memset(killer_moves, 0, sizeof(killer_moves));
         std::memset(path_moves, 0, sizeof(path_moves));
         std::memset(path_pieces, 0, sizeof(path_pieces));
+        std::memset(pv_length, 0, sizeof(pv_length));
         age_history();
-        TT.clear();
+        TT.new_search();
         SearchContext ctx(limits, Signals_stop);
 
-        // Clamp negative time values to prevent signed-to-unsigned underflow wrapping
-        int64_t raw_wtime = limits.wtime;
-        int64_t raw_btime = limits.btime;
-        int64_t raw_winc = limits.winc;
-        int64_t raw_binc = limits.binc;
+        const int64_t raw_time = (pos.sideToMove == WHITE) ? limits.wtime : limits.btime;
+        const int64_t raw_inc = (pos.sideToMove == WHITE) ? limits.winc : limits.binc;
+        const bool has_game_clock =
+            !limits.infinite && (limits.wtime != 0 || limits.btime != 0 || limits.winc != 0 || limits.binc != 0);
 
-        uint64_t time_left = (pos.sideToMove == WHITE) ? (raw_wtime > 0 ? raw_wtime : 0) : (raw_btime > 0 ? raw_btime : 0);
-        uint64_t inc = (pos.sideToMove == WHITE) ? (raw_winc > 0 ? raw_winc : 0) : (raw_binc > 0 ? raw_binc : 0);
+        // If a game clock is active but raw_time <= 0 due to lag, clamp to 1ms instead of 0
+        // so the engine plays immediately rather than entering an infinite UINT64_MAX search.
+        const uint64_t time_left = (raw_time > 0) ? static_cast<uint64_t>(raw_time) : (has_game_clock ? 1ULL : 0ULL);
+        const uint64_t inc = (raw_inc > 0) ? static_cast<uint64_t>(raw_inc) : 0ULL;
 
         if (limits.movetime > 0)
         {
-            ctx.opt_time_ms = (limits.movetime > 20) ? limits.movetime - 20 : 1;
+            ctx.opt_time_ms = (limits.movetime > 20) ? static_cast<uint64_t>(limits.movetime - 20) : 1;
             ctx.max_time_ms = ctx.opt_time_ms;
         }
-        else if (time_left > 0)
+        else if (has_game_clock)
         {
             ctx.opt_time_ms = (time_left / 40) + (inc * 3 / 4);
 
             // Avoid sudden cliff jumps in safety margin calculations
-            uint64_t safe_margin = std::min(time_left / 4, static_cast<uint64_t>(50));
+            const uint64_t safe_margin = std::min(time_left / 4, static_cast<uint64_t>(50));
 
             // Cap max_time_ms closer to opt_time_ms instead of allowing an 8x gap
             ctx.max_time_ms = std::min(
@@ -524,7 +559,7 @@ namespace Search
             if (ctx.max_time_ms == 0)
                 ctx.max_time_ms = 1;
 
-            ctx.opt_time_ms = std::min(ctx.opt_time_ms, ctx.max_time_ms);
+            ctx.opt_time_ms = std::clamp<uint64_t>(ctx.opt_time_ms, 1, ctx.max_time_ms);
         }
         else
         {
@@ -577,13 +612,11 @@ namespace Search
                         alpha = std::max(alpha - delta, -VALUE_INFINITE);
                         delta += delta / 2;
                     }
-
                     else if (score >= beta)
                     {
                         beta = std::min(beta + delta, VALUE_INFINITE);
                         delta += delta / 2;
                     }
-
                     else
                     {
                         break;
@@ -606,7 +639,7 @@ namespace Search
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
 
             // Decay or compound opt_time_ms dynamically based on move stability at depth >= 5
-            if (current_depth >= 5 && base_opt_time_ms != UINT64_MAX)
+            if (current_depth >= 5 && has_game_clock)
             {
                 if (ctx.info.best_move == safe_best_move)
                 {
@@ -624,13 +657,31 @@ namespace Search
             ctx.info.score = score;
             ctx.info.time_ms = elapsed;
 
+            ctx.info.pv.clear();
+            for (int i = 0; i < pv_length[0]; ++i)
+            {
+                if (pv_table[0][i].is_ok())
+                {
+                    ctx.info.pv.push_back(pv_table[0][i]);
+                }
+            }
+            if (ctx.info.pv.empty() && safe_best_move.is_ok())
+            {
+                ctx.info.pv.push_back(safe_best_move);
+            }
+
             // Output UCI telemetry progress update
             UCI::send_search_info(ctx.info);
 
-            // Check soft limit and do not start next depth if past 65% of opt_time_ms
-            if (elapsed >= ctx.opt_time_ms ||
-                (base_opt_time_ms != UINT64_MAX && elapsed >= static_cast<uint64_t>(ctx.opt_time_ms * 0.65)))
+            if (has_game_clock)
+            {
+                if (elapsed >= static_cast<uint64_t>(ctx.opt_time_ms * 0.65))
+                    break;
+            }
+            else if ( elapsed >= ctx.opt_time_ms )
+            {
                 break;
+            }
 
             // Checkmate early exit
             if (std::abs(score) >= MATE_BOUND && current_depth >= (VALUE_MATE - std::abs(score)))
