@@ -25,11 +25,9 @@ namespace Search
     Move counter_moves[MAX_PIECES][MAX_SQUARES];
     int16_t cont_history[MAX_PIECES][MAX_SQUARES][PieceType::NONE][MAX_SQUARES];
 
-    // >>> [EDIT START: Add Triangular PV Table for UCI PV line tracking]
     /** @brief Triangular Principal Variation table populated only at PV/ROOT nodes. */
     Move pv_table[MAX_PLY][MAX_PLY];
     int pv_length[MAX_PLY];
-    // <<< [EDIT END]
 
     namespace
     {
