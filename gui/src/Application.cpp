@@ -89,6 +89,15 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
             return !sideIsEngineControlled(side);
         });
 
+    // Engine ownership is a query over the engine players, which only
+    // Application can see. The controller consults this for canResign()
+    // and sideIsHuman(); it does not need to know what an engine is.
+    controller_.setSideIsEngineControlled(
+        [this](Color side)
+        {
+            return sideIsEngineControlled(side);
+        });
+
     if (!ImGui::SFML::Init(window_, false))
         throw std::runtime_error("[ImGui] Initialization failed!");
 
@@ -218,32 +227,24 @@ void Application::processEvents()
         if (!inputEvent)
             continue;
 
+        const bool insideBoard = boardPanel_.contains(inputEvent->position);
+
         // Clicking anywhere outside the board clears a pending selection.
         // Runs before shouldForwardInput because ImGui-captured panel
         // clicks are otherwise not forwarded. Skipped while a modal is
         // open: the modal owns every click.
         if (!setupModalOpen_ && !isGameOver() && inputEvent->kind == Gui::InputEvent::Kind::PointerPressed &&
-            inputEvent->button == Gui::MouseButton::Left && !boardPanel_.contains(inputEvent->position))
+            inputEvent->button == Gui::MouseButton::Left && !insideBoard)
         {
             controller_.cancelSelection();
         }
 
-        if (inputEvent->kind == Gui::InputEvent::Kind::PointerPressed && inputEvent->button == Gui::MouseButton::Right &&
-            !boardPanel_.contains(inputEvent->position))
-        {
+        // The controller decides whether it wants right-click events that
+        // land outside the board: presses are dropped, releases are let
+        // through only when they resolve an in-flight arrow gesture.
+        if (!controller_.wantsEvent(*inputEvent, insideBoard))
             continue;
-        }
 
-        // A right-click outside the board should also not end an arrow
-        // mid-gesture; let releases through only when they started on
-        // the board, which the controller tracks itself. Releases outside
-        // the board are forwarded and the controller treats them as a
-        // cancel, matching a "drag off the board" gesture.
-        if (inputEvent->kind == Gui::InputEvent::Kind::PointerReleased && inputEvent->button == Gui::MouseButton::Right &&
-            controller_.arrows().empty() == false && !boardPanel_.contains(inputEvent->position))
-        {
-            // Fall through; the controller will resolve the gesture.
-        }
         if (inputEvent->kind == Gui::InputEvent::Kind::KeyPressed)
         {
             if (setupModalOpen_ || isGameOver())
@@ -263,17 +264,7 @@ void Application::processEvents()
         if (forwarded.kind != Gui::InputEvent::Kind::FocusLost)
             forwarded.position = boardPanel_.toBoardSpace(forwarded.position);
 
-        const bool wasDragging = controller_.drag().active;
-        const std::size_t cursorBefore = game_.cursor();
-
         controller_.handleEvent(forwarded, geo_);
-
-        if (wasDragging && forwarded.kind == Gui::InputEvent::Kind::PointerReleased)
-        {
-            const std::size_t cursorAfter = game_.cursor();
-            if (cursorAfter > cursorBefore)
-                suppressAnimationAtPly_ = cursorAfter;
-        }
     }
 }
 
@@ -312,14 +303,12 @@ bool Application::canResign() const
 {
     if (isGameOver())
         return false;
-    return !sideIsEngineControlled(game_.sideToMove());
+    return controller_.canResign();
 }
 
 bool Application::sideIsHuman(Color side) const
 {
-    const bool whitePlaysIt = playerWhite_.isSideControlled(side);
-    const bool blackPlaysIt = playerBlack_.isSideControlled(side);
-    return !whitePlaysIt && !blackPlaysIt;
+    return controller_.sideIsHuman(side);
 }
 
 std::string Application::gameOverSoundKey() const
@@ -379,6 +368,47 @@ bool Application::sideIsEngineControlled(Color side) const
     return whiteWouldPlay || blackWouldPlay;
 }
 
+std::string Application::applyLoadFen(const std::string& fen)
+{
+    // Abort both engines. An engine mid-search is analyzing a position
+    // that is about to stop existing; its next "bestmove" would be
+    // applied to the new board and either be illegal or be played in a
+    // position it never saw. abort() clears the search identity
+    // (thinkStartPly_, lastInfo_, pendingBestMove_), so a late bestmove
+    // cannot be mistaken for a result on the new position.
+    //
+    // The next tick will re-evaluate from scratch and, if it's still the
+    // engine's turn, start a fresh search on the loaded position.
+    playerWhite_.abort();
+    playerBlack_.abort();
+
+    try
+    {
+        game_.loadFEN(fen);
+    }
+    catch (const std::exception& e)
+    {
+        return e.what();
+    }
+
+    lastCursor_ = game_.cursor();
+    animation_.active = false;
+
+    controller_.clearArrows();
+    controller_.cancelSelection();
+    controller_.updateAnnotations();
+
+    gameOverWas_ = false;
+
+    // Stop the clock. The side to move may have flipped, and the clock
+    // has no way to know that without a move being played; leaving it
+    // running would tick the wrong side. The user can start a fresh
+    // timed game from the setup modal if they want a clock.
+    clock_.stop();
+
+    return {};
+}
+
 void Application::stepSimulation(float dtSeconds)
 {
     // Quit first: if the user clicked Quit in the modal, do it before
@@ -391,6 +421,14 @@ void Application::stepSimulation(float dtSeconds)
 
     if (controller_.consumeNewGameRequest())
         newGame();
+
+    if (auto fen = controller_.consumeLoadFenRequest())
+    {
+        // applyLoadFen aborts both engines, so this must run before the
+        // player ticks below: they should see the new position and the
+        // aborted (not-thinking) state on the same frame.
+        fenLoadError_ = applyLoadFen(*fen);
+    }
 
     if (auto resigner = controller_.consumeResignRequest())
         game_.resign(*resigner);
@@ -430,10 +468,14 @@ void Application::stepSimulation(float dtSeconds)
     const std::size_t curr = game_.cursor();
 
     // Animation: a single forward step is a real commit; a single backward
-    // step is an undo. Multi-ply jumps snap.
+    // step is an undo. Multi-ply jumps snap. A forward step whose commit
+    // came from a drag is suppressed: the dragged piece is already under
+    // the cursor, and sliding it again would look like a double move. The
+    // controller records drag-vs-click on every commit (lastMoveWasDrag_),
+    // so no per-frame bookkeeping is needed here.
     if (curr == lastCursor_ + 1)
     {
-        if (curr != suppressAnimationAtPly_)
+        if (!controller_.lastMoveWasDrag())
         {
             const MoveRecord& rec = game_.history()[curr - 1];
             animation_.start(rec.move.from(), rec.move.to(), game_.pieceAt(rec.move.to()));
@@ -448,8 +490,6 @@ void Application::stepSimulation(float dtSeconds)
     {
         animation_.active = false;
     }
-
-    suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
 
     animation_.tick(dtSeconds);
 
@@ -513,7 +553,7 @@ void Application::stepUi(float dtSeconds)
     Gui::renderClockPanel(clock_, game_, assets_, clockFont_, engineNameFont_, displayName(engineWhite_),
                           displayName(engineBlack_));
     Gui::renderMoveListPanel(game_, controller_, moveListFont_);
-    Gui::renderFenPanel(game_, controller_);
+    Gui::renderFenPanel(game_, controller_, fenLoadError_);
     Gui::renderEngineErrorPopup(engineError_);
 
     if (auto committed = Gui::renderGameSetupModal(pendingSetup_, setupModalOpen_))
@@ -616,7 +656,6 @@ void Application::applyGameSetup(const Gui::GameSetup& setup)
     lastCursor_ = 0;
     gameOverWas_ = false;
     animation_.active = false;
-    suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
 
     // Clamp the initial time to one minute: zero would make the flag fall
     // on the first tick, before either side can move.

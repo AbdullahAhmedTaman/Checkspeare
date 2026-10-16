@@ -40,6 +40,32 @@ namespace Gui
         }
     }
 
+    bool GuiGameController::wantsEvent(const InputEvent& ev, bool insideBoard) const
+    {
+        // Right-clicks outside the board are only meaningful when they
+        // resolve an arrow gesture this controller started. The press that
+        // opens a gesture is always on the board, so a press outside is
+        // dropped; a release is let through so the controller can cancel
+        // the in-flight gesture. Anything else outside the board is the
+        // caller's business to filter (e.g. ImGui capture).
+        if (ev.button == MouseButton::Right && !insideBoard)
+            return ev.kind == InputEvent::Kind::PointerReleased && rightPressActive_;
+
+        return true;
+    }
+
+    bool GuiGameController::canResign() const
+    {
+        if (isFrozen(game_))
+            return false;
+        return !sideIsEngineControlled_(game_.sideToMove());
+    }
+
+    bool GuiGameController::sideIsHuman(Color side) const
+    {
+        return !sideIsEngineControlled_(side);
+    }
+
     void GuiGameController::cancelDrag()
     {
         if (drag_.active)
@@ -470,6 +496,18 @@ namespace Gui
         const bool requested = newGameRequested_;
         newGameRequested_ = false;
         return requested;
+    }
+
+    void GuiGameController::requestLoadFen(std::string fen)
+    {
+        queuedLoadFen_ = std::move(fen);
+    }
+
+    std::optional<std::string> GuiGameController::consumeLoadFenRequest()
+    {
+        auto out = std::move(queuedLoadFen_);
+        queuedLoadFen_.reset();
+        return out;
     }
 
     void GuiGameController::requestResign(Color side)

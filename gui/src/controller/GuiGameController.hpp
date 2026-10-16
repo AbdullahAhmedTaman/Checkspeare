@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <functional>
 #include <optional>
+#include <string>
 
 #include <SFML/System/Vector2.hpp>
 
@@ -79,7 +80,23 @@ namespace Gui
             humanMayMove_ = std::move(pred);
         }
 
+        /// Installs the predicate the controller consults to decide whether
+        /// an engine is currently playing `side`. Used by sideIsHuman() and
+        /// canResign(). Defaults to "no engine controls any side", which is
+        /// correct for tests and headless use.
+        void setSideIsEngineControlled(std::function<bool(Color)> pred)
+        {
+            sideIsEngineControlled_ = std::move(pred);
+        }
+
         void handleEvent(const InputEvent& event, const BoardGeometry& geo);
+
+        /// True when the controller wants this event delivered, given
+        /// whether the pointer is currently over the board panel.
+        /// Encapsulates the arrow-gesture routing rules so the caller does
+        /// not need to inspect arrows()/drag() to decide what to forward.
+        bool wantsEvent(const InputEvent& ev, bool insideBoard) const;
+
         void cancelDrag();
 
         /// Clears `selected` and `legalTargets` if a selection is active.
@@ -97,6 +114,13 @@ namespace Gui
 
         void requestNewGame();
         bool consumeNewGameRequest();
+
+        /// Queues a FEN load. Application drains it in stepSimulation,
+        /// aborts both engines (they may be mid-search on the old position),
+        /// resets the board, and lets each EnginePlayer re-evaluate whether
+        /// to start a fresh search on the new position.
+        void requestLoadFen(std::string fen);
+        std::optional<std::string> consumeLoadFenRequest();
 
         void requestResign(Color side);
         std::optional<Color> consumeResignRequest();
@@ -122,6 +146,15 @@ namespace Gui
         }
 
         void updateAnnotations();
+
+        /// True when the human side to move may resign. Only consults state
+        /// the controller can see: the game result and the engine-control
+        /// predicate. Callers that also gate on a clock flag should check
+        /// that separately before delegating here.
+        bool canResign() const;
+
+        /// True if no engine is configured to play `side`.
+        bool sideIsHuman(Color side) const;
 
         const DragState& drag() const
         {
@@ -188,6 +221,7 @@ namespace Gui
         mutable bool queuedUndo_ = false;
         mutable bool queuedRedo_ = false;
         mutable std::optional<Color> queuedResign_;
+        std::optional<std::string> queuedLoadFen_;
         bool newGameRequested_ = false;
         bool gameOverModalDismissed_ = false;
         bool quitRequested_ = false;
@@ -197,6 +231,14 @@ namespace Gui
         std::function<bool(Color)> humanMayMove_ = [](Color)
         {
             return true;
+        };
+
+        /// Engine-ownership query. Consulted by sideIsHuman() and
+        /// canResign(). Defaults to "no engines", which makes every side
+        /// human — correct for tests and standalone use.
+        std::function<bool(Color)> sideIsEngineControlled_ = [](Color)
+        {
+            return false;
         };
     };
 

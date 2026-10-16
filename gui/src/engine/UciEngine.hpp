@@ -85,6 +85,8 @@ public:
 
     void setPosition(const std::string& fen, const std::vector<Move>& moves);
 
+    void setPositionFen(const std::string& fen);
+
     /// Validation against contradictory limits argument is not yet implemented.
     void go(const UciSearchLimits& limits);
 

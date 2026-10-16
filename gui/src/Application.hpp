@@ -23,7 +23,6 @@
 #include <SFML/System/Clock.hpp>
 
 #include <cstddef>
-#include <limits>
 #include <string>
 
 struct ImFont;
@@ -71,7 +70,9 @@ private:
     /// terminal, or either side's clock has flagged.
     bool isGameOver() const;
 
-    /// True when the human side to move may resign.
+    /// True when the human side to move may resign. Gates on isGameOver()
+    /// (which includes clock flags) and then delegates to the controller,
+    /// which knows the game result and the side's engine ownership.
     bool canResign() const;
 
     /// True if no engine is configured to play `side`. Hotseat and
@@ -95,6 +96,14 @@ private:
     /// otherwise. Swallows start failures; a bad path leaves the engine
     /// stopped and the setup panel can retry.
     void launchOrStopEngine(UciEngine& engine, Gui::PlayerKind kind, const std::string& path);
+
+    /// Replaces the current position with `fen`. Aborts both engines (they
+    /// may be mid-search on the old position), resets the board, and lets
+    /// each EnginePlayer re-evaluate whether to start a fresh search. The
+    /// clock is stopped: the side to move may have flipped, and the clock
+    /// cannot know that without a move being played. Returns an error
+    /// message on failure, empty on success.
+    std::string applyLoadFen(const std::string& fen);
 
     Gui::EngineThinkingSnapshot buildThinkingSnapshot() const;
 
@@ -145,7 +154,14 @@ private:
     /// a move was committed and notify the clock.
     std::size_t lastCursor_ = 0;
 
+    /// Error surface for engine start failures and other hard failures.
+    /// Rendered by EngineErrorPopup.
     std::string engineError_;
+
+    /// Error surface for FEN loads specifically. Rendered inline by the
+    /// FEN panel so the user sees it next to the field they typed into.
+    /// Cleared when the panel's Apply or Refresh runs.
+    std::string fenLoadError_;
 
     /// True on frames where game_.result() reports a terminal state. Used
     /// to fire one-shot reactions (engine abort) on the transition into
@@ -154,11 +170,6 @@ private:
 
     /// Visual slide of the most recently committed ply.
     Gui::MoveAnimation animation_;
-
-    /// Cursor position of the ply committed by the most recent drag
-    /// release. Suppresses the slide for that ply only.
-    /// max() means "no suppression".
-    std::size_t suppressAnimationAtPly_ = std::numeric_limits<std::size_t>::max();
 
     /// Edit buffer for the setup modal, persisted across new-game requests.
     Gui::GameSetup pendingSetup_;

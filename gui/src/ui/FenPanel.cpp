@@ -2,9 +2,9 @@
 
 #include <imgui.h>
 
+#include <cctype>
 #include <cstddef>
 #include <cstring>
-#include <exception>
 #include <sstream>
 #include <string>
 
@@ -120,7 +120,7 @@ namespace Gui
         }
     } // namespace
 
-    void renderFenPanel(ChessGame& game, GuiGameController& controller)
+    void renderFenPanel(ChessGame& game, GuiGameController& controller, std::string& errorOut)
     {
         ImGui::Begin("FEN");
 
@@ -134,20 +134,18 @@ namespace Gui
             syncBufferFromGame(game);
         }
 
-        // Persisted across frames. Declared up here so the input-width
-        // calculation below can reserve room for it when present.
-        static std::string lastError;
+        // Local syntax errors are shown immediately; semantic errors come
+        // back from Application through errorOut on a later frame.
+        static std::string localError;
 
         const float applyW = buttonWidth("Apply");
         const float refreshW = buttonWidth("Refresh");
         const float copyW = buttonWidth("Copy");
         const float spacing = ImGui::GetStyle().ItemSpacing.x;
 
-        // Reserve room on the right for the error text so the input can
-        // expand to fill the rest of the row without ever underlapping it.
-        // Width is 0 when there's nothing to show, so the input takes the
-        // full available space in the common (no-error) case.
-        const float errorW = lastError.empty() ? 0.0f : ImGui::CalcTextSize(lastError.c_str()).x + spacing;
+        // One error slot, whichever source filled it.
+        const std::string& shownError = localError.empty() ? errorOut : localError;
+        const float errorW = shownError.empty() ? 0.0f : ImGui::CalcTextSize(shownError.c_str()).x + spacing;
 
         // [label] [input] [Apply] [Refresh] [Copy] [error]
         ImGui::AlignTextToFramePadding();
@@ -165,7 +163,8 @@ namespace Gui
         ImGui::SameLine();
         const bool apply = ImGui::Button("Apply", ImVec2(applyW, 0.0f));
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Apply replaces the current game and clears undo history.");
+            ImGui::SetTooltip("Apply replaces the current game and clears undo history. "
+                              "Any engine search on the old position is aborted.");
 
         ImGui::SameLine();
         const bool refresh = ImGui::Button("Refresh", ImVec2(refreshW, 0.0f));
@@ -175,32 +174,29 @@ namespace Gui
 
         if (apply)
         {
-            lastError.clear();
+            localError.clear();
+            errorOut.clear();
+
             const std::string candidate = fenBuffer;
 
             if (!looksLikeFen(candidate))
             {
-                lastError = "Not a valid FEN.";
+                localError = "Not a valid FEN.";
             }
             else
             {
-                try
-                {
-                    game.loadFEN(candidate);
-                    controller.clearArrows();
-                    controller.cancelSelection();
-                }
-                catch (const std::exception& e)
-                {
-                    lastError = e.what();
-                }
+                // Hand the position change to Application. It owns the
+                // engines, clock, animation, and cursor bookkeeping, all
+                // of which have to move together when the position does.
+                controller.requestLoadFen(candidate);
             }
         }
 
         if (refresh)
         {
             syncBufferFromGame(game);
-            lastError.clear();
+            localError.clear();
+            errorOut.clear();
         }
 
         if (copy)
@@ -208,13 +204,13 @@ namespace Gui
             ImGui::SetClipboardText(fenBuffer);
         }
 
-        if (!lastError.empty())
+        if (!shownError.empty())
         {
-            const float textWidth = ImGui::CalcTextSize(lastError.c_str()).x;
+            const float textWidth = ImGui::CalcTextSize(shownError.c_str()).x;
             const float targetX = ImGui::GetWindowContentRegionMax().x - textWidth;
             ImGui::SameLine(targetX);
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.55f, 0.55f, 1.0f));
-            ImGui::TextUnformatted(lastError.c_str());
+            ImGui::TextUnformatted(shownError.c_str());
             ImGui::PopStyleColor();
         }
 

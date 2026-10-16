@@ -172,11 +172,19 @@ bool EnginePlayer::isSideControlled(Color side) const
 
 void EnginePlayer::abort()
 {
-    if (!thinking_)
-        return;
+    if (thinking_)
+    {
+        engine_.stopSearch();
+        thinking_ = false;
+    }
 
-    engine_.stopSearch();
-    thinking_ = false;
+    // Clear the search identity even when not thinking. A pending
+    // bestmove from a search that has since been abandoned must not
+    // survive into a new position: the state machine cannot tell it
+    // apart from a result on the current board.
+    pendingBestMove_.reset();
+    lastInfo_.reset();
+    thinkStartPly_ = 0;
 }
 
 std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
@@ -208,18 +216,22 @@ std::optional<Move> EnginePlayer::tick(ChessGame& game, ChessClock& clock)
             return std::nullopt;
 
         case EnginePlayerAction::StartSearch:
-            {
-                engine_.setPosition("", playedMoves(game));
-                engine_.go(limitsFrom(clock));
+            // Always send the FEN. The engine's job is to search the
+            // "current" board, and the current board is not necessarily
+            // reachable from startpos via the recorded history — a FEN
+            // load replaces the position without producing a replayable
+            // move list. Using the FEN directly makes the engine's view
+            // match the board unconditionally.
+            engine_.setPositionFen(game.board().position().to_fen());
+            engine_.go(limitsFrom(clock));
 
-                thinking_ = true;
-                thinkStartPly_ = game.cursor();
-                lastInfo_.reset();
-                lastInfoSide_ = game.sideToMove();
-                pendingBestMove_.reset();
-                thinkStartTime_ = std::chrono::steady_clock::now();
-                return std::nullopt;
-            }
+            thinking_ = true;
+            thinkStartPly_ = game.cursor();
+            lastInfo_.reset();
+            lastInfoSide_ = game.sideToMove();
+            pendingBestMove_.reset();
+            thinkStartTime_ = std::chrono::steady_clock::now();
+            return std::nullopt;
 
         case EnginePlayerAction::AbortSearch:
             engine_.stopSearch();

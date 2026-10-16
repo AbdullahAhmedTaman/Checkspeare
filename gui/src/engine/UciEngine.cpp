@@ -359,6 +359,11 @@ void UciEngine::setPosition(const std::string& fen, const std::vector<Move>& mov
     impl_->writeLine(command.str());
 }
 
+void UciEngine::setPositionFen(const std::string& fen)
+{
+    impl_->writeLine("position fen " + fen);
+}
+
 void UciEngine::go(const UciSearchLimits& limits)
 {
     if (!isReady())
