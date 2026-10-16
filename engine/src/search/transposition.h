@@ -3,7 +3,9 @@
 #include "board/types.h"
 #include <cstdint>
 #include <vector>
-
+#if defined(__x86_64__) || defined(_M_X64)
+#include <xmmintrin.h>
+#endif
 namespace Search
 {
 
@@ -129,6 +131,23 @@ namespace Search
         void new_search()
         {
             global_age = (global_age + 1) & 0x3F;
+        }
+        /**
+         * @brief Prefetches the 64-byte TT bucket for the given Zobrist key into L1 cache.
+         *
+         * Called early in negamax before in_check() so the memory controller fetches
+         * the cache line in parallel with attack bitboard calculations.
+         */
+        inline void prefetch(Key key) const noexcept
+        {
+            if (table.empty())
+                return;
+            const void* addr = &table[key & bucket_mask];
+#if defined(__x86_64__) || defined(_M_X64)
+            _mm_prefetch(static_cast<const char*>(addr), _MM_HINT_T0);
+#elif defined(__GNUC__) || defined(__clang__)
+            __builtin_prefetch(addr, 0, 3);
+#endif
         }
 
     private:

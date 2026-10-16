@@ -8,6 +8,10 @@ namespace MoveOrdering
                                                            {35, 34, 33, 32, 31, 30}, {45, 44, 43, 42, 41, 40},
                                                            {55, 54, 53, 52, 51, 50}, {0, 0, 0, 0, 0, 0}};
 
+    namespace
+    {
+        constexpr int CAPTURE_PIECE_VALUE[PieceType::NONE + 1] = {100, 300, 300, 500, 900, 20000, 0};
+    } // namespace
     MovePicker::MovePicker(const Position& p, Move tt, int pl, bool qs)
         : pos(p),
           tt_move(tt),
@@ -91,6 +95,21 @@ namespace MoveOrdering
 
    void MovePicker::score_quiets()
     {
+        Move counter = Move::none();
+        Piece prev_piece = PIECE_NONE;
+        Square prev_to = SQ_NONE;
+
+        if (ply > 0 && ply < MAX_PLY)
+        {
+            const Move prev_move = Search::path_moves[ply - 1];
+            prev_piece = Search::path_pieces[ply - 1];
+            if (prev_move.is_ok() && !prev_move.is_null())
+            {
+                prev_to = prev_move.to();
+                counter = Search::counter_move(prev_piece, prev_to);
+            }
+        }
+
         for (int i = 0; i < list.count; ++i)
         {
             Move& move = list.moves[i];
@@ -116,12 +135,23 @@ namespace MoveOrdering
                 }
             }
 
+            if (move == counter)
+            {
+                move.set_score(COUNTER_MOVE_SCORE);
+                continue;
+            }
+
             const Piece attacker = pos.board[move.from()];
-            move.set_score(static_cast<int16_t>(Search::history_score(move, attacker)));
+            int hist = Search::history_score(move, attacker);
+            if (prev_piece < PIECE_NONE && is_valid(prev_to))
+            {
+                hist = (hist + Search::continuation_history_score(prev_piece, prev_to, attacker, move.to())) / 2;
+            }
+            move.set_score(static_cast<int16_t>(hist));
         }
     }
 
-    Move MovePicker::next_move()
+   Move MovePicker::next_move()
     {
         while (stage != STAGE_DONE)
         {
@@ -144,11 +174,10 @@ namespace MoveOrdering
                 case STAGE_GOOD_CAPTURES:
                     while (list.count > 0)
                     {
-                        const Move best = get_best_from_list();
+                        Move best = get_best_from_list();
 
                         if (best.is_promotion())
                         {
-                            
                             if (best.ordering_score() >= 0)
                             {
                                 return best;
@@ -160,14 +189,22 @@ namespace MoveOrdering
                             continue;
                         }
 
-                        if (Search::see_ge(pos, best, 0))
+                       
+                        const PieceType attacker_pt = type_of(pos.board[best.from()]);
+                        const PieceType victim_pt = best.is_ep() ? PAWN : type_of(pos.board[best.to()]);
+
+                        if (CAPTURE_PIECE_VALUE[victim_pt] >= CAPTURE_PIECE_VALUE[attacker_pt] ||
+                            Search::see_ge(pos, best, 0))
                         {
                             return best;
                         }
 
-                        
+                        // Losing capture (SEE < 0):
+                        // - In Q-Search (not in check): prune it completely.
+                        // - In Main Search: tag with BAD_CAPTURE and defer to STAGE_BAD_CAPTURES.
                         if (!qsearch || in_check)
                         {
+                            best.set_score(BAD_CAPTURE);
                             bad_captures[bad_capture_count++] = best;
                         }
                     }
