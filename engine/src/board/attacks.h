@@ -9,8 +9,8 @@
 #endif
 
 #if defined(USE_PEXT)
-#if !(defined(__x86_64__) || defined(_M_X64))
-#error "USE_PEXT requires a 64-bit x86 target (PEXT does not exist on ARM or 32-bit x86)"
+#if !(defined(__x86_64__) || defined(_M_X64)) || defined(_M_ARM64EC)
+#error "USE_PEXT requires a 64-bit x86 target (_pext_u64 is unavailable on ARM and 32-bit x86)"
 #endif
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(__BMI2__)
 #error "USE_PEXT: compile with -mbmi2 (or -march=x86-64-v3 / haswell / native)"
