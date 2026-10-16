@@ -44,7 +44,6 @@ Checkspeare/
 ### Engine Core & Search
 *   **Move Generation:** Highly optimized bitboard representation utilizing mask-based legality checking and the Hyperbola Quintessence technique for sliding piece attacks.
 *   **Search Algorithm:** Iterative Deepening with Fail-Soft Alpha-Beta (Negamax) pruning.
-*   **Time Management:** Dynamic time management that scales optimal thinking time based on root move volatility and remaining clock time.
 *   **Transposition Table:** Lockless, 4-way associative Zobrist hash table with a Two-Tier replacement strategy.
 *   **Advanced Pruning & Reductions:**
     *   Null Move Pruning (NMP).
@@ -89,7 +88,7 @@ Checkspeare uses CMake for a clean, out-of-source build process.
 
 - Clone the repository and build:
 ```bash
-git clone https://github.com/AbdullahAhmedTaman/ChessEngine
+git clone https://github.com/AbdullahAhmedTaman/Checkspeare
 cd checkspeare
 mkdir build && cd build
 cmake ..
@@ -106,7 +105,7 @@ Ensure you have CMake installed and a compatible compiler (such as Visual Studio
 - Open PowerShell or your Developer Command Prompt.
 - Clone and build:
 ```powershell
-git clone https://github.com/AbdullahAhmedTaman/ChessEngine
+git clone https://github.com/AbdullahAhmedTaman/Checkspeare
 cd checkspeare
 mkdir build
 cd build
