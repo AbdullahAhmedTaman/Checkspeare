@@ -156,7 +156,7 @@ namespace Search
         return std::clamp(R, 0, depth - 1);
     }
 
-    template <NodeType NT>
+    
     template <NodeType NT>
     Value negamax(Position& pos, int depth, int ply, Value alpha, Value beta, SearchContext& ctx, bool do_null)
     {
