@@ -1,6 +1,6 @@
 #include "transposition.h"
 #include <algorithm>
-
+#include <cstring>
 namespace Search
 {
     TranspositionTable TT;
@@ -29,7 +29,10 @@ namespace Search
 
     void TranspositionTable::clear()
     {
-        std::fill(table.begin(), table.end(), TTBucket{});
+        if (!table.empty())
+        {
+            std::memset(table.data(), 0, table.size() * sizeof(TTBucket));
+        }    
     }
 
     void TranspositionTable::store(Key key, int ply, int depth, Value score, TTFlag flag, Move move)
@@ -41,79 +44,71 @@ namespace Search
             score += ply;
         else if (score <= -MATE_BOUND)
             score -= ply;
+
         TTBucket& bucket = table[key & bucket_mask];
+       int match_slot = -1;
+        int empty_slot = -1;
+        int worst_slot = 0;
+        int worst_score = -999999;
 
-        int target_slot = -1;
-        bool found_key = false;
-
-        if (bucket.entries[0].key == key)
+        for (int i = 0; i < 4; ++i)
         {
-            target_slot = 0;
-            found_key = true;
-        }
-        else if (bucket.entries[1].key == key)
-        {
-            target_slot = 1;
-            found_key = true;
-        }
-        else if (bucket.entries[2].key == key)
-        {
-            target_slot = 2;
-            found_key = true;
-        }
-        else if (bucket.entries[3].key == key)
-        {
-            target_slot = 3;
-            found_key = true;
-        }
-
-        if (!found_key)
-        {
-            if (bucket.entries[0].key == 0)
-                target_slot = 0;
-            else if (bucket.entries[1].key == 0)
-                target_slot = 1;
-            else if (bucket.entries[2].key == 0)
-                target_slot = 2;
-            else if (bucket.entries[3].key == 0)
-                target_slot = 3;
-        }
-        // Collision Resolution: Two-Tier Replacement Strategy.
-        if (target_slot == -1)
-        {
-            if (depth >= bucket.entries[0].depth)
+            const TTEntry& entry = bucket.entries[i];
+            if (entry.key == key)
             {
-                // Claim Slot 0: The depth-preferred fortress.
-                target_slot = 0;
+                match_slot = i;
+                break;
             }
-            else
+            if (entry.key == 0 && empty_slot == -1)
             {
-                // pseudo-random slot selection (1, 2, or 3).
-                target_slot = 1 + (key & 1) + ((key >> 1) & 1);
+                empty_slot = i;
+            }
+
+            // Calculate how old the entry is (0 = current search, >0 = older searches)
+            const int age_diff = (global_age - entry.age() + 64) & 0x3F;
+            const int replace_score = (age_diff * 256) - entry.depth;
+            if (replace_score > worst_score)
+            {
+                worst_score = replace_score;
+                worst_slot = i;
             }
         }
 
-        if (found_key && depth < bucket.entries[target_slot].depth)
+        const bool found_key = (match_slot != -1);
+        const int target_slot = found_key ? match_slot : (empty_slot != -1 ? empty_slot : worst_slot);
+        TTEntry& target = bucket.entries[target_slot];
+
+        move.set_score(0);
+        const bool has_new_move = move.is_ok() && !move.is_null();
+
+        // Don't overwrite deeper entries from the SAME generation
+        if (found_key && target.age() == global_age && depth < target.depth)
         {
+            // Still salvage the move hint if the existing entry had none and this is not a fail-low
+            if (!target.best_move.is_ok() && has_new_move && flag != TT_UPPERBOUND)
+            {
+                target.best_move = move;
+            }
             return;
         }
 
-        Move preserved_move = Move::none();
-        if (found_key)
-            preserved_move = bucket.entries[target_slot].best_move;
+        const Move preserved_move = found_key ? target.best_move : Move::none();
 
-        bucket.entries[target_slot].key = key;
-        bucket.entries[target_slot].depth = depth;
-        bucket.entries[target_slot].score = score;
-        bucket.entries[target_slot].flag = flag;
+        target.key = key;
+        target.depth = static_cast<uint8_t>(std::clamp(depth, 0, 255));
+        target.score = static_cast<int16_t>(score);
+        target.pack_gen_bound(global_age, flag);
 
-        // Preserve existing PV moves if the new evaluation fails low (null move).
-        if (move.is_ok() && !move.is_null())
+        // Only overwrite an existing best_move if the new move comes from an EXACT or LOWERBOUND
+        // node, or if there was no prior best_move stored for this key.
+        if (has_new_move && (flag != TT_UPPERBOUND || !preserved_move.is_ok()))
         {
-            bucket.entries[target_slot].best_move = move;
+            target.best_move = move;
         }
         else
-            bucket.entries[target_slot].best_move = preserved_move; // Clears the move if it's a new key eviction
+        {
+            target.best_move = preserved_move;
+        }
     }
 
     bool TranspositionTable::probe(Key key, int ply, TTEntry& out_entry) const
@@ -123,34 +118,22 @@ namespace Search
 
         const TTBucket& bucket = table[key & bucket_mask];
 
-        if (bucket.entries[0].key == key)
+        for (int i = 0; i < 4; ++i)
         {
-            out_entry = bucket.entries[0];
-        }
-        else if (bucket.entries[1].key == key)
-        {
-            out_entry = bucket.entries[1];
-        }
-        else if (bucket.entries[2].key == key)
-        {
-            out_entry = bucket.entries[2];
-        }
-        else if (bucket.entries[3].key == key)
-        {
-            out_entry = bucket.entries[3];
-        }
-        else
-        {
-            return false;
-        } // Cache miss
+            if (bucket.entries[i].key == key)
+            {
+                out_entry = bucket.entries[i];
 
-        // Decouple the stored score from the table's depth to match the current search ply
-        if (out_entry.score >= MATE_BOUND)
-            out_entry.score -= ply;
-        else if (out_entry.score <= -MATE_BOUND)
-            out_entry.score += ply;
+                // Decouple the stored score from the table's depth to match the current search ply
+                if (out_entry.score >= MATE_BOUND)
+                    out_entry.score -= ply;
+                else if (out_entry.score <= -MATE_BOUND)
+                    out_entry.score += ply;
 
-        return true;
+                return true;
+            }
+        }
+        return false; // Cache miss
     }
 
     int TranspositionTable::hashfull() const

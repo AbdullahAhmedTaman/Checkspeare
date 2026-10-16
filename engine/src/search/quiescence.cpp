@@ -1,6 +1,6 @@
+#include "board/movegen.h"
 #include "eval/evaluate.h"
 #include "move_ordering.h"
-#include "board/movegen.h"
 #include "search.h"
 #include "transposition.h"
 
@@ -36,73 +36,102 @@ namespace Search
      */
     Value quiescence(Position& pos, int ply, Value alpha, Value beta, SearchContext& ctx)
     {
-        if (ctx.stop_flag)
-            return Eval::evaluate(pos);
+        if (ply > ctx.info.seldepth)
+        {
+            ctx.info.seldepth = ply;
+        }
 
+        if (ctx.stop_flag.load(std::memory_order_relaxed))
+            return VALUE_ZERO;
+        // Telemetry and Engine Hang Prevention
+        ctx.info.nodes++;
+
+        // Poll the clock every 2048 nodes to prevent deep tactical lines from bypassing time limits
+        if ((ctx.info.nodes & 2047) == 0 && ctx.max_time_ms > 0)
+        {
+            auto now = std::chrono::steady_clock::now();
+            uint64_t elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - ctx.start_time).count();
+            if (elapsed >= ctx.max_time_ms)
+            {
+                ctx.stop_flag.store(true, std::memory_order_relaxed);
+                return VALUE_ZERO;
+            }
+        }
         const Color us = pos.sideToMove;
         const bool in_check = pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
 
         if (ply >= MAX_SEARCH_PLY - 1)
             return Eval::evaluate(pos);
 
-        Value stand_pat = Eval::evaluate(pos);
-
-        Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
+        Value stand_pat = 0;
         if (!in_check)
         {
+            stand_pat = Eval::evaluate(pos);
             if (stand_pat >= beta)
                 return beta;
             if (stand_pat > alpha)
                 alpha = stand_pat;
+
+            // Big delta pruning: if even capturing a Queen cannot raise alpha, return early
+            constexpr Value DELTA_MARGIN = 1100;
+            if (stand_pat + DELTA_MARGIN <= alpha)
+            {
+                return alpha;
+            }
         }
 
-        MoveList list;
-        MoveGen::generate_pseudo_legal_moves(pos, list);
-        if (!in_check)
-        {
-            int tactical_count = 0;
-            for (int i = 0; i < list.count; ++i)
-            {
-                if (list.moves[i].is_capture() || list.moves[i].is_promotion())
-                {
-                    list.moves[tactical_count++] = list.moves[i];
-                }
-            }
-            list.count = tactical_count;
-        }
-        MoveOrdering::MovePicker picker(list, pos, Move::none(), ply);
+        Value best_score = in_check ? -VALUE_INFINITE : stand_pat;
+
+        // Instantiate Lazy MovePicker without a TT move (qsearch = true)
+        MoveOrdering::MovePicker picker(pos, Move::none(), ply, true);
         int legal_moves = 0;
 
-        while (true)
+     while (true)
         {
             const Move move = picker.next_move();
             if (!move.is_ok())
                 break;
 
+         
+            if (!in_check && !move.is_promotion())
+            {
+                const PieceType victim = move.is_ep() ? PAWN : type_of(pos.board[move.to()]);
+                if (victim < PieceType::NONE && stand_pat + Eval::MG_WEIGHT[victim] + 200 <= alpha)
+                {
+                    continue;
+                }
+            }
+            // Lazy Legality Check
             pos.make_move(move);
-
             if (pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1)))
             {
                 pos.unmake_move(move);
                 continue;
             }
             ++legal_moves;
+
             const Value score = -quiescence(pos, ply + 1, -beta, -alpha, ctx);
             pos.unmake_move(move);
 
+            if (ctx.stop_flag.load(std::memory_order_relaxed))
+                return VALUE_ZERO;
+
             if (score > best_score)
+            {
                 best_score = score;
-
-            if (best_score >= beta)
-                return beta;
-
-            if (best_score > alpha)
-                alpha = best_score;
+                if (best_score > alpha)
+                {
+                    alpha = best_score;
+                    if (best_score >= beta)
+                        break;
+                }
+            }
         }
 
         if (in_check && legal_moves == 0)
             return -VALUE_MATE + ply;
 
         return best_score;
+        
     }
 } // namespace Search

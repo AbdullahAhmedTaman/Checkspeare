@@ -1,9 +1,6 @@
 add_executable(EngineTests
-    ${CMAKE_CURRENT_SOURCE_DIR}/perft/perft.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/perft/perft_test.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/position_zobrist_tests.cpp
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/test-search-v3.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/bitboard_tests.cpp
 )
 
 target_link_libraries(EngineTests

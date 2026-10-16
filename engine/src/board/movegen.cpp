@@ -1,6 +1,8 @@
 #include "movegen.h"
 #include "attacks.h"
 #include "bitboard.h"
+#include "board/bitboard.h"
+#include "position.h"
 #include "types.h"
 
 namespace
@@ -286,6 +288,269 @@ namespace
                            QUEEN_CASTLE);
         }
     }
+
+    /**
+     * @brief Adds only capture moves represented by an attack bitboard.
+     */
+    inline void add_piece_captures(Bitboard attacks, Square from, Bitboard enemies, MoveList& list)
+    {
+        Bitboard captures = attacks & enemies;
+        while (captures)
+        {
+            const Square to = pop_lsb(captures);
+            list.add(Move(from, to, CAPTURE));
+        }
+    }
+
+    template <Color Us>
+    void add_pawn_captures_impl(const Position& pos, MoveList& list)
+    {
+        constexpr Color Them = static_cast<Color>(Us ^ 1);
+        constexpr int PushDir = (Us == WHITE) ? 8 : -8;
+        constexpr int PushDirNE = (Us == WHITE) ? 9 : -7;
+        constexpr int PushDirNW = (Us == WHITE) ? 7 : -9;
+        constexpr Bitboard PromoFrom = (Us == WHITE) ? RANK_7 : RANK_2;
+
+        constexpr auto shiftUp = (Us == WHITE) ? shift_north : shift_south;
+        constexpr auto shiftUpNE = (Us == WHITE) ? shift_north_east : shift_south_east;
+        constexpr auto shiftUpNW = (Us == WHITE) ? shift_north_west : shift_south_west;
+
+        const Bitboard pawns = pos.pieces[Us][PAWN];
+        const Bitboard enemies = pos.occupancy[Them];
+        const Bitboard empty = ~pos.occupancy[BOTH];
+
+        const Bitboard promotingPawns = pawns & PromoFrom;
+        const Bitboard regularPawns = pawns & ~PromoFrom;
+
+        {
+            Bitboard bb = shiftUp(promotingPawns) & empty;
+            while (bb)
+            {
+                const Square to = pop_lsb(bb);
+                const Square from = static_cast<Square>(to - PushDir);
+                list.add(Move(from, to, QUEEN_PROMO));
+                list.add(Move(from, to, ROOK_PROMO));
+                list.add(Move(from, to, BISHOP_PROMO));
+                list.add(Move(from, to, KNIGHT_PROMO));
+            }
+        }
+
+        {
+            Bitboard ne = shiftUpNE(regularPawns) & enemies;
+            Bitboard nw = shiftUpNW(regularPawns) & enemies;
+            while (ne)
+            {
+                const Square to = pop_lsb(ne);
+                list.add(Move(static_cast<Square>(to - PushDirNE), to, CAPTURE));
+            }
+            while (nw)
+            {
+                const Square to = pop_lsb(nw);
+                list.add(Move(static_cast<Square>(to - PushDirNW), to, CAPTURE));
+            }
+        }
+
+        {
+            Bitboard ne = shiftUpNE(promotingPawns) & enemies;
+            Bitboard nw = shiftUpNW(promotingPawns) & enemies;
+            while (ne)
+            {
+                const Square to = pop_lsb(ne);
+                const Square from = static_cast<Square>(to - PushDirNE);
+                list.add(Move(from, to, QUEEN_PROMO_CAP));
+                list.add(Move(from, to, ROOK_PROMO_CAP));
+                list.add(Move(from, to, BISHOP_PROMO_CAP));
+                list.add(Move(from, to, KNIGHT_PROMO_CAP));
+            }
+            while (nw)
+            {
+                const Square to = pop_lsb(nw);
+                const Square from = static_cast<Square>(to - PushDirNW);
+                list.add(Move(from, to, QUEEN_PROMO_CAP));
+                list.add(Move(from, to, ROOK_PROMO_CAP));
+                list.add(Move(from, to, BISHOP_PROMO_CAP));
+                list.add(Move(from, to, KNIGHT_PROMO_CAP));
+            }
+        }
+
+        if (pos.enPassantSquare != SQ_NONE)
+        {
+            Bitboard attackers = pawn_attacks(Them, pos.enPassantSquare) & pawns;
+            while (attackers)
+            {
+                list.add(Move(pop_lsb(attackers), pos.enPassantSquare, EP_CAPTURE));
+            }
+        }
+    }
+
+    /**
+     * @brief Adds only quiet (non-capture) moves for a non-pawn piece from its attack mask.
+     */
+    inline void add_piece_quiets(Bitboard attacks, Square from, Bitboard occupancy, MoveList& list)
+    {
+        Bitboard quiets = attacks & ~occupancy;
+        while (quiets)
+        {
+            const Square to = pop_lsb(quiets);
+            list.add(Move(from, to, QUIET_MOVE));
+        }
+    }
+
+    /**
+     * @brief Generates only non-promoting single pawn pushes and double pawn pushes.
+     */
+    template <Color Us>
+    void add_pawn_quiets_impl(const Position& pos, MoveList& list)
+    {
+        constexpr int PushDir = (Us == WHITE) ? 8 : -8;
+        constexpr Bitboard StartRank = (Us == WHITE) ? RANK_2 : RANK_7;
+        constexpr Bitboard PromoFrom = (Us == WHITE) ? RANK_7 : RANK_2;
+        constexpr auto shiftUp = (Us == WHITE) ? shift_north : shift_south;
+
+        const Bitboard pawns = pos.pieces[Us][PAWN];
+        const Bitboard empty = ~pos.occupancy[BOTH];
+        const Bitboard regularPawns = pawns & ~PromoFrom;
+
+        
+        {
+            Bitboard bb = shiftUp(regularPawns) & empty;
+            while (bb)
+            {
+                const Square to = pop_lsb(bb);
+                const Square from = static_cast<Square>(to - PushDir);
+                list.add(Move(from, to, QUIET_MOVE));
+            }
+        }
+
+        {
+            const Bitboard fromStart = pawns & StartRank;
+            const Bitboard mid = shiftUp(fromStart) & empty;
+            Bitboard dest = shiftUp(mid) & empty;
+            while (dest)
+            {
+                const Square to = pop_lsb(dest);
+                const Square from = static_cast<Square>(to - 2 * PushDir);
+                list.add(Move(from, to, DOUBLE_PAWN_PUSH));
+            }
+        }
+    }
+
+    void get_checkers_and_pinned(const Position& pos, Bitboard& checkers, Bitboard& pinned)
+    {
+        checkers = 0;
+        pinned = 0;
+
+        Color us = pos.sideToMove;
+        Color them = static_cast<Color>(us ^ 1);
+        Square ksq = pos.king_square(us);
+        Bitboard occ = pos.occupancy[BOTH];
+
+        checkers |= pawn_attacks(us, ksq) & pos.pieces[them][PAWN];
+        checkers |= knight_attacks(ksq) & pos.pieces[them][KNIGHT];
+        checkers |= bishop_attacks(occ, ksq) & (pos.pieces[them][BISHOP] | pos.pieces[them][QUEEN]);
+        checkers |= rook_attacks(occ, ksq) & (pos.pieces[them][ROOK] | pos.pieces[them][QUEEN]);
+
+        Bitboard enemy_occ = pos.occupancy[them] | square_bb(ksq);
+        Bitboard pinner_candidates = (bishop_attacks(enemy_occ, ksq) & (pos.pieces[them][BISHOP] | pos.pieces[them][QUEEN])) |
+                                     (rook_attacks(enemy_occ, ksq) & (pos.pieces[them][ROOK] | pos.pieces[them][QUEEN]));
+
+        while (pinner_candidates)
+        {
+            Square pinner_sq = pop_lsb(pinner_candidates);
+            Bitboard ray = 0;
+
+            if (pos.pieces[them][ROOK] & square_bb(pinner_sq) || pos.pieces[them][QUEEN] & square_bb(pinner_sq))
+            {
+                if (file_of(ksq) == file_of(pinner_sq) || rank_of(ksq) == rank_of(pinner_sq))
+                {
+                    ray = rook_attacks(square_bb(pinner_sq), ksq) & rook_attacks(square_bb(ksq), pinner_sq);
+                }
+            }
+            if (ray == 0)
+            {
+                ray = bishop_attacks(square_bb(pinner_sq), ksq) & bishop_attacks(square_bb(ksq), pinner_sq);
+            }
+
+            Bitboard blockers = ray & occ;
+
+            if (popcount(blockers) == 1)
+            {
+                Bitboard our_blocker = blockers & pos.occupancy[us];
+                if (our_blocker)
+                {
+                    pinned |= our_blocker;
+                }
+            }
+        }
+    }
+
+    bool is_legal(Position& pos, Move move, Bitboard checkers, Bitboard pinned)
+    {
+        Color us = pos.sideToMove;
+        Square from = move.from();
+        Square to = move.to();
+        PieceType pt = type_of(pos.board[from]);
+
+        if (pt == KING || move.is_ep())
+        {
+            pos.make_move(move);
+            bool legal = !pos.is_square_attacked(pos.king_square(us), static_cast<Color>(us ^ 1));
+            pos.unmake_move(move);
+            return legal;
+        }
+
+        if (popcount(checkers) > 1)
+        {
+            return false;
+        }
+
+        Square ksq = pos.king_square(us);
+
+        if (pinned & square_bb(from))
+        {
+            bool aligned = false;
+
+            if (file_of(from) == file_of(ksq) && file_of(to) == file_of(ksq))
+                aligned = true;
+            else if (rank_of(from) == rank_of(ksq) && rank_of(to) == rank_of(ksq))
+                aligned = true;
+            else if (diagonal_bb(from) == diagonal_bb(ksq) && diagonal_bb(to) == diagonal_bb(ksq))
+                aligned = true;
+            else if (anti_diagonal_bb(from) == anti_diagonal_bb(ksq) && anti_diagonal_bb(to) == anti_diagonal_bb(ksq))
+                aligned = true;
+
+            if (!aligned)
+                return false;
+        }
+
+        if (checkers)
+        {
+            Square checker_sq = lsb(checkers);
+            Bitboard valid_target_squares = checkers;
+            PieceType checker_pt = type_of(pos.board[checker_sq]);
+
+            if (checker_pt == BISHOP || checker_pt == ROOK || checker_pt == QUEEN)
+            {
+                Bitboard between = 0;
+                if (file_of(checker_sq) == file_of(ksq) || rank_of(checker_sq) == rank_of(ksq))
+                {
+                    between = rook_attacks(square_bb(checker_sq), ksq) & rook_attacks(square_bb(ksq), checker_sq);
+                }
+                else
+                {
+                    between = bishop_attacks(square_bb(checker_sq), ksq) & bishop_attacks(square_bb(ksq), checker_sq);
+                }
+                valid_target_squares |= between;
+            }
+
+            if (!(square_bb(to) & valid_target_squares))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 } // namespace
 
 namespace MoveGen
@@ -310,21 +575,94 @@ namespace MoveGen
     {
         MoveList pseudoLegalMoves;
         generate_pseudo_legal_moves(pos, pseudoLegalMoves);
-
         legalMoves.count = 0;
-        const Color us = pos.sideToMove;
+
+        Bitboard checkers = 0;
+        Bitboard pinned = 0;
+        get_checkers_and_pinned(pos, checkers, pinned);
 
         for (int i = 0; i < pseudoLegalMoves.count; ++i)
         {
             const Move move = pseudoLegalMoves.moves[i];
-            pos.make_move(move);
-            const Square kingSquare = pos.king_square(us);
-            const bool legal = !pos.is_square_attacked(kingSquare, static_cast<Color>(us ^ 1));
-
-            pos.unmake_move(move);
-
-            if (legal)
+            if (is_legal(pos, move, checkers, pinned))
+            {
                 legalMoves.add(move);
+            }
         }
     }
+
+    void generate_captures(const Position& pos, MoveList& list)
+    {
+        list.count = 0;
+        const Color us = pos.sideToMove;
+        const Color them = static_cast<Color>(us ^ 1);
+        const Bitboard enemies = pos.occupancy[them];
+        const Bitboard occupancy = pos.occupancy[BOTH];
+
+        if (us == WHITE)
+            add_pawn_captures_impl<WHITE>(pos, list);
+        else
+            add_pawn_captures_impl<BLACK>(pos, list);
+
+        Bitboard knights = pos.pieces[us][KNIGHT];
+        while (knights)
+        {
+            const Square from = pop_lsb(knights);
+            add_piece_captures(knight_attacks(from), from, enemies, list);
+        }
+
+        auto add_slider_captures = [&](Bitboard pieces, auto attackFn)
+        {
+            while (pieces)
+            {
+                const Square from = pop_lsb(pieces);
+                add_piece_captures(attackFn(occupancy, from), from, enemies, list);
+            }
+        };
+        add_slider_captures(pos.pieces[us][ROOK], rook_attacks);
+        add_slider_captures(pos.pieces[us][BISHOP], bishop_attacks);
+        add_slider_captures(pos.pieces[us][QUEEN], queen_attacks);
+
+        const Square ksq = pos.king_square(us);
+        add_piece_captures(king_attacks(ksq), ksq, enemies, list);
+    }
+
+    void generate_quiets(const Position& pos, MoveList& list)
+    {
+        list.count = 0;
+
+        const Color us = pos.sideToMove;
+        const Bitboard occupancy = pos.occupancy[BOTH];
+
+        if (us == WHITE)
+            add_pawn_quiets_impl<WHITE>(pos, list);
+        else
+            add_pawn_quiets_impl<BLACK>(pos, list);
+
+        Bitboard knights = pos.pieces[us][KNIGHT];
+        while (knights)
+        {
+            const Square from = pop_lsb(knights);
+            add_piece_quiets(knight_attacks(from), from, occupancy, list);
+        }
+
+        auto add_slider_quiets = [&](Bitboard pieces, auto attackFn)
+        {
+            while (pieces)
+            {
+                const Square from = pop_lsb(pieces);
+                add_piece_quiets(attackFn(occupancy, from), from, occupancy, list);
+            }
+        };
+
+        add_slider_quiets(pos.pieces[us][ROOK], rook_attacks);
+        add_slider_quiets(pos.pieces[us][BISHOP], bishop_attacks);
+        add_slider_quiets(pos.pieces[us][QUEEN], queen_attacks);
+
+        const Square ksq = pos.king_square(us);
+        add_piece_quiets(king_attacks(ksq), ksq, occupancy, list);
+
+        add_castling_moves(pos, list);
+    }
+    
 } // namespace MoveGen
