@@ -70,10 +70,11 @@ namespace UCI
         std::string book_filename = "book.bin";
         std::string book_mode = "Weighted";
 
+        int tt_size_mb = 64;
+
         // Try loading default opening book quietly
         book.load(book_filename);
 
-        // Helper lambda to safely stop and join active search thread
         auto stop_search = [&]()
         {
             Search::Signals_stop = true;
@@ -93,6 +94,7 @@ namespace UCI
             {
                 std::cout << "id name Checkspeare" << std::endl;
                 std::cout << "id author Check-Mates" << std::endl;
+                std::cout << "option name Hash type spin default 128 min 1 max 32768" << std::endl;
                 std::cout << "option name BookFile type string default book.bin" << std::endl;
                 std::cout << "option name BookMode type combo default Weighted var Weighted var Best" << std::endl;
                 std::cout << "uciok" << std::endl;
@@ -105,6 +107,7 @@ namespace UCI
             {
                 stop_search();
                 Search::init();
+                Search::TT.resize(tt_size_mb);
                 Search::TT.clear();
             }
             else if (command == "setoption")
@@ -126,7 +129,22 @@ namespace UCI
                     val_str += token;
                 }
 
-                if (name == "BookFile")
+                if (name == "Hash")
+                {
+                    try
+                    {
+                        int mb = std::stoi(val_str);
+                        if (mb < 1)
+                            mb = 1;
+                        tt_size_mb = mb;
+                        Search::TT.resize(tt_size_mb);
+                    }
+                    catch (const std::exception&)
+                    {
+                        std::cout << "info string Invalid Hash value: " << val_str << std::endl;
+                    }
+                }
+                else if (name == "BookFile")
                 {
                     book_filename = val_str;
                     if (book.load(book_filename))

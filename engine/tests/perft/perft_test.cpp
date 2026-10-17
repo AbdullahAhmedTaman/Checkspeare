@@ -19,6 +19,7 @@ TEST_CASE("Perft Leaf Node Verification", "[perft][movegen]")
         REQUIRE(Perft::run(pos, 3) == 8902ULL);
         REQUIRE(Perft::run(pos, 4) == 197281ULL);
         REQUIRE(Perft::run(pos, 5) == 4865609ULL);
+        Perft::divide(pos, 6);
     }
 
     SECTION("KiwiPete (Position 2 - Complex Pins, Checks & Castling)")

@@ -1,149 +1,175 @@
-# Checkspeare
+<div align="center">
 
-**Checkspeare** is a high-performance UCI chess engine and graphical user interface (GUI) written in modern C++. With an estimated playing strength of ~2700 Elo, it combines a highly optimized bitboard move generator with advanced search heuristics and a handcrafted evaluation function. 
+# ♟️ Checkspeare
 
-The project is architected such that the engine and the graphical user interface are completely independent of each other. Checkspeare can be used as a standalone UCI engine with any standard chess GUI, and the included SFML/ImGui visual interface can be used to load and play against other UCI-compliant engines. Checkspeare is fully cross-platform and natively supports both Windows and Linux.
+**A high-performance chess engine and standalone graphical interface, written in modern C++23.**
+
+[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23.html)
+[![CMake](https://img.shields.io/badge/CMake-3.28%2B-064F8C.svg)](https://cmake.org/)
+[![Protocol](https://img.shields.io/badge/Protocol-UCI-success.svg)](https://www.chessprogramming.org/UCI)
+![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux-lightgrey)
+
+[Features](#features) · [Performance](#performance) · [Playing Strength](#playing-strength) · [Architecture](#architecture) · [Building](#building) · [Usage](#usage) · [Documentation](#technical-documentation)
+
+</div>
 
 ---
-## Documentation
 
-If you are interested in the internal workings of Checkspeare, a comprehensive documentation PDF is included in this repository. It provides a deep dive into the architecture, implementation details, and the complete development process behind both the chess engine and the graphical user interface.
+Checkspeare combines optimized bitboard move generation, alpha-beta search, and handcrafted position evaluation. The engine and the GUI are fully independent: the engine runs in any UCI-compatible chess GUI, and the graphical application can connect to any external UCI engine.
 
----
+<p align="center">
+  <img src="docs/images/gui-overview.png"
+       alt="Checkspeare graphical interface"
+       width="85%">
+</p>
 
-## Directory Structure
+<p align="center">
+  <img src="docs/images/gameplay.gif"
+       alt="Checkspeare gameplay demonstration"
+       width="85%">
+</p>
 
-The repository is divided into two primary components: the engine and the GUI.
+## Features
+
+### Chess Engine
+
+| Area | Details |
+|---|---|
+| **Move generation** | Bitboard representation with optimized attack calculation |
+| **Sliding attacks** | BMI2/PEXT acceleration where supported; Hyperbola Quintessence fallback |
+| **Search** | Alpha-beta with iterative deepening, aspiration windows, and quiescence search |
+| **Search optimizations** | Transposition table, null-move pruning, late-move reductions (LMR), heuristic move ordering |
+| **Evaluation** | Handcrafted and tapered: PeSTO piece-square tables, pawn structure, mobility, king safety |
+| **Protocol** | UCI, for use with compatible GUIs and engine-testing tools |
+
+### Graphical Interface
+
+- Interactive chessboard with drag-and-drop piece movement and game controls
+- Play against Checkspeare, or connect any external UCI-compliant engine
+- Built with **SFML** for windowing and rendering and **Dear ImGui** for the interface
+
+## Performance
+
+| Benchmark | Result | Notes |
+|---|---|---|
+| **Perft** | 119,060,324 nodes | Start position, depth 6, 752 ms |
+| **Search speed** | 5.29 M nodes/second | Start position, depth 18, 64 MB hash |
+
+**Test environment:** AMD Ryzen 5 5600X · MinGW-w64 UCRT GCC 14.2.0 · Release build (`-O3`, IPO/LTO) · BMI2/PEXT sliding attacks enabled for both benchmarks. Results vary with hardware, compiler, and build configuration.
+
+## Playing Strength
+
+| Opponent | Games | W / D / L | Score | Elo Difference | LOS |
+|---|---|---|---|---|---|
+| Stockfish 19 *(`UCI_Elo` 2600)* | 100 | 55 / 11 / 34 | 60.5% | **+74.1 ± 66.3** | 98.7% |
+| Stockfish 19 *(`UCI_Elo` 2700)* | TBD | TBD | TBD | TBD | TBD |
+
+*W / D / L is from Checkspeare's perspective; LOS is the likelihood of superiority.*
+
+**Conditions:** cutechess-cli · 60 s + 0.6 s per game · `komodo.bin` opening book · 64 MB hash · Ryzen 5 5600X, 16 GB RAM, Windows 11.
+
+> [!NOTE]
+> Preliminary results from a single 100-game match with a wide error margin. Stockfish's `UCI_Elo` is not directly comparable to FIDE or rating-list Elo. Full methodology and the exact match command are in the [technical documentation](#technical-documentation).
+
+## Architecture
+
+Checkspeare consists of two independent components that communicate over the UCI protocol:
+
+- **Engine (`engine/`)**: a standalone UCI executable responsible for board state, move generation, evaluation, and search.
+- **GUI (`gui/`)**: an SFML/ImGui application responsible for rendering, user interaction, game management, and UCI engine communication.
 
 ```text
 Checkspeare/
-├── engine/              # Standalone UCI chess engine
-│   ├── src/             # Core engine source files
-│   │   ├── board/       # Bitboard representation and move generation
-│   │   ├── eval/        # Handcrafted evaluation and PeSTO tables
-│   │   ├── search/      # Alpha-Beta search, pruning, and heuristics
-│   │   └── uci/         # Universal Chess Interface protocol handling
-│   └── tests/           # Catch2 test suite (Perft, search validation, etc.)
-└── gui/                 # Graphical User Interface
-    ├── assets/          # Static assets for the application
-    ├── src/             # GUI source files
-    │   ├── assets/      # Asset management logic
-    │   ├── audio/       # Sound effects and audio handling
-    │   ├── controller/  # Application state controllers
-    │   ├── engine/      # GUI-side engine communication wrappers
-    │   ├── game/        # Visual chessboard and game logic
-    │   ├── input/       # User input handling
-    │   └── ui/          # ImGui interface components
-    └── tests/           # GUI-specific test suite
+├── engine/
+│   ├── src/
+│   │   ├── board/       # Board representation and move generation
+│   │   ├── eval/        # Position evaluation
+│   │   ├── search/      # Search and move ordering
+│   │   └── uci/         # UCI protocol handling
+│   └── tests/           # Engine tests
+├── gui/
+│   ├── assets/          # Fonts, themes, and piece textures
+│   ├── src/
+│   │   ├── assets/      # Asset management
+│   │   ├── audio/       # Audio handling
+│   │   ├── controller/  # Application controllers
+│   │   ├── engine/      # UCI subprocess communication
+│   │   ├── game/        # Game and board logic
+│   │   ├── input/       # User input handling
+│   │   └── ui/          # ImGui interface components
+│   └── tests/           # GUI tests
+└── docs/                # Technical documentation
 ```
 
----
+## Requirements
 
-## Main Features
+| Requirement | Version / Notes |
+|---|---|
+| **Compiler** | C++23-capable GCC, Clang, or MSVC |
+| **CMake** | 3.28 or newer |
+| **Git** | Required by CMake to fetch dependencies |
+| **Internet access** | Needed on the first configure to download dependencies |
 
-### Engine Core & Search
-*   **Move Generation:** Highly optimized bitboard representation utilizing mask-based legality checking and the Hyperbola Quintessence technique for sliding piece attacks.
-*   **Search Algorithm:** Iterative Deepening with Fail-Soft Alpha-Beta (Negamax) pruning.
-*   **Transposition Table:** Lockless, 4-way associative Zobrist hash table with a Two-Tier replacement strategy.
-*   **Advanced Pruning & Reductions:**
-    *   Null Move Pruning (NMP).
-    *   Late Move Reductions (LMR) based on logarithmic scaling.
-    *   Aspiration Windows for optimized root node resolution.
-    *   Quiescence Search to resolve forcing tactical sequences and mitigate the horizon effect.
-*   **Move Ordering:** MVV-LVA for captures, alongside Killer Move and History heuristics for quiet moves.
+SFML, Dear ImGui, ImGui-SFML, and Catch2 are downloaded and built automatically via [`FetchContent`](https://cmake.org/cmake/help/latest/module/FetchContent.html). Nothing to install manually.
 
-### Handcrafted Evaluation (HCE)
-*   **Tapered Evaluation:** Smooth interpolation between middlegame and endgame piece values.
-*   **PeSTO Piece-Square Tables:** Granular positional understanding for all piece types.
-*   **Structural Knowledge:** Advanced pawn structure evaluation penalizing isolated/doubled pawns and rewarding passed pawns.
-*   **King Safety & Mobility:** Dynamic pawn shield evaluation, knight outposts, and king-zone attack detection.
-
-### Graphical User Interface
-*   Integrated, lightweight visual interface for playing directly against the engine or analyzing positions.
-*   Powered by **SFML** (windowing and rendering) and **ImGui** (immediate mode user interface).
-
----
-
-## Dependencies
-
-To build Checkspeare, your development environment must include:
-*   **C++ Compiler:** Must support C++23 (GCC, Clang, or MSVC).
-*   **CMake:** Version 3.28 or higher.
-*   **SFML:** Simple and Fast Multimedia Library (required for the GUI).
-*   **ImGui:** Dear ImGui (required for the GUI components).
-
----
-
-## Installation & Building
-
-Checkspeare uses CMake for a clean, out-of-source build process.
+## Building
 
 ### Linux
-- Install the required build tools and dependencies:
-```bash
-   sudo apt update
-   sudo apt install build-essential cmake libsfml-dev
 
+SFML is built from source, so it needs its usual system development packages. On Debian/Ubuntu, for example:
+
+```bash
+sudo apt install build-essential cmake git \
+    libx11-dev libxrandr-dev libxcursor-dev libxi-dev libudev-dev \
+    libgl1-mesa-dev libfreetype-dev libopenal-dev libvorbis-dev libflac-dev
 ```
 
-- Clone the repository and build:
 ```bash
-git clone https://github.com/AbdullahAhmedTaman/Checkspeare
-cd checkspeare
-mkdir build && cd build
-cmake ..
-cmake --build . --config Release
+git clone https://github.com/AbdullahAhmedTaman/Checkspeare.git
+cd Checkspeare
 
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
 ```
-
-
 
 ### Windows
 
-Ensure you have CMake installed and a compatible compiler (such as Visual Studio/MSVC or MinGW). SFML and ImGui should be accessible via your package manager (e.g., vcpkg) or included in your project structure.
+Install CMake, Git, and a supported compiler (Visual Studio with MSVC, or MinGW-w64).
 
-- Open PowerShell or your Developer Command Prompt.
-- Clone and build:
 ```powershell
-git clone https://github.com/AbdullahAhmedTaman/Checkspeare
-cd checkspeare
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+git clone https://github.com/AbdullahAhmedTaman/Checkspeare.git
+cd Checkspeare
 
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
 ```
 
-
-
----
+> [!NOTE]
+> The first configure downloads and compiles all dependencies, so it takes noticeably longer than subsequent builds.
 
 ## Usage
 
-### Running the GUI
+**Graphical interface:** launch the GUI executable produced by the build. Its location depends on the selected generator and build configuration.
 
-Launch the visual interface directly from the build directory:
+**Standalone UCI engine:** run the engine executable directly, or add it to any UCI-compatible chess GUI such as [Arena](http://www.playwitharena.de/). To try it from a terminal, send these commands through standard input:
 
-```bash
-# Linux
-./CheckspeareGUI
-
-# Windows
-.\Release\CheckspeareGUI.exe
-
-```
-
-### Running the UCI Engine
-
-Checkspeare is fully compliant with the Universal Chess Interface (UCI) protocol. You can run it via the command line or hook it into standard chess GUIs like Arena, Cutechess, or Encroissant.
-
-```bash
-# Start the UCI engine
-./Checkspeare
-
-# Example UCI commands:
+```text
 uci
+isready
 position startpos
 go depth 8
-
 ```
+
+## Testing
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+Validation includes perft testing alongside the other checks in the project's test suite.
+
+## Technical Documentation
+
+For a detailed discussion of the architecture, bitboard optimizations, search algorithms, evaluation design, and implementation decisions, read the accompanying paper:
+
+**📄 [Checkspeare Technical Documentation (PDF)](docs/Checkspeare-Technical-Documentation.pdf)**

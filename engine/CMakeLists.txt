@@ -66,6 +66,24 @@ list(REMOVE_ITEM ENGINE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
 )
 
+include(CheckIPOSupported)
+
+check_ipo_supported(
+    RESULT ipo_ok
+    OUTPUT ipo_msg
+    LANGUAGES CXX
+)
+
+if(ipo_ok)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON)
+    message(STATUS "IPO/LTO Engine: ENABLED")
+else()
+    message(STATUS "IPO/LTO Engine: NOT SUPPORTED")
+    message(STATUS "IPO/LTO Engine reason: ${ipo_msg}")
+endif()
+
 add_library(EngineCore ${ENGINE_SRC})
 
 target_include_directories(EngineCore
@@ -102,40 +120,21 @@ if(ENGINE_USE_PEXT)
 endif()
 
 
-add_executable(Checkspeare src/main.cpp)
+add_executable(CheckspeareEngine src/main.cpp)
 
-target_link_libraries(Checkspeare PRIVATE EngineCore)
+target_link_libraries(CheckspeareEngine PRIVATE EngineCore)
 
 # Compiler warnings.
 if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-    target_compile_options(Checkspeare PRIVATE /W4 /wd4100 /wd4189)
+    target_compile_options(CheckspeareEngine PRIVATE /W4 /wd4100 /wd4189)
 else()
-    target_compile_options(Checkspeare PRIVATE
+    target_compile_options(CheckspeareEngine PRIVATE
         -Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 
 message(STATUS "PEXT sliding attacks: ${USE_PEXT}")
 message(STATUS "Compressed rook table: ${ROOK_COMPRESSED}")
 
-
-include(CheckIPOSupported)
-
-check_ipo_supported(
-    RESULT ipo_ok
-    OUTPUT ipo_msg
-    LANGUAGES CXX
-)
-
-if(ipo_ok)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON)
-    message(STATUS "IPO/LTO: ENABLED")
-else()
-    message(STATUS "IPO/LTO: NOT SUPPORTED")
-    message(STATUS "IPO/LTO reason: ${ipo_msg}")
-endif()
-
-configure_gnu_production_runtime(Checkspeare)
+configure_gnu_production_runtime(CheckspeareEngine)
 
 add_subdirectory(tests)

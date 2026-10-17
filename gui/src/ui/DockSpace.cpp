@@ -54,7 +54,7 @@ namespace Gui
                 ImGuiID bottomStrip = ImGui::DockBuilderSplitNode(root, ImGuiDir_Down, 0.192f, nullptr, &root);
 
                 // 4. Engine: left of the region above Clock.
-                ImGuiID engineCol = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.13f, nullptr, &root);
+                ImGuiID engineCol = ImGui::DockBuilderSplitNode(root, ImGuiDir_Left, 0.14f, nullptr, &root);
 
                 ImGui::DockBuilderDockWindow("FEN", fenCell);
                 ImGui::DockBuilderDockWindow("Engine", engineCol);
