@@ -5,9 +5,9 @@
 #include <string>
 
 #ifdef _WIN32
-constexpr const char* DEFAULT_ENGINE_PATH = "Checkspeare.exe";
+constexpr const char* DEFAULT_ENGINE_PATH = "CheckspeareEngine.exe";
 #else
-constexpr const char* DEFAULT_ENGINE_PATH = "Checkspeare";
+constexpr const char* DEFAULT_ENGINE_PATH = "CheckspeareEngine";
 #endif
 
 struct Config

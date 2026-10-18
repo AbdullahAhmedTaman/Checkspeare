@@ -33,7 +33,7 @@ namespace
 Application::Application(Config& conf, const Assets::TextureLibrary& assets, const Assets::SoundLibrary& sounds)
     : assets_(assets),
       sounds_(sounds),
-      window_(sf::VideoMode({1150, 1000}), "Chess GUI", sf::Style::Default, sf::State::Windowed, makeWindowSettings()),
+      window_(sf::VideoMode({1150, 1000}), "Checkspeare GUI", sf::Style::Default, sf::State::Windowed, makeWindowSettings()),
       controller_(game_),
       theme_(Gui::getBoardTheme("Default", assets)),
       soundPlayer_(sounds),

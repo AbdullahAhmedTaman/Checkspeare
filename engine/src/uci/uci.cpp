@@ -94,7 +94,7 @@ namespace UCI
             {
                 std::cout << "id name Checkspeare" << std::endl;
                 std::cout << "id author Check-Mates" << std::endl;
-                std::cout << "option name Hash type spin default 128 min 1 max 32768" << std::endl;
+                std::cout << "option name Hash type spin default 64 min 1 max 32768" << std::endl;
                 std::cout << "option name BookFile type string default book.bin" << std::endl;
                 std::cout << "option name BookMode type combo default Weighted var Weighted var Best" << std::endl;
                 std::cout << "uciok" << std::endl;
