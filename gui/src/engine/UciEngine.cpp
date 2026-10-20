@@ -97,7 +97,7 @@ struct UciEngine::Impl
 
     Process process;
 
-    std::jthread readerThread;
+    std::thread readerThread;
 
     std::mutex queueMutex;
     std::queue<std::string> outputQueue;
@@ -115,6 +115,13 @@ struct UciEngine::Impl
     void start(const std::filesystem::path& path);
     void startReaderThread();
     void writeLine(const std::string& line);
+
+    ~Impl()
+    {
+        // stop() should already have joined. If not, never destroy a joinable thread.
+        if (readerThread.joinable())
+            readerThread.join();
+    }
 };
 
 UciEngine::UciEngine()
@@ -165,7 +172,6 @@ void UciEngine::Impl::start(const std::filesystem::path& path)
 
         if (readerThread.joinable())
         {
-            readerThread.request_stop();
             readerThread.join();
         }
 
@@ -182,15 +188,13 @@ void UciEngine::Impl::startReaderThread()
 {
     Impl* impl = this;
 
-    // The reader thread uses the Process object that belongs to this Impl.
-    // The Process object stays alive until the reader thread has been joined.
-    readerThread = std::jthread(
-        [impl](std::stop_token stop)
+    readerThread = std::thread(
+        [impl]
         {
             char buffer[4096];
             std::string pending;
 
-            while (!stop.stop_requested())
+            while (true)
             {
                 const std::ptrdiff_t bytesRead = impl->process.read(buffer, sizeof(buffer));
 
@@ -273,10 +277,6 @@ const std::string& UciEngine::name() const
 
 void UciEngine::stop()
 {
-    if (!impl_->process.hasProcess())
-        return;
-
-    // Ask the engine to exit.
     if (impl_->process.hasProcess())
     {
         try
@@ -285,27 +285,17 @@ void UciEngine::stop()
         }
         catch (...)
         {
-            // Ignore write failures during shutdown.
         }
+
+        if (!impl_->process.waitForExit(std::chrono::seconds(2)))
+            impl_->process.terminate();
     }
 
-    // Wait for it to terminate.
-    const bool exited = impl_->process.waitForExit(std::chrono::seconds(2));
-
-    // Force termination if necessary.
-    if (!exited)
-    {
-        impl_->process.terminate();
-    }
-
+    // Join even if there is no process, so a joinable std::thread can
+    // never be destroyed (which would call std::terminate).
     if (impl_->readerThread.joinable())
-    {
-        impl_->readerThread.request_stop();
         impl_->readerThread.join();
-    }
 
-    // Clean up process resources after the reader thread has stopped
-    // using the stdout pipe.
     impl_->process.reset();
 
     impl_->running = false;

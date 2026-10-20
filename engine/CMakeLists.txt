@@ -132,9 +132,13 @@ else()
         -Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 
-message(STATUS "PEXT sliding attacks: ${USE_PEXT}")
+message(STATUS "PEXT sliding attacks: ${ENGINE_USE_PEXT}")
 message(STATUS "Compressed rook table: ${ROOK_COMPRESSED}")
 
-configure_gnu_production_runtime(CheckspeareEngine)
+if(APPLE)
+    configure_portable_runtime(CheckspeareEngine)
+else()
+    configure_portable_runtime(CheckspeareEngine FULL_STATIC)
+endif()
 
 add_subdirectory(tests)

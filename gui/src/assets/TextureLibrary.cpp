@@ -3,6 +3,7 @@
 #include <SFML/Graphics/Texture.hpp>
 
 #include <cassert>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -43,7 +44,7 @@ namespace Assets
         }
     } // namespace
 
-    void TextureLibrary::loadAllPieceTextures(const std::string& basePath)
+    void TextureLibrary::loadAllPieceTextures(const std::filesystem::path& basePath)
     {
         constexpr Color colors[] = {WHITE, BLACK};
         constexpr PieceType types[] = {PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING};
@@ -53,11 +54,11 @@ namespace Assets
             for (PieceType type : types)
             {
                 const std::string key = std::string(1, colorCode(color)) + pieceCode(type);
-                const std::string fullPath = basePath + key + ".png";
+                const std::filesystem::path fullPath = basePath / (key + ".png");
 
                 sf::Texture texture;
                 if (!texture.loadFromFile(fullPath))
-                    throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath);
+                    throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath.string());
                 texture.setSmooth(true);
                 m_textures[key] = std::move(texture);
             }
@@ -66,17 +67,17 @@ namespace Assets
         std::cout << "[TextureLibrary] All 12 piece textures loaded successfully!\n";
     }
 
-    void TextureLibrary::loadAllSquareTextures(const std::string& basePath)
+    void TextureLibrary::loadAllSquareTextures(const std::filesystem::path& basePath)
     {
         const char* keys[] = {Key::SquareWhite, Key::SquareBlack};
 
         for (const char* key : keys)
         {
-            const std::string fullPath = basePath + key + ".png";
+            const std::filesystem::path fullPath = basePath / (std::string(key) + ".png");
 
             sf::Texture texture;
             if (!texture.loadFromFile(fullPath))
-                throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath);
+                throw std::runtime_error("[TextureLibrary Error] Failed to load: " + fullPath.string());
             texture.setSmooth(true);
             m_textures[key] = std::move(texture);
         }

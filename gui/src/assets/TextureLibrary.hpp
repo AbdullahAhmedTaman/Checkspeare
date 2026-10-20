@@ -4,6 +4,7 @@
 
 #include <SFML/Graphics/Texture.hpp>
 
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 
@@ -43,11 +44,11 @@ namespace Assets
 
         /// Loads the 12 standard piece textures from `basePath`, which must
         /// end with '/'. Idempotent.
-        void loadAllPieceTextures(const std::string& basePath);
+        void loadAllPieceTextures(const std::filesystem::path& basePath);
 
         /// Loads Square_White.png and Square_Black.png from `basePath`,
         /// which must end with '/'.
-        void loadAllSquareTextures(const std::string& basePath);
+        void loadAllSquareTextures(const std::filesystem::path& basePath);
 
         /// Throws std::out_of_range if `key` was not loaded.
         const sf::Texture& getTexture(const std::string& key) const;

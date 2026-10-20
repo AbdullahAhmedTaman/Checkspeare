@@ -16,7 +16,7 @@ namespace Assets
         }
     } // namespace
 
-    void SoundLibrary::loadAll(const std::string& basePath)
+    void SoundLibrary::loadAll(const std::filesystem::path& basePath)
     {
         loadCategory(basePath, SoundKey::Move);
         loadCategory(basePath, SoundKey::Capture);
@@ -30,18 +30,19 @@ namespace Assets
         loadCategory(basePath, SoundKey::Cancel);
     }
 
-    void SoundLibrary::loadCategory(const std::string& basePath, const std::string& name)
+    void SoundLibrary::loadCategory(const std::filesystem::path& basePath, const std::string& name)
     {
         std::vector<sf::SoundBuffer> variants;
 
         for (int i = 1;; ++i)
         {
-            const std::string fullPath = basePath + name + "_" + std::to_string(i) + ".wav";
+            const std::filesystem::path fullPath = basePath / (name + "_" + std::to_string(i) + ".wav");
 
             // SFML's loadFromFile logs to stderr on every failed open. The
             // probe loop relies on failure to know when variants stop, so
             // check existence first to keep the probe silent.
-            if (!std::filesystem::exists(fullPath))
+            std::error_code ec;
+            if (!std::filesystem::exists(fullPath, ec))
                 break;
 
             sf::SoundBuffer buffer;

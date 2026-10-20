@@ -70,7 +70,7 @@ namespace UCI
         std::string book_filename = "book.bin";
         std::string book_mode = "Weighted";
 
-        int tt_size_mb = 64;
+        int tt_size_mb = Search::DEFAULT_HASH_MB;
 
         // Try loading default opening book quietly
         book.load(book_filename);
@@ -94,7 +94,7 @@ namespace UCI
             {
                 std::cout << "id name Checkspeare" << std::endl;
                 std::cout << "id author Check-Mates" << std::endl;
-                std::cout << "option name Hash type spin default 64 min 1 max 32768" << std::endl;
+                std::cout << "option name Hash type spin default " << Search::DEFAULT_HASH_MB << " min 1 max 32768" << std::endl;
                 std::cout << "option name BookFile type string default book.bin" << std::endl;
                 std::cout << "option name BookMode type combo default Weighted var Weighted var Best" << std::endl;
                 std::cout << "uciok" << std::endl;
@@ -106,9 +106,7 @@ namespace UCI
             else if (command == "ucinewgame")
             {
                 stop_search();
-                Search::init();
-                Search::TT.resize(tt_size_mb);
-                Search::TT.clear();
+                Search::init(tt_size_mb);
             }
             else if (command == "setoption")
             {

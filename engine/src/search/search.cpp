@@ -114,7 +114,7 @@ namespace Search
 
     std::atomic<bool> Signals_stop{false};
 
-    void init()
+    void init(int hash_mb)
     {
         Signals_stop.store(false, std::memory_order_relaxed);
         std::memset(killer_moves, 0, sizeof(killer_moves));
@@ -125,6 +125,8 @@ namespace Search
         std::memset(cont_history, 0, sizeof(cont_history));
         std::memset(pv_table, 0, sizeof(pv_table));
         std::memset(pv_length, 0, sizeof(pv_length));
+        TT.resize(hash_mb);
+        TT.clear();
     }
 
     /**
@@ -338,7 +340,6 @@ namespace Search
                 {
                     if (is_quiet)
                     {
-                       
                         if (depth <= 4 && quiet_count >= (6 + 2 * depth * depth))
                             continue;
 
@@ -349,7 +350,6 @@ namespace Search
                     }
                     else if (depth <= 3 && move.ordering_score() == MoveOrdering::BAD_CAPTURE)
                     {
-                       
                         continue;
                     }
                 }
@@ -676,7 +676,7 @@ namespace Search
                 if (elapsed >= static_cast<uint64_t>(ctx.opt_time_ms * 0.65))
                     break;
             }
-            else if ( elapsed >= ctx.opt_time_ms )
+            else if (elapsed >= ctx.opt_time_ms)
             {
                 break;
             }

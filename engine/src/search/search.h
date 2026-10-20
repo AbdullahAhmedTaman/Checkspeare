@@ -69,7 +69,7 @@ namespace Search
     /**
      * @brief Clears search heuristics (history, killers, etc.) before a new search.
      */
-    void init();
+    void init(int hash_mb);
 
     /**
      * @brief Precomputes the baseline Late Move Reduction values using a logarithmic curve.

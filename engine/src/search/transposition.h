@@ -9,6 +9,7 @@
 namespace Search
 {
 
+    constexpr int DEFAULT_HASH_MB = 64;
     constexpr int MAX_SEARCH_PLY = 256;
     /**
      * @brief Threshold to detect forced mate scores.
@@ -83,7 +84,11 @@ namespace Search
     class TranspositionTable
     {
     public:
-        TranspositionTable() = default;
+        TranspositionTable()
+        {
+            resize(DEFAULT_HASH_MB);
+        }
+
         ~TranspositionTable() = default;
 
         /**
@@ -132,6 +137,7 @@ namespace Search
         {
             global_age = (global_age + 1) & 0x3F;
         }
+
         /**
          * @brief Prefetches the 64-byte TT bucket for the given Zobrist key into L1 cache.
          *

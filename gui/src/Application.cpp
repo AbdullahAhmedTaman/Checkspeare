@@ -1,5 +1,6 @@
 #include "Application.hpp"
 
+#include "ResourcePaths.hpp"
 #include "game/GameResult.hpp"
 #include "input/InputEvent.hpp"
 #include "input/SfmlInputAdapter.hpp"
@@ -43,7 +44,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     window_.setVerticalSyncEnabled(true);
     sf::Image icon;
 
-    if (!icon.loadFromFile(RESOURCES_PATH "/chess.png"))
+    if (!icon.loadFromFile(resourcesDir() / "chess.png"))
     {
         throw std::runtime_error("Failed to load application icon\n");
     }
@@ -51,7 +52,6 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     {
         window_.setIcon(icon);
     }
-
     // Clock is configured but not started. It stays stopped until a setup
     // is committed, so no time is lost while the user reads the modal.
     clock_.configure(conf.timeControl);
@@ -109,7 +109,7 @@ Application::Application(Config& conf, const Assets::TextureLibrary& assets, con
     Gui::applyChessTheme();
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    if (!coordinateFont_.openFromFile(RESOURCES_PATH "fonts/Roboto-Regular.ttf"))
+    if (!coordinateFont_.openFromFile(resourcesDir() / "fonts" / "Roboto-Regular.ttf"))
         throw std::runtime_error("[Fonts] Failed to load board coordinate font!");
 
     setupFlow_.seedFromConfig();
@@ -151,19 +151,26 @@ void Application::wireClockCallbacks()
 void Application::loadFonts()
 {
     ImGuiIO& io = ImGui::GetIO();
+    const std::filesystem::path fontsDir = resourcesDir() / "fonts";
 
-    ImFont* uiFont = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Medium.ttf", 19.0f);
-    IM_ASSERT(uiFont != nullptr && "[Fonts] Failed to load UI font!");
+    const auto loadFont = [&](const char* file, float size)
+    {
+        return io.Fonts->AddFontFromFileTTF(toUtf8(fontsDir / file).c_str(), size);
+    };
 
-    clockFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 36.0f);
+    ImFont* uiFont = loadFont("Roboto-Medium.ttf", 19.0f);
+    if (uiFont == nullptr)
+        throw std::runtime_error("[Fonts] Failed to load UI font!");
+
+    clockFont_ = loadFont("Roboto-Bold.ttf", 36.0f);
     if (clockFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load clock font!");
 
-    engineNameFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 26.0f);
+    engineNameFont_ = loadFont("Roboto-Bold.ttf", 26.0f);
     if (engineNameFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load engine name font!");
 
-    moveListFont_ = io.Fonts->AddFontFromFileTTF(RESOURCES_PATH "fonts/Roboto-Bold.ttf", 20.0f);
+    moveListFont_ = loadFont("Roboto-Bold.ttf", 20.0f);
     if (moveListFont_ == nullptr)
         throw std::runtime_error("[Fonts] Failed to load move list font!");
 }

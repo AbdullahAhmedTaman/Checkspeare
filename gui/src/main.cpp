@@ -17,12 +17,14 @@ int runApplication()
         init_attacks();
         Zobrist::init();
 
+        const std::filesystem::path& res = resourcesDir();
+
         Assets::TextureLibrary textures;
-        textures.loadAllPieceTextures(RESOURCES_PATH "/textures/pieces/");
-        textures.loadAllSquareTextures(RESOURCES_PATH "/textures/squares/");
+        textures.loadAllPieceTextures(res / "textures" / "pieces");
+        textures.loadAllSquareTextures(res / "textures" / "squares");
 
         Assets::SoundLibrary sounds;
-        sounds.loadAll(RESOURCES_PATH "/sounds/");
+        sounds.loadAll(res / "sounds");
 
         Config conf;
         Application app(conf, textures, sounds);

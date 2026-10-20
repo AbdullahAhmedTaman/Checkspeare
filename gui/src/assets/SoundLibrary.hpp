@@ -2,9 +2,11 @@
 
 #include <SFML/Audio/SoundBuffer.hpp>
 
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 
 namespace Assets
 {
@@ -44,10 +46,10 @@ namespace Assets
 
         /// Loads every category the game uses. Throws if any category is
         /// missing at least one variant.
-        void loadAll(const std::string& basePath);
+        void loadAll(const std::filesystem::path& basePath);
 
         /// Loads a single category. Throws if no variants are found.
-        void loadCategory(const std::string& basePath, const std::string& name);
+        void loadCategory(const std::filesystem::path& basePath, const std::string& name);
 
         /// Random variant of the named category. Throws if the category
         /// was never loaded.
