@@ -16,12 +16,7 @@
 #   configure_portable_runtime(executable CONFIG_CONDITION "$<CONFIG:Release>")
 #   configure_portable_runtime(executable FULL_STATIC)            # Linux, see warning
 #
-# Linux portability note: the glibc version you BUILD against is the minimum
-# version your users need. Build on the oldest distro you want to support
-# (e.g. in a container). CMake can't fix this from inside a function.
-#
 # macOS note: set CMAKE_OSX_DEPLOYMENT_TARGET BEFORE the first project() call.
-# Setting it afterwards has no effect on how CMake configures the toolchain.
 
 include_guard(GLOBAL)
 include(CMakePushCheckState)
