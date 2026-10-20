@@ -36,37 +36,35 @@ Checkspeare combines optimized bitboard move generation, alpha-beta search, and 
 
 ### Chess Engine
 
-| Area | Details |
-|---|---|
-| **Move generation** | Bitboards with BMI2/PEXT sliding attacks where supported, Hyperbola Quintessence fallback |
-| **Search** | Alpha-beta with iterative deepening, aspiration windows, quiescence search, transposition table, null-move and futility pruning, late-move reductions, check extensions |
-| **Move ordering** | SEE, killer moves, history heuristic, countermoves, continuation history |
-| **Opening book** | Polyglot (`.bin`) books, with weighted-random or best-move selection |
-| **Evaluation** | Handcrafted and tapered: PeSTO piece-square tables, pawn structure, mobility, king safety |
-| **Protocol** | UCI |
+- **Move generation:** bitboards with BMI2/PEXT sliding attacks where supported, Hyperbola Quintessence fallback
+- **Search:** alpha-beta with iterative deepening, aspiration windows, quiescence search, transposition table, null-move and futility pruning, late-move reductions, check extensions
+- **Move ordering:** SEE, killer moves, history heuristic, countermoves, continuation history
+- **Opening book:** Polyglot (`.bin`) books, with weighted-random or best-move selection
+- **Evaluation:** handcrafted and tapered: PeSTO piece-square tables, pawn structure, mobility, king safety
+- **Protocol:** UCI
 
 ### Graphical Interface
 
-| Area | Details |
-|---|---|
-| **Board** | Drag-and-drop or click-to-move input, smooth animations, board arrows |
-| **Game tools** | Chess clocks with presets and custom increments, SAN move list, FEN loading, evaluation bar, engine-thinking panel, resignation |
-| **Opponents** | Human vs. human, human vs. engine, or engine vs. engine, using the Checkspeare engine or any UCI engine |
-| **Presentation** | Custom theme, fonts, piece textures, and sound effects |
-| **Technology** | **SFML** for windowing and rendering, **Dear ImGui** for the interface |
+- **Board:** drag-and-drop or click-to-move input, smooth animations, board arrows
+- **Game tools:** chess clocks with presets and custom increments, SAN move list, FEN loading, evaluation bar, engine-thinking panel, resignation
+- **Opponents:** human vs. human, human vs. engine, or engine vs. engine, using the Checkspeare engine or any UCI engine
+- **Presentation:** custom theme, fonts, piece textures, and sound effects
+- **Technology:** **SFML** for windowing and rendering, **Dear ImGui** for the interface
 
 ## Performance
 
-| Benchmark | Result | Notes |
-|---|---|---|
-| **Perft** | 119,060,324 nodes | Start position, depth 6, 752 ms |
-| **Search speed** | 5.11 M nodes/second | Start position, depth 18, 64 MB hash |
+- **Perft:** 119,060,324 nodes (start position, depth 6, 752 ms)
+- **Search speed:** 5.11 M nodes/second (start position, depth 18, 64 MB hash)
 
 **Test environment:** AMD Ryzen 5 5600X · MinGW-w64 UCRT GCC 14.2.0 · Release build (`-O3`, IPO/LTO) · PEXT enabled. Results vary with hardware, compiler, and build configuration.
 
 ## Playing Strength
 
 BayesElo ratings from a 600-game match against Stockfish 19 limited to `UCI_Elo` 2900 (`SF2900`):
+
+> [!IMPORTANT]
+> ### Estimated strength under these conditions: **≈ 2822 Elo**
+> On the Stockfish `UCI_Elo` scale (2900 − 78 Elo deficit), using the match conditions listed below.
 
 ```text
 Rank Name          Elo    +    - games score oppo. draws
@@ -92,20 +90,14 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel
 ```
 
-On Windows, use `cmake --build build --config Release --parallel` with Visual Studio or MinGW-w64.
+On Windows, or with any multi-config generator such as Visual Studio, add `--config Release` to the build commands, including the target builds below.
 
 ### Building Specific Targets
 
 By default, the build command above compiles everything. To build only one component, add `--target`:
 
-| What to build | Command |
-|---|---|
-| **Engine only** | `cmake --build build --parallel --target CheckspeareEngine` |
-| **GUI only** | `cmake --build build --parallel --target CheckspeareGUI` |
-
-> [!NOTE]
-> With multi-config generators such as Visual Studio, also add `--config Release`, e.g.
-> `cmake --build build --config Release --parallel --target CheckspeareEngine`.
+- **Engine only:** `cmake --build build --parallel --target CheckspeareEngine`
+- **GUI only:** `cmake --build build --parallel --target CheckspeareGUI`
 
 On Linux, SFML is built from source and needs its development packages. On Debian/Ubuntu:
 
