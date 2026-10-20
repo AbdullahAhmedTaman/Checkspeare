@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+
 namespace Search
 {
     constexpr int MAX_PIECES = 13;
@@ -27,6 +28,7 @@ namespace Search
      *        Size: 13 * 64 * 6 * 64 * 2 bytes = 638 KB (fits in L2/L3 cache).
      */
     extern int16_t cont_history[MAX_PIECES][MAX_SQUARES][PieceType::NONE][MAX_SQUARES];
+
     /**
      * @brief Returns whether a move can be stored as a killer move.
      * @param move Candidate move to validate.
@@ -82,7 +84,8 @@ namespace Search
 
         int& score = history_table[piece][move.to()];
         int bonus = depth > 128 ? MAX_HISTORY_SCORE : depth * depth;
-        score += bonus - ((std::abs(score) * bonus) / MAX_HISTORY_SCORE);
+        score += bonus - ((score * bonus) / MAX_HISTORY_SCORE);
+        score = std::clamp(score, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
     }
 
     /**
@@ -93,13 +96,15 @@ namespace Search
      */
     inline void penalize_history(Move move, int depth, Piece piece)
     {
-       if (depth <= 0 || piece >= MAX_PIECES || piece == PIECE_NONE || !is_valid(move.to()))
+        if (depth <= 0 || piece >= MAX_PIECES || piece == PIECE_NONE || !is_valid(move.to()))
             return;
 
         int& score = history_table[piece][move.to()];
         const int penalty = depth > 128 ? MAX_HISTORY_SCORE : depth * depth;
-        score -= penalty + ((std::abs(score) * penalty) / MAX_HISTORY_SCORE);
+        score -= penalty + ((score * penalty) / MAX_HISTORY_SCORE);
+        score = std::clamp(score, -MAX_HISTORY_SCORE, MAX_HISTORY_SCORE);
     }
+
     inline void update_countermove(Piece prev_piece, Square prev_to, Move refutation) noexcept
     {
         if (prev_piece >= PIECE_NONE || !is_valid(prev_to) || !is_killer_candidate(refutation))
