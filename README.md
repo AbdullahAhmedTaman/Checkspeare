@@ -8,7 +8,7 @@
 [![Protocol](https://img.shields.io/badge/Protocol-UCI-success.svg)](https://www.chessprogramming.org/UCI)
 ![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux-lightgrey.svg)
 
-[Features](#features) · [Performance](#performance) · [Playing Strength](#playing-strength) · [Building](#building) · [Usage](#usage) · [Architecture](#project-structure) · [Documentation](#technical-documentation)
+[Features](#features) · [Performance](#performance) · [Playing Strength](#playing-strength) · [Building](#building) · [Usage](#usage) · [Project Structure](#project-structure) · [Documentation](#technical-documentation)
 
 </div>
 
