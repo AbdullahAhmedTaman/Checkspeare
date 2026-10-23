@@ -66,63 +66,162 @@ list(REMOVE_ITEM ENGINE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp"
 )
 
+option(
+    ENGINE_ENABLE_LTO
+    "Enable IPO/LTO for the standalone engine when supported"
+    ON
+)
+
 include(CheckIPOSupported)
 
-check_ipo_supported(
-    RESULT ipo_ok
-    OUTPUT ipo_msg
-    LANGUAGES CXX
-)
+if(ENGINE_ENABLE_LTO)
+    check_ipo_supported(
+        RESULT ENGINE_IPO_SUPPORTED
+        OUTPUT ENGINE_IPO_ERROR
+        LANGUAGES CXX
+    )
+else()
+    set(ENGINE_IPO_SUPPORTED FALSE)
+endif()
 
-if(ipo_ok)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELWITHDEBINFO ON)
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_MINSIZEREL ON)
+if(ENGINE_ENABLE_LTO AND ENGINE_IPO_SUPPORTED)
     message(STATUS "IPO/LTO Engine: ENABLED")
 else()
-    message(STATUS "IPO/LTO Engine: NOT SUPPORTED")
-    message(STATUS "IPO/LTO Engine reason: ${ipo_msg}")
+    message(STATUS "IPO/LTO Engine: DISABLED")
+
+    if(ENGINE_ENABLE_LTO AND NOT ENGINE_IPO_SUPPORTED)
+        message(WARNING
+            "IPO/LTO is unsupported by this toolchain: ${ENGINE_IPO_ERROR}"
+        )
+    endif()
 endif()
 
-add_library(EngineCore ${ENGINE_SRC})
+function(configure_engine_core target)
+    target_include_directories(${target}
+        PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    )
 
-target_include_directories(EngineCore
-    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    target_compile_features(${target}
+        PUBLIC cxx_std_23
+    )
+
+    if(ENGINE_USE_PEXT)
+        target_compile_definitions(${target}
+            PUBLIC USE_PEXT
+        )
+
+        if(ROOK_COMPRESSED)
+            target_compile_definitions(${target}
+                PUBLIC ATTACKS_ROOK_COMPRESSED
+            )
+        endif()
+
+        if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+            target_compile_options(${target}
+                PUBLIC /arch:AVX2
+            )
+
+            if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+                target_compile_options(${target}
+                    PUBLIC /clang:-mbmi2
+                )
+            endif()
+
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+            if(ENGINE_X86_ARCH)
+                target_compile_options(${target}
+                    PUBLIC "-march=${ENGINE_X86_ARCH}"
+                )
+            else()
+                target_compile_options(${target}
+                    PUBLIC -mbmi2
+                )
+            endif()
+        endif()
+    endif()
+endfunction()
+
+# Normal core: used by the GUI and tests.
+add_library(EngineCore STATIC ${ENGINE_SRC})
+configure_engine_core(EngineCore)
+
+# Explicitly disable IPO for the normal core in every configuration.
+set_property(
+    TARGET EngineCore
+    PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE
 )
 
-target_compile_features(EngineCore PUBLIC cxx_std_23)
-
-if(ENGINE_USE_PEXT)
-    target_compile_definitions(EngineCore PUBLIC USE_PEXT)
-
-    if(ROOK_COMPRESSED)
-        target_compile_definitions(EngineCore PUBLIC ATTACKS_ROOK_COMPRESSED)
-    endif()
-
-    # BMI2 is needed only when PEXT is used, so the non-PEXT build stays
-    # runnable on baseline x86-64 (and on non-x86 targets).
-    # PUBLIC is intentional: attacks.h contains inline PEXT functions that
-    # are compiled in EngineCore's consumers, so flags must propagate.
-    if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-        # MSVC exposes _pext_u64 without a BMI2 flag; /arch:AVX2 only
-        # allows AVX2 codegen. clang-cl does need BMI2 enabled explicitly.
-        target_compile_options(EngineCore PUBLIC /arch:AVX2)
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-            target_compile_options(EngineCore PUBLIC /clang:-mbmi2)
-        endif()
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-        if(ENGINE_X86_ARCH)
-            target_compile_options(EngineCore PUBLIC -march=${ENGINE_X86_ARCH})
-        else()
-            target_compile_options(EngineCore PUBLIC -mbmi2)
-        endif()
-    endif()
-endif()
+foreach(config IN ITEMS DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_property(
+        TARGET EngineCore
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION_${config} FALSE
+    )
+endforeach()
 
 
+# Standalone engine executable.
 add_executable(CheckspeareEngine src/main.cpp)
 
-target_link_libraries(CheckspeareEngine PRIVATE EngineCore)
+# Default to no IPO, unless explicitly enabled below.
+set_property(
+    TARGET CheckspeareEngine
+    PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE
+)
+
+foreach(config IN ITEMS DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+    set_property(
+        TARGET CheckspeareEngine
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION_${config} FALSE
+    )
+endforeach()
+
+
+if(ENGINE_ENABLE_LTO AND ENGINE_IPO_SUPPORTED)
+
+    # Separate core variant compiled with LTO.
+    add_library(EngineCoreLTO STATIC ${ENGINE_SRC})
+    configure_engine_core(EngineCoreLTO)
+
+    # Explicitly disable IPO by default.
+    set_property(
+        TARGET EngineCoreLTO
+        PROPERTY INTERPROCEDURAL_OPTIMIZATION FALSE
+    )
+
+    foreach(config IN ITEMS DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+        set_property(
+            TARGET EngineCoreLTO
+            PROPERTY INTERPROCEDURAL_OPTIMIZATION_${config} FALSE
+        )
+    endforeach()
+
+    # Enable IPO only for optimized configurations.
+    foreach(config IN ITEMS RELEASE RELWITHDEBINFO MINSIZEREL)
+
+        set_property(
+            TARGET EngineCoreLTO
+            PROPERTY INTERPROCEDURAL_OPTIMIZATION_${config} TRUE
+        )
+
+        set_property(
+            TARGET CheckspeareEngine
+            PROPERTY INTERPROCEDURAL_OPTIMIZATION_${config} TRUE
+        )
+
+    endforeach()
+
+    target_link_libraries(CheckspeareEngine
+        PRIVATE EngineCoreLTO
+    )
+
+else()
+
+    # Portable fallback when LTO is disabled or unsupported.
+    target_link_libraries(CheckspeareEngine
+        PRIVATE EngineCore
+    )
+
+endif()
 
 # Compiler warnings.
 if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
